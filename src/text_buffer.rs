@@ -1,0 +1,404 @@
+use std::io::{Read, Result};
+use std::ops::{Bound, Range, RangeBounds};
+
+use ropey::{str_utils::byte_to_char_idx, Rope, RopeSlice};
+use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
+
+/// Finds the previous grapheme boundary before the given char position.
+fn prev_grapheme_boundary(slice: &RopeSlice, char_idx: usize) -> usize {
+    // Bounds check
+    debug_assert!(char_idx <= slice.len_chars());
+
+    // We work with bytes for this, so convert.
+    let byte_idx = slice.char_to_byte(char_idx);
+
+    // Get the chunk with our byte index in it.
+    let (mut chunk, mut chunk_byte_idx, mut chunk_char_idx, _) = slice.chunk_at_byte(byte_idx);
+
+    // Set up the grapheme cursor.
+    let mut gc = GraphemeCursor::new(byte_idx, slice.len_bytes(), true);
+
+    // Find the previous grapheme cluster boundary.
+    loop {
+        match gc.prev_boundary(chunk, chunk_byte_idx) {
+            Ok(None) => return 0,
+            Ok(Some(n)) => {
+                let tmp = byte_to_char_idx(chunk, n - chunk_byte_idx);
+                return chunk_char_idx + tmp;
+            }
+            Err(GraphemeIncomplete::PrevChunk) => {
+                let (a, b, c, _) = slice.chunk_at_byte(chunk_byte_idx - 1);
+                chunk = a;
+                chunk_byte_idx = b;
+                chunk_char_idx = c;
+            }
+            Err(GraphemeIncomplete::PreContext(n)) => {
+                let ctx_chunk = slice.chunk_at_byte(n - 1).0;
+                gc.provide_context(ctx_chunk, n - ctx_chunk.len());
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// Finds the next grapheme boundary after the given char position.
+fn next_grapheme_boundary(slice: &RopeSlice, char_idx: usize) -> usize {
+    // Bounds check
+    debug_assert!(char_idx <= slice.len_chars());
+
+    // We work with bytes for this, so convert.
+    let byte_idx = slice.char_to_byte(char_idx);
+
+    // Get the chunk with our byte index in it.
+    let (mut chunk, mut chunk_byte_idx, mut chunk_char_idx, _) = slice.chunk_at_byte(byte_idx);
+
+    // Set up the grapheme cursor.
+    let mut gc = GraphemeCursor::new(byte_idx, slice.len_bytes(), true);
+
+    // Find the next grapheme cluster boundary.
+    loop {
+        match gc.next_boundary(chunk, chunk_byte_idx) {
+            Ok(None) => return slice.len_chars(),
+            Ok(Some(n)) => {
+                let tmp = byte_to_char_idx(chunk, n - chunk_byte_idx);
+                return chunk_char_idx + tmp;
+            }
+            Err(GraphemeIncomplete::NextChunk) => {
+                chunk_byte_idx += chunk.len();
+                let (a, _, c, _) = slice.chunk_at_byte(chunk_byte_idx);
+                chunk = a;
+                chunk_char_idx = c;
+            }
+            Err(GraphemeIncomplete::PreContext(n)) => {
+                let ctx_chunk = slice.chunk_at_byte(n - 1).0;
+                gc.provide_context(ctx_chunk, n - ctx_chunk.len());
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+fn char_at_index(slice: &RopeSlice, index: usize) -> Option<char> {
+    if slice.len_bytes() <= index {
+        None
+    } else {
+        Some(slice.char(index))
+    }
+}
+
+fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
+    let line = slice.byte_to_line(index);
+    let line_index = slice.line_to_byte(line);
+    let mut i = next_grapheme_boundary(slice, line_index);
+    let mut col = 0;
+    while i < index {
+        i = next_grapheme_boundary(slice, i);
+        col += 1;
+    }
+    (line, col)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Carret {
+    index: usize,
+    vcol: usize,
+    selection: Selection,
+}
+
+impl Carret {
+    pub fn new() -> Self {
+        Self {
+            index: 0,
+            vcol: 0,
+            selection: Default::default(),
+        }
+    }
+
+    pub fn range(&self, selection: Selection) -> Range<usize> {
+        match selection.direction {
+            SelectionDirection::Forward => self.index..self.index + selection.len,
+            SelectionDirection::Backward => self.index - selection.len..self.index,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EditStack {
+    stack: Vec<Buffer>,
+    sp: usize,
+}
+
+impl Default for EditStack {
+    fn default() -> Self { EditStack::new() }
+    
+}
+
+impl EditStack {
+    pub fn new() -> Self {
+        Self {
+            stack: Vec::new(),
+            sp: 0,
+        }
+    }
+
+    pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
+        Buffer::from_reader(reader).map(|b| Self {
+            stack: vec![b],
+            sp: 0,
+        })
+    }
+
+    pub fn push(&mut self, buffer: Buffer) {
+        self.stack.truncate(self.sp);
+        self.stack.push(buffer);
+        self.sp += 1;
+    }
+
+    pub fn peek(&self) -> Option<Buffer> {
+        if self.sp == 0 {
+            None
+        } else {
+            Some(self.stack[self.sp].clone())
+        }
+    }
+
+    pub fn undo(&mut self) -> Option<Buffer> {
+        if self.sp == 0 {
+            None
+        } else {
+            self.sp -= 1;
+            Some(self.stack[self.sp].clone())
+        }
+    }
+
+    pub fn redo(&mut self) -> Option<Buffer> {
+        if self.sp == self.stack.len() {
+            None
+        } else {
+            let result = self.stack[self.sp].clone();
+            self.sp += 1;
+            Some(result)
+        }
+    }
+
+    pub fn insert(&mut self, text: &str) {
+        let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
+        self.push(topbuf.insert(text));
+    }
+    pub fn backspace(&mut self) {
+        let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
+        self.push(topbuf.backspace());
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionDirection {
+    Forward,
+    Backward,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Selection {
+    direction: SelectionDirection,
+    pub len: usize,
+}
+
+impl Selection {
+    pub fn new() -> Self {
+        Selection {
+            direction: SelectionDirection::Forward,
+            len: 0,
+        }
+    }
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Buffer {
+    rope: Rope,
+    carrets: Vec<Carret>,
+}
+
+impl Buffer {
+    pub fn new() -> Self {
+        Self {
+            rope: Rope::new(),
+            carrets: {
+                let mut v = Vec::new();
+                v.push(Carret::new());
+                v
+            },
+        }
+    }
+
+    pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
+        Rope::from_reader(reader).map(|r| Self {
+            rope: Rope::new(),
+            carrets: {
+                let mut v = Vec::new();
+                v.push(Carret::new());
+                v
+            },
+        })
+    }
+
+    pub fn backward(&self, expand_selection: bool) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let mut index = prev_grapheme_boundary(&rope.slice(..), s.index);
+
+            if expand_selection && s.index != index {
+                s.selection.direction = SelectionDirection::Forward;
+                s.selection.len += s.index - index;
+            }
+            s.index = index;
+            s.vcol = index_to_point(&rope.slice(..), s.index).1;
+        }
+        Self { rope, carrets }
+    }
+
+    pub fn forward(&self, expand_selection: bool) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let index = next_grapheme_boundary(&rope.slice(..), s.index);
+
+            if expand_selection && s.index != index {
+                s.selection.direction = SelectionDirection::Backward;
+                s.selection.len += index - s.index;
+            }
+            s.index = index;
+            s.vcol = index_to_point(&rope.slice(..), s.index).1;
+        }
+        Self { rope, carrets }
+        // TODO: skip carriage return if \r\n
+    }
+
+    pub fn insert(&self, text: &str) -> Self {
+        let mut rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let r = s.range(s.selection);
+            s.index = r.start;
+            rope.remove(r);
+            rope.insert(s.index, text);
+            //s.index += text.graphemes(true).count();
+            s.index += text.len(); // assume text have the correct grapheme boundary
+            s.selection = Default::default();
+        }
+        Self { rope, carrets }
+    }
+    pub fn backspace(&self) -> Self {
+        let mut rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            if s.selection.len > 0 {
+                let r = s.range(s.selection);
+                s.index = r.start;
+                rope.remove(r);
+                s.selection = Default::default();
+            } else if s.index > 0 {
+                let r = s.index - 1..s.index;
+                s.index = r.start;
+                rope.remove(r);
+            }
+        }
+        Self { rope, carrets }
+    }
+}
+
+impl ToString for Buffer {
+    fn to_string(&self) -> String {
+        self.rope.to_string()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn rope_insert() {
+        let b = Buffer::new();
+        assert_eq!(b.insert("hello world").to_string(), "hello world");
+    }
+    #[test]
+    fn rope_double_insert() {
+        let b = Buffer::new();
+        println!("{:?}", b.insert("hello"));
+        assert_eq!(
+            b.insert("hello").insert(" world").to_string(),
+            "hello world"
+        );
+    }
+    #[test]
+    fn rope_backspace() {
+        let b = Buffer::new();
+        assert_eq!(b.insert("hello").backspace().to_string(), "hell");
+    }
+    #[test]
+    fn rope_backspace2() {
+        let b = Buffer::new();
+        assert_eq!(b.insert("").backspace().to_string(), "");
+    }
+    #[test]
+    fn rope_right() {
+        let b = Buffer::new();
+        let mut b = b.insert("hello\n");
+        b.carrets[0].index = 0;
+        let b = b.forward(false);
+        assert_eq!(b.carrets[0].index, 1);
+
+        let b = b.forward(false).forward(false).forward(false);
+        assert_eq!(b.carrets[0].index, 4);
+        // move 3 forward, but the last move is ineffective because beyond the rope lenght
+        let b = b.forward(false).forward(false).forward(false);
+        assert_eq!(b.carrets[0].index, 6);
+    }
+    #[test]
+    fn rope_forward() {
+        let indexes = vec![1usize, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 12];
+        let mut b = Buffer::new().insert("hello\r\nWorld");
+        b.carrets[0].index = 0;
+
+        for i in &indexes {
+            b = b.forward(false);
+            assert_eq!(b.carrets[0].index, *i);
+        }
+        b.carrets[0].index = 0;
+
+        for i in &indexes {
+            b = b.forward(true);
+            assert_eq!(b.carrets[0].selection.len, *i);
+            assert_eq!(
+                b.carrets[0].selection.direction,
+                SelectionDirection::Backward
+            );
+        }
+    }
+    #[test]
+    fn rope_backward() {
+        let indexes = vec![11, 10, 9, 8, 7, 5, 4, 3, 2, 1, 0, 0];
+        let mut b = Buffer::new().insert("hello\r\nWorld");
+
+        for i in &indexes {
+            b = b.backward(false);
+            assert_eq!(b.carrets[0].index, *i);
+        }
+        let mut b = Buffer::new().insert("hello\r\nWorld");
+        let len = vec![1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 12];
+        for i in &len {
+            b = b.backward(true);
+            assert_eq!(b.carrets[0].selection.len, *i);
+            assert_eq!(
+                b.carrets[0].selection.direction,
+                SelectionDirection::Forward
+            );
+        }
+    }
+}
