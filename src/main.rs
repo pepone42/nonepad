@@ -83,14 +83,25 @@ impl WinHandler for HelloState {
         let rect = Rect::new(0.0, 0.0, width, height);
         piet.fill(rect, &BG_COLOR);
         // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
+        let mut dy = 0.;
+        for line in self.text.lines().take((self.size.1/self.font_height) as usize) {
+                let layout = piet
+                .text()
+                .new_text_layout(&font, &line)
+                .build()
+                .unwrap();
 
-        let layout = piet
-            .text()
-            .new_text_layout(&font, &self.text)
-            .build()
-            .unwrap();
+            piet.draw_text(&layout, (0.0, self.font_height + self.delta_y+ dy) , &FG_COLOR);
+            dy+=self.font_height;
+        }
 
-        piet.draw_text(&layout, (0.0, self.font_height + self.delta_y), &FG_COLOR);
+        // let layout = piet
+        //     .text()
+        //     .new_text_layout(&font, &self.text)
+        //     .build()
+        //     .unwrap();
+
+        //piet.draw_text(&layout, (0.0, self.font_height + self.delta_y), &FG_COLOR);
         false
     }
 
@@ -188,7 +199,7 @@ fn main() {
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
     let mut state = HelloState::from_reader(std::fs::File::open("./src/main.rs").unwrap()).unwrap();
-    println!("{:?}",file::load(std::env::args().nth(1).unwrap()));
+    //println!("{:?}",file::load(std::env::args().nth(1).unwrap()));
     state.text = file::load(std::env::args().nth(1).unwrap()).unwrap().buffer;
         //fs::read_to_string("./src/main.rs").expect("Something went wrong reading the file"); //"Hello\nWorld!".into();
     builder.set_handler(Box::new(state));
