@@ -1,9 +1,10 @@
-mod text_buffer;
 mod file;
+mod text_buffer;
 
 use std::any::Any;
 use std::fs;
 use std::io::{Read, Result};
+use std::ops::Range;
 
 use druid_shell::kurbo::{Line, Rect, Vec2};
 use druid_shell::piet::{Color, FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
@@ -29,7 +30,6 @@ struct HelloState {
     need_recalculate_font_size: bool,
     font_advance: f64,
     font_height: f64,
-    text: String,
     editor: EditStack,
     delta_y: f64,
 }
@@ -42,7 +42,6 @@ impl HelloState {
             need_recalculate_font_size: true,
             font_advance: Default::default(),
             font_height: Default::default(),
-            text: Default::default(),
             delta_y: Default::default(),
             editor: Default::default(),
         }
@@ -54,10 +53,14 @@ impl HelloState {
             need_recalculate_font_size: true,
             font_advance: Default::default(),
             font_height: Default::default(),
-            text: Default::default(),
             delta_y: Default::default(),
             editor: r,
         })
+    }
+
+    fn visible_range(&self) -> Range<usize> {
+        (-self.delta_y / self.font_height) as usize
+            ..((-self.delta_y + self.size.1) / self.font_height) as usize
     }
 }
 
@@ -79,29 +82,23 @@ impl WinHandler for HelloState {
             let layout = piet.text().new_text_layout(&font, "O").build().unwrap();
             self.font_advance = layout.width();
             println!("{} {}", self.font_height, self.font_advance);
+            self.need_recalculate_font_size = false;
         }
         let rect = Rect::new(0.0, 0.0, width, height);
         piet.fill(rect, &BG_COLOR);
         // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
-        let mut dy = 0.;
-        for line in self.text.lines().take((self.size.1/self.font_height) as usize) {
-                let layout = piet
-                .text()
-                .new_text_layout(&font, &line)
-                .build()
-                .unwrap();
+        let r = self.visible_range();
+        let mut dy = (self.delta_y / self.font_height).fract();
+        //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
+        let mut line = String::new();
+        for line_idx in r {
+            self.editor.line(line_idx, &mut line);
+            let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
-            piet.draw_text(&layout, (0.0, self.font_height + self.delta_y+ dy) , &FG_COLOR);
-            dy+=self.font_height;
+            piet.draw_text(&layout, (0.0, self.font_height + dy), &FG_COLOR);
+            dy += self.font_height;
         }
 
-        // let layout = piet
-        //     .text()
-        //     .new_text_layout(&font, &self.text)
-        //     .build()
-        //     .unwrap();
-
-        //piet.draw_text(&layout, (0.0, self.font_height + self.delta_y), &FG_COLOR);
         false
     }
 
@@ -135,14 +132,14 @@ impl WinHandler for HelloState {
     }
 
     fn wheel(&mut self, delta: Vec2, mods: KeyModifiers, _ctx: &mut dyn WinCtx) {
-        println!("mouse_wheel {:?} {:?}", delta, mods);
+        //println!("mouse_wheel {:?} {:?}", delta, mods);
         self.delta_y -= delta.y;
         _ctx.invalidate();
     }
 
     fn mouse_move(&mut self, event: &MouseEvent, ctx: &mut dyn WinCtx) {
         ctx.set_cursor(&Cursor::Arrow);
-        println!("mouse_move {:?}", event);
+        //println!("mouse_move {:?}", event);
     }
 
     fn mouse_down(&mut self, event: &MouseEvent, _ctx: &mut dyn WinCtx) {
@@ -198,10 +195,14 @@ fn main() {
 
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
-    let mut state = HelloState::from_reader(std::fs::File::open("./src/main.rs").unwrap()).unwrap();
-    //println!("{:?}",file::load(std::env::args().nth(1).unwrap()));
-    state.text = file::load(std::env::args().nth(1).unwrap()).unwrap().buffer;
-        //fs::read_to_string("./src/main.rs").expect("Something went wrong reading the file"); //"Hello\nWorld!".into();
+    let state = HelloState::from_reader(
+        file::load(std::env::args().nth(1).unwrap())
+            .unwrap()
+            .buffer
+            .as_bytes(),
+    )
+    .unwrap();
+
     builder.set_handler(Box::new(state));
 
     builder.set_title("Hello example");

@@ -129,8 +129,9 @@ pub struct EditStack {
 }
 
 impl Default for EditStack {
-    fn default() -> Self { EditStack::new() }
-    
+    fn default() -> Self {
+        EditStack::new()
+    }
 }
 
 impl EditStack {
@@ -144,8 +145,15 @@ impl EditStack {
     pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
         Buffer::from_reader(reader).map(|b| Self {
             stack: vec![b],
-            sp: 0,
+            sp: 1,
         })
+    }
+
+    pub fn line(&self, line: usize, out: &mut String) {
+        out.clear();
+        if self.sp > 0 {
+            self.stack[self.sp - 1].line(line, out);
+        }
     }
 
     pub fn push(&mut self, buffer: Buffer) {
@@ -158,7 +166,7 @@ impl EditStack {
         if self.sp == 0 {
             None
         } else {
-            Some(self.stack[self.sp].clone())
+            Some(self.stack[self.sp - 1].clone())
         }
     }
 
@@ -167,7 +175,7 @@ impl EditStack {
             None
         } else {
             self.sp -= 1;
-            Some(self.stack[self.sp].clone())
+            Some(self.stack[self.sp - 1].clone())
         }
     }
 
@@ -175,7 +183,7 @@ impl EditStack {
         if self.sp == self.stack.len() {
             None
         } else {
-            let result = self.stack[self.sp].clone();
+            let result = self.stack[self.sp - 1].clone();
             self.sp += 1;
             Some(result)
         }
@@ -238,13 +246,22 @@ impl Buffer {
 
     pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
         Rope::from_reader(reader).map(|r| Self {
-            rope: Rope::new(),
+            rope: r,
             carrets: {
                 let mut v = Vec::new();
                 v.push(Carret::new());
                 v
             },
         })
+    }
+
+    pub fn line(&self, line: usize, out: &mut String) {
+        out.clear();
+        if line < self.rope.len_lines() {
+            for r in self.rope.line(line).chunks() {
+                out.push_str(r);
+            }
+        }
     }
 
     pub fn backward(&self, expand_selection: bool) -> Self {
