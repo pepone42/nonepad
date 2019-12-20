@@ -12,7 +12,7 @@ use druid_shell::piet::{Color, FontBuilder, RenderContext, Text, TextLayout, Tex
 use druid_shell::piet::Piet;
 
 use druid_shell::{
-    Application, Cursor, FileDialogOptions, FileSpec, HotKey, KeyEvent, KeyModifiers, Menu,
+    Application, Cursor, FileDialogOptions, FileSpec, HotKey, KeyEvent, KeyModifiers, KeyCode, Menu,
     MouseEvent, RunLoop, SysMods, TimerToken, WinCtx, WinHandler, WindowBuilder, WindowHandle,
 };
 
@@ -92,10 +92,22 @@ impl WinHandler for HelloState {
         //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
         let mut line = String::new();
         for line_idx in r {
-            self.editor.line(line_idx, &mut line);
+            if let Some(b) = self.editor.buffer() {
+                b.line(line_idx, &mut line);
+            }
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_height + dy), &FG_COLOR);
+
+            if let Some (b) = self.editor.buffer() {
+                b.carrets_on_line(line_idx).for_each(|c| {
+                    println!("carret {:?} on line {}",c,line_idx);
+                    println!("{:?}",layout.hit_test_text_position(c.col_index));
+                }
+                );
+                
+            };
+
             dy += self.font_height;
         }
 
@@ -124,6 +136,11 @@ impl WinHandler for HelloState {
     fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx) -> bool {
         let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
         let id = ctx.request_timer(deadline);
+        match event.key_code {
+            KeyCode::ArrowRight => {self.editor.forward(false);ctx.invalidate();},
+            KeyCode::ArrowLeft => {self.editor.backward(false);ctx.invalidate();},
+            _ => (),
+        };
         println!("keydown: {:?}, timer id = {:?}", event, id);
         if let Some(text) = event.text() {
             println!("keydown: {}, timer id = {:?}", text, id);
@@ -131,10 +148,10 @@ impl WinHandler for HelloState {
         false
     }
 
-    fn wheel(&mut self, delta: Vec2, mods: KeyModifiers, _ctx: &mut dyn WinCtx) {
+    fn wheel(&mut self, delta: Vec2, mods: KeyModifiers, ctx: &mut dyn WinCtx) {
         //println!("mouse_wheel {:?} {:?}", delta, mods);
         self.delta_y -= delta.y;
-        _ctx.invalidate();
+        ctx.invalidate();
     }
 
     fn mouse_move(&mut self, event: &MouseEvent, ctx: &mut dyn WinCtx) {
@@ -205,7 +222,7 @@ fn main() {
 
     builder.set_handler(Box::new(state));
 
-    builder.set_title("Hello example");
+    builder.set_title("Hello 😊︎ 😐︎ ☹︎ example");
     builder.set_menu(menubar);
     let window = builder.build().unwrap();
 

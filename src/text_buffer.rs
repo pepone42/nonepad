@@ -100,8 +100,9 @@ fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Carret {
-    index: usize,
+    pub index: usize,
     vcol: usize,
+    pub col_index: usize,
     selection: Selection,
 }
 
@@ -110,6 +111,7 @@ impl Carret {
         Self {
             index: 0,
             vcol: 0,
+            col_index: 0,
             selection: Default::default(),
         }
     }
@@ -149,12 +151,28 @@ impl EditStack {
         })
     }
 
-    pub fn line(&self, line: usize, out: &mut String) {
-        out.clear();
+    pub fn buffer(&self) -> Option<&Buffer> {
         if self.sp > 0 {
-            self.stack[self.sp - 1].line(line, out);
+            Some(&self.stack[self.sp - 1])
+        } else {
+            None
         }
     }
+
+    pub fn buffer_mut(&mut self) -> Option<&mut Buffer> {
+        if self.sp > 0 {
+            Some(&mut self.stack[self.sp - 1])
+        } else {
+            None
+        }
+    }
+
+    // pub fn line(&self, line: usize, out: &mut String) {
+    //     out.clear();
+    //     if self.sp > 0 {
+    //         self.stack[self.sp - 1].line(line, out);
+    //     }
+    // }
 
     pub fn push(&mut self, buffer: Buffer) {
         self.stack.truncate(self.sp);
@@ -189,6 +207,16 @@ impl EditStack {
         }
     }
 
+    pub fn forward(&mut self, expand_selection: bool) {
+        if self.sp > 0 {
+            self.stack[self.sp - 1] = self.stack[self.sp - 1].forward(expand_selection);
+        }
+    }
+    pub fn backward(&mut self, expand_selection: bool) {
+        if self.sp > 0 {
+            self.stack[self.sp - 1] = self.stack[self.sp - 1].backward(expand_selection);
+        }
+    }
     pub fn insert(&mut self, text: &str) {
         let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
         self.push(topbuf.insert(text));
@@ -228,8 +256,8 @@ impl Default for Selection {
 
 #[derive(Debug, Clone)]
 pub struct Buffer {
-    rope: Rope,
-    carrets: Vec<Carret>,
+    pub rope: Rope,
+    pub carrets: Vec<Carret>,
 }
 
 impl Buffer {
@@ -242,6 +270,10 @@ impl Buffer {
                 v
             },
         }
+    }
+
+    pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
+        self.carrets.iter().filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
     }
 
     pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
@@ -275,7 +307,9 @@ impl Buffer {
                 s.selection.len += s.index - index;
             }
             s.index = index;
-            s.vcol = index_to_point(&rope.slice(..), s.index).1;
+            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = index - rope.line_to_byte(line);
         }
         Self { rope, carrets }
     }
