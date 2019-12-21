@@ -1,3 +1,4 @@
+// "Hello 😊︎ 😐︎ ☹︎ example"
 mod file;
 mod text_buffer;
 
@@ -103,6 +104,9 @@ impl WinHandler for HelloState {
                 b.carrets_on_line(line_idx).for_each(|c| {
                     println!("carret {:?} on line {}",c,line_idx);
                     println!("{:?}",layout.hit_test_text_position(c.col_index));
+                    if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
+                        piet.stroke(Line::new((metrics.point.x, self.font_height + dy + 2.2), (metrics.point.x, dy+2.2)), &FG_COLOR, 2.0);
+                    }
                 }
                 );
                 
@@ -134,16 +138,16 @@ impl WinHandler for HelloState {
     }
 
     fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx) -> bool {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
-        let id = ctx.request_timer(deadline);
+        //let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        //let id = ctx.request_timer(deadline);
         match event.key_code {
             KeyCode::ArrowRight => {self.editor.forward(false);ctx.invalidate();},
             KeyCode::ArrowLeft => {self.editor.backward(false);ctx.invalidate();},
             _ => (),
         };
-        println!("keydown: {:?}, timer id = {:?}", event, id);
+        //println!("keydown: {:?}, timer id = {:?}", event, id);
         if let Some(text) = event.text() {
-            println!("keydown: {}, timer id = {:?}", text, id);
+            println!("keydown: {}", text);
         }
         false
     }
