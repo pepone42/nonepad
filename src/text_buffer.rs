@@ -95,7 +95,7 @@ fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
         i = next_grapheme_boundary(slice, i);
         col += 1;
     }
-    (line, col)
+    (col, line)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -309,7 +309,7 @@ impl Buffer {
             s.index = index;
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;
-            s.col_index = index - rope.line_to_byte(line);
+            s.col_index = s.index - rope.line_to_byte(line);
         }
         Self { rope, carrets }
     }
@@ -325,10 +325,11 @@ impl Buffer {
                 s.selection.len += index - s.index;
             }
             s.index = index;
-            s.vcol = index_to_point(&rope.slice(..), s.index).1;
+            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - rope.line_to_byte(line);
         }
         Self { rope, carrets }
-        // TODO: skip carriage return if \r\n
     }
 
     pub fn insert(&self, text: &str) -> Self {
@@ -345,6 +346,8 @@ impl Buffer {
         }
         Self { rope, carrets }
     }
+
+    // TODO: vcol col_index
     pub fn backspace(&self) -> Self {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
