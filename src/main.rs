@@ -19,13 +19,14 @@ use druid_shell::{
 };
 
 use crate::text_buffer::EditStack;
+use crate::file::{TextFile, LineFeed};
 
 const BG_COLOR: Color = Color::rgb8(0x27, 0x28, 0x22);
 const FG_COLOR: Color = Color::rgb8(0xf0, 0xf0, 0xea);
 
 const FONT_HEIGHT: f64 = 13.0;
 
-#[derive(Default)]
+//#[derive(Default)]
 struct HelloState {
     size: (f64, f64),
     handle: WindowHandle,
@@ -48,8 +49,8 @@ impl HelloState {
             editor: Default::default(),
         }
     }
-    fn from_reader<T: Read>(reader: T) -> Result<Self> {
-        EditStack::from_reader(reader).map(|r| Self {
+    fn from_file(file: TextFile) -> Result<Self> {
+        EditStack::from_file(file).map(|r| Self {
             size: Default::default(),
             handle: Default::default(),
             need_recalculate_font_size: true,
@@ -168,6 +169,9 @@ impl WinHandler for HelloState {
                 ctx.invalidate();
                 return true;
             }
+            KeyCode::NumpadEnter | KeyCode::Return => {
+                self.editor.insert(self.editor.file.linefeed.to_str())
+            }
             _ => (),
         };
         //println!("keydown: {:?}, timer id = {:?}", event, id);
@@ -245,11 +249,9 @@ fn main() {
 
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
-    let state = HelloState::from_reader(
+    let state = HelloState::from_file(
         file::load(std::env::args().nth(1).unwrap())
             .unwrap()
-            .buffer
-            .as_bytes(),
     )
     .unwrap();
 

@@ -4,6 +4,8 @@ use std::ops::{Bound, Range, RangeBounds};
 use ropey::{str_utils::byte_to_char_idx, Rope, RopeSlice};
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
+use crate::file::TextFile;
+
 /// Finds the previous grapheme boundary before the given char position.
 fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
     // Bounds check
@@ -117,30 +119,24 @@ impl Carret {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct EditStack {
     stack: Vec<Buffer>,
     sp: usize,
+    pub file: TextFile,
 }
 
-impl Default for EditStack {
-    fn default() -> Self {
-        EditStack::new()
-    }
-}
 
 impl EditStack {
     pub fn new() -> Self {
-        Self {
-            stack: Vec::new(),
-            sp: 0,
-        }
+        Default::default()
     }
 
-    pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
-        Buffer::from_reader(reader).map(|b| Self {
+    pub fn from_file(file: TextFile) -> Result<Self> {
+        Buffer::from_reader(file.buffer.as_bytes()).map(|b| Self {
             stack: vec![b],
             sp: 1,
+            file,
         })
     }
 
