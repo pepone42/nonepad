@@ -13,8 +13,9 @@ use druid_shell::piet::{Color, FontBuilder, RenderContext, Text, TextLayout, Tex
 use druid_shell::piet::Piet;
 
 use druid_shell::{
-    Application, Cursor, FileDialogOptions, FileSpec, HotKey, KeyEvent, KeyModifiers, KeyCode, Menu,
-    MouseEvent, RunLoop, SysMods, TimerToken, WinCtx, WinHandler, WindowBuilder, WindowHandle,
+    Application, Cursor, FileDialogOptions, FileSpec, HotKey, KeyCode, KeyEvent, KeyModifiers,
+    Menu, MouseEvent, RunLoop, SysMods, TimerToken, WinCtx, WinHandler, WindowBuilder,
+    WindowHandle,
 };
 
 use crate::text_buffer::EditStack;
@@ -22,7 +23,7 @@ use crate::text_buffer::EditStack;
 const BG_COLOR: Color = Color::rgb8(0x27, 0x28, 0x22);
 const FG_COLOR: Color = Color::rgb8(0xf0, 0xf0, 0xea);
 
-const FONT_HEIGHT: f64 = 12.0;
+const FONT_HEIGHT: f64 = 13.0;
 
 #[derive(Default)]
 struct HelloState {
@@ -100,16 +101,21 @@ impl WinHandler for HelloState {
 
             piet.draw_text(&layout, (0.0, self.font_height + dy), &FG_COLOR);
 
-            if let Some (b) = self.editor.buffer() {
+            if let Some(b) = self.editor.buffer() {
                 b.carrets_on_line(line_idx).for_each(|c| {
-                    println!("carret {:?} on line {}",c,line_idx);
-                    println!("{:?}",layout.hit_test_text_position(c.col_index));
+                    println!("carret {:?} on line {}", c, line_idx);
+                    println!("{:?}", layout.hit_test_text_position(c.col_index));
                     if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
-                        piet.stroke(Line::new((metrics.point.x, self.font_height + dy + 2.2), (metrics.point.x, dy+2.2)), &FG_COLOR, 2.0);
+                        piet.stroke(
+                            Line::new(
+                                (metrics.point.x, self.font_height + dy + 2.2),
+                                (metrics.point.x, dy + 2.2),
+                            ),
+                            &FG_COLOR,
+                            2.0,
+                        );
                     }
-                }
-                );
-                
+                });
             };
 
             dy += self.font_height;
@@ -141,13 +147,36 @@ impl WinHandler for HelloState {
         //let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
         //let id = ctx.request_timer(deadline);
         match event.key_code {
-            KeyCode::ArrowRight => {self.editor.forward(false);ctx.invalidate();},
-            KeyCode::ArrowLeft => {self.editor.backward(false);ctx.invalidate();},
+            KeyCode::ArrowRight => {
+                self.editor.forward(false);
+                ctx.invalidate();
+                return true;
+            }
+            KeyCode::ArrowLeft => {
+                self.editor.backward(false);
+                ctx.invalidate();
+                return true;
+            }
+            KeyCode::Backspace => {
+                self.editor.backspace();
+                ctx.invalidate();
+                return true;
+            }
+            KeyCode::Delete => {
+                // Todo
+                //self.editor.delete();
+                ctx.invalidate();
+                return true;
+            }
             _ => (),
         };
         //println!("keydown: {:?}, timer id = {:?}", event, id);
         if let Some(text) = event.text() {
-            println!("keydown: {}", text);
+            if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
+                self.editor.insert(text);
+                println!("keydown: {:?}", text);
+                ctx.invalidate();
+            }            
         }
         false
     }

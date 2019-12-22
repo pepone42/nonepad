@@ -9,9 +9,6 @@ fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
     // Bounds check
     debug_assert!(byte_idx <= slice.len_bytes());
 
-    // We work with bytes for this, so convert.
-    //let byte_idx = slice.char_to_byte(char_idx);
-
     // Get the chunk with our byte index in it.
     let (mut chunk, mut chunk_byte_idx, _, _) = slice.chunk_at_byte(byte_idx);
 
@@ -30,7 +27,6 @@ fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
                 let (a, b, _, _) = slice.chunk_at_byte(chunk_byte_idx - 1);
                 chunk = a;
                 chunk_byte_idx = b;
-                //chunk_char_idx = c;
             }
             Err(GraphemeIncomplete::PreContext(n)) => {
                 let ctx_chunk = slice.chunk_at_byte(n - 1).0;
@@ -44,11 +40,7 @@ fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 /// Finds the next grapheme boundary after the given char position.
 fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
     // Bounds check
-    //debug_assert!(char_idx <= slice.len_chars());
     debug_assert!(byte_idx <= slice.len_bytes());
-
-    // We work with bytes for this, so convert.
-    //let byte_idx = slice.char_to_byte(char_idx);
 
     // Get the chunk with our byte index in it.
     let (mut chunk, mut chunk_byte_idx, _, _) = slice.chunk_at_byte(byte_idx);
@@ -61,7 +53,6 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
         match gc.next_boundary(chunk, chunk_byte_idx) {
             Ok(None) => return slice.len_chars(),
             Ok(Some(n)) => {
-                //let tmp = byte_to_char_idx(chunk, n - chunk_byte_idx);
                 let tmp = n - chunk_byte_idx;
                 return chunk_byte_idx + tmp;
             }
@@ -345,11 +336,13 @@ impl Buffer {
             //s.index += text.graphemes(true).count();
             s.index += text.len(); // assume text have the correct grapheme boundary
             s.selection = Default::default();
+            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - rope.line_to_byte(line);
         }
         Self { rope, carrets }
     }
 
-    // TODO: vcol col_index
     pub fn backspace(&self) -> Self {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
@@ -360,13 +353,17 @@ impl Buffer {
                 rope.remove(r);
                 s.selection = Default::default();
             } else if s.index > 0 {
-                let r = s.index - 1..s.index;
+                let r = prev_grapheme_boundary(&rope.slice(..), s.index)..s.index;
                 s.index = r.start;
                 rope.remove(r);
             }
+            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - rope.line_to_byte(line);
         }
         Self { rope, carrets }
     }
+    // todo : delete
 }
 
 impl ToString for Buffer {
