@@ -179,11 +179,11 @@ impl EditStack {
     }
 
     pub fn undo(&mut self) -> Option<Buffer> {
-        if self.sp == 0 {
+        if self.sp <=1 {
             None
         } else {
             self.sp -= 1;
-            Some(self.stack[self.sp - 1].clone())
+            Some(self.stack[self.sp].clone())
         }
     }
 
@@ -341,7 +341,7 @@ impl Buffer {
             s.index = r.start;
             rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
             rope.insert(rope.byte_to_char(s.index), text);
-            //s.index += text.graphemes(true).count();
+
             s.index += text.len(); // assume text have the correct grapheme boundary
             s.selection = Default::default();
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);

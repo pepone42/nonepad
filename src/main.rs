@@ -174,6 +174,16 @@ impl WinHandler for HelloState {
                 ctx.invalidate();
                 return true;
             }
+            KeyCode::KeyZ if event.mods.ctrl => {
+                self.editor.undo();
+                ctx.invalidate();
+                return true;
+            }
+            KeyCode::KeyY if event.mods.ctrl => {
+                self.editor.redo();
+                ctx.invalidate();
+                return true;
+            }
             _ => (),
         };
         //println!("keydown: {:?}, timer id = {:?}", event, id);
