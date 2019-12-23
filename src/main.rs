@@ -26,7 +26,7 @@ const FG_COLOR: Color = Color::rgb8(0xdb, 0xd0, 0xa7);
 
 const FONT_HEIGHT: f64 = 13.0;
 
-//#[derive(Default)]
+#[derive(Default)]
 struct HelloState {
     size: (f64, f64),
     handle: WindowHandle,
@@ -40,24 +40,15 @@ struct HelloState {
 impl HelloState {
     fn new() -> Self {
         Self {
-            size: Default::default(),
-            handle: Default::default(),
             need_recalculate_font_size: true,
-            font_advance: Default::default(),
-            font_height: Default::default(),
-            delta_y: Default::default(),
-            editor: Default::default(),
+            ..Default::default()
         }
     }
     fn from_file(file: TextFile) -> Self {
         Self {
-            size: Default::default(),
-            handle: Default::default(),
             need_recalculate_font_size: true,
-            font_advance: Default::default(),
-            font_height: Default::default(),
-            delta_y: Default::default(),
             editor: EditStack::from_file(file),
+            ..Default::default()
         }
     }
 
@@ -260,7 +251,11 @@ fn main() {
 
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
-    let state = HelloState::from_file(file::load(std::env::args().nth(1).unwrap()).unwrap());
+    let state = if let Some(filename) = std::env::args().nth(1) {
+        HelloState::from_file(file::load(filename).unwrap())
+    } else {
+        HelloState::new()
+    };
 
     builder.set_handler(Box::new(state));
 
