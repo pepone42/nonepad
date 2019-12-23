@@ -1,12 +1,13 @@
 use chardetng::EncodingDetector;
 use encoding_rs::{Encoding, UTF_8};
+use ropey::Rope;
 use std::fs;
 use std::io::{Read, Result};
 use std::path::Path;
 
 #[derive(Debug)]
 pub struct TextFile {
-    pub buffer: String,
+    pub buffer: Rope,
     pub encoding: &'static Encoding,
     pub bom: Option<Vec<u8>>,
     pub linefeed: LineFeed,
@@ -15,7 +16,7 @@ pub struct TextFile {
 impl Default for TextFile {
     fn default() -> Self {
         TextFile {
-            buffer: String::new(),
+            buffer: Rope::new(),
             encoding: UTF_8,
             bom: None,
             linefeed: Default::default(),
@@ -62,7 +63,7 @@ pub fn load<'a, P: AsRef<Path>>(path: P) -> Result<TextFile> {
     match encoding {
         None => {
             let encoding = detector.guess(None, true);
-            let buffer = encoding.decode_with_bom_removal(&vec).0.into_owned();
+            let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
             let linefeed = detect_linefeed(&buffer);
             Ok(TextFile {
                 buffer,
@@ -77,10 +78,10 @@ pub fn load<'a, P: AsRef<Path>>(path: P) -> Result<TextFile> {
                 v.extend_from_slice(&vec[0..bom_size]);
                 v
             };
-            let buffer = encoding.decode_with_bom_removal(&vec).0.into_owned();
+            let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
             let linefeed = detect_linefeed(&buffer);
             Ok(TextFile {
-                buffer: encoding.decode_with_bom_removal(&vec).0.into_owned(),
+                buffer,
                 encoding,
                 bom: Some(bom),
                 linefeed,
@@ -90,10 +91,10 @@ pub fn load<'a, P: AsRef<Path>>(path: P) -> Result<TextFile> {
 }
 
 /// Detect the carriage return type of the buffer
-pub fn detect_linefeed(input: &str) -> LineFeed {
+fn detect_linefeed(input: &Rope) -> LineFeed {
     let linefeed = Default::default();
 
-    if input.len() == 0 {
+    if input.len_bytes() == 0 {
         return linefeed;
     }
 

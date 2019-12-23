@@ -132,12 +132,13 @@ impl EditStack {
         Default::default()
     }
 
-    pub fn from_file(file: TextFile) -> Result<Self> {
-        Buffer::from_reader(file.buffer.as_bytes()).map(|b| Self {
+    pub fn from_file(file: TextFile) -> Self {
+        let b = Buffer::from_rope(file.buffer.clone());
+        Self {
             stack: vec![b],
             sp: 1,
             file,
-        })
+        }
     }
 
     pub fn buffer(&self) -> Option<&Buffer> {
@@ -276,6 +277,17 @@ impl Buffer {
         })
     }
 
+    pub fn from_rope(rope: Rope) -> Self {
+        Self {
+            rope,
+            carrets: {
+                let mut v = Vec::new();
+                v.push(Carret::new());
+                v
+            },
+        }
+    }
+
     pub fn line(&self, line: usize, out: &mut String) {
         out.clear();
         if line < self.rope.len_lines() {
@@ -327,8 +339,8 @@ impl Buffer {
         for s in &mut carrets {
             let r = s.range(s.selection);
             s.index = r.start;
-            rope.remove(r);
-            rope.insert(s.index, text);
+            rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+            rope.insert(rope.byte_to_char(s.index), text);
             //s.index += text.graphemes(true).count();
             s.index += text.len(); // assume text have the correct grapheme boundary
             s.selection = Default::default();
@@ -346,12 +358,12 @@ impl Buffer {
             if s.selection.len > 0 {
                 let r = s.range(s.selection);
                 s.index = r.start;
-                rope.remove(r);
+                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
                 s.selection = Default::default();
             } else if s.index > 0 {
                 let r = prev_grapheme_boundary(&rope.slice(..), s.index)..s.index;
                 s.index = r.start;
-                rope.remove(r);
+                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
             }
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;

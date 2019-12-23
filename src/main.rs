@@ -18,11 +18,11 @@ use druid_shell::{
     WindowHandle,
 };
 
+use crate::file::{LineFeed, TextFile};
 use crate::text_buffer::EditStack;
-use crate::file::{TextFile, LineFeed};
 
-const BG_COLOR: Color = Color::rgb8(0x27, 0x28, 0x22);
-const FG_COLOR: Color = Color::rgb8(0xf0, 0xf0, 0xea);
+const BG_COLOR: Color = Color::rgb8(0x2f, 0x4f, 0x4f);
+const FG_COLOR: Color = Color::rgb8(0xdb, 0xd0, 0xa7);
 
 const FONT_HEIGHT: f64 = 13.0;
 
@@ -49,16 +49,16 @@ impl HelloState {
             editor: Default::default(),
         }
     }
-    fn from_file(file: TextFile) -> Result<Self> {
-        EditStack::from_file(file).map(|r| Self {
+    fn from_file(file: TextFile) -> Self {
+        Self {
             size: Default::default(),
             handle: Default::default(),
             need_recalculate_font_size: true,
             font_advance: Default::default(),
             font_height: Default::default(),
             delta_y: Default::default(),
-            editor: r,
-        })
+            editor: EditStack::from_file(file),
+        }
     }
 
     fn visible_range(&self) -> Range<usize> {
@@ -170,7 +170,9 @@ impl WinHandler for HelloState {
                 return true;
             }
             KeyCode::NumpadEnter | KeyCode::Return => {
-                self.editor.insert(self.editor.file.linefeed.to_str())
+                self.editor.insert(self.editor.file.linefeed.to_str());
+                ctx.invalidate();
+                return true;
             }
             _ => (),
         };
@@ -180,7 +182,7 @@ impl WinHandler for HelloState {
                 self.editor.insert(text);
                 println!("keydown: {:?}", text);
                 ctx.invalidate();
-            }            
+            }
         }
         false
     }
@@ -249,11 +251,7 @@ fn main() {
 
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
-    let state = HelloState::from_file(
-        file::load(std::env::args().nth(1).unwrap())
-            .unwrap()
-    )
-    .unwrap();
+    let state = HelloState::from_file(file::load(std::env::args().nth(1).unwrap()).unwrap());
 
     builder.set_handler(Box::new(state));
 
