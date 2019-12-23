@@ -73,14 +73,6 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
     }
 }
 
-fn char_at_index(slice: &RopeSlice, index: usize) -> Option<char> {
-    if slice.len_bytes() <= index {
-        None
-    } else {
-        Some(slice.char(index))
-    }
-}
-
 fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
     let line = slice.byte_to_line(index);
     let line_index = slice.line_to_byte(line);
@@ -213,7 +205,11 @@ impl EditStack {
     }
     pub fn backspace(&mut self) {
         let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
-        self.push(topbuf.backspace());
+        if let Some(b) = topbuf.backspace() {self.push(b)};
+    }
+    pub fn delete(&mut self) {
+        let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
+        if let Some(b) = topbuf.delete() {self.push(b)};
     }
 }
 
@@ -266,17 +262,6 @@ impl Buffer {
         self.carrets.iter().filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
     }
 
-    pub fn from_reader<T: Read>(reader: T) -> Result<Self> {
-        Rope::from_reader(reader).map(|r| Self {
-            rope: r,
-            carrets: {
-                let mut v = Vec::new();
-                v.push(Carret::new());
-                v
-            },
-        })
-    }
-
     pub fn from_rope(rope: Rope) -> Self {
         Self {
             rope,
@@ -301,7 +286,7 @@ impl Buffer {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         for s in &mut carrets {
-            let mut index = prev_grapheme_boundary(&rope.slice(..), s.index);
+            let index = prev_grapheme_boundary(&rope.slice(..), s.index);
 
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Forward;
@@ -351,27 +336,66 @@ impl Buffer {
         Self { rope, carrets }
     }
 
-    pub fn backspace(&self) -> Self {
+    pub fn backspace(&self) -> Option<Self> {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
+        let mut did_nothing = true;
         for s in &mut carrets {
             if s.selection.len > 0 {
                 let r = s.range(s.selection);
                 s.index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
                 s.selection = Default::default();
+                did_nothing=false;
             } else if s.index > 0 {
                 let r = prev_grapheme_boundary(&rope.slice(..), s.index)..s.index;
                 s.index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+                did_nothing=false;
+            } else {
+                continue;
             }
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;
             s.col_index = s.index - rope.line_to_byte(line);
         }
-        Self { rope, carrets }
+        if did_nothing {
+            None
+        } else {
+            Some(Self { rope, carrets })
+        }
     }
-    // todo : delete
+    
+    pub  fn delete(&self) -> Option<Self> {
+        let mut rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        let mut did_nothing = true;
+        for s in &mut carrets {
+            if s.selection.len > 0 {
+                let r = s.range(s.selection);
+                s.index = r.start;
+                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+                s.selection = Default::default();
+                did_nothing=false;
+            } else if s.index < rope.len_bytes()-1 {
+                let r = s.index..next_grapheme_boundary(&rope.slice(..), s.index);
+                s.index = r.start;
+                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+                did_nothing=false;
+            } else {
+                continue;
+            }
+            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - rope.line_to_byte(line);
+        }
+        if did_nothing {
+            None
+        } else {
+            Some(Self { rope, carrets })
+        }
+    }
+
 }
 
 impl ToString for Buffer {
@@ -400,12 +424,12 @@ mod test {
     #[test]
     fn rope_backspace() {
         let b = Buffer::new();
-        assert_eq!(b.insert("hello").backspace().to_string(), "hell");
+        assert_eq!(b.insert("hello").backspace().unwrap().to_string(), "hell");
     }
     #[test]
     fn rope_backspace2() {
         let b = Buffer::new();
-        assert_eq!(b.insert("").backspace().to_string(), "");
+        assert_eq!(b.insert("").backspace().unwrap().to_string(), "");
     }
     #[test]
     fn rope_right() {

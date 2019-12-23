@@ -164,8 +164,7 @@ impl WinHandler for HelloState {
                 return true;
             }
             KeyCode::Delete => {
-                // Todo
-                //self.editor.delete();
+                self.editor.delete();
                 ctx.invalidate();
                 return true;
             }
