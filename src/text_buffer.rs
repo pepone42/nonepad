@@ -133,6 +133,12 @@ impl EditStack {
         }
     }
 
+    pub fn save(&mut self) -> Result<()> {
+        self.file.buffer = self.peek().map(|b| b.rope).unwrap_or(Rope::new());
+        self.file.save()?;
+        Ok(())
+    }
+
     pub fn buffer(&self) -> Option<&Buffer> {
         if self.sp > 0 {
             Some(&self.stack[self.sp - 1])

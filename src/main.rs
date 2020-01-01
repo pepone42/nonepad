@@ -174,6 +174,11 @@ impl WinHandler for HelloState {
                 ctx.invalidate();
                 return true;
             }
+            KeyCode::KeyS if event.mods.ctrl => {
+                self.editor.save().unwrap();
+                ctx.invalidate();
+                return true;
+            }
             _ => (),
         };
         //println!("keydown: {:?}, timer id = {:?}", event, id);
@@ -246,20 +251,22 @@ fn main() {
         false,
     );
     let mut menubar = Menu::new();
-    menubar.add_dropdown(Menu::new(), "Application", true);
+
+    //menubar.add_dropdown(Menu::new(), "Application", true);
+    
     menubar.add_dropdown(file_menu, "&File", true);
 
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
     let state = if let Some(filename) = std::env::args().nth(1) {
-        HelloState::from_file(file::load(filename).unwrap())
+        HelloState::from_file(TextFile::load(filename).unwrap())
     } else {
         HelloState::new()
     };
 
     builder.set_handler(Box::new(state));
 
-    builder.set_title("Hello 😊︎ 😐︎ ☹︎ example");
+    builder.set_title("NonePad");
     builder.set_menu(menubar);
     let window = builder.build().unwrap();
 
