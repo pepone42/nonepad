@@ -7,8 +7,8 @@ use std::io::{Read, Result, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
-pub struct TextFile {
-    pub buffer: Rope,
+pub struct TextFileInfo {
+    //pub buffer: Rope,
     pub encoding: &'static Encoding,
     pub bom: Option<Vec<u8>>,
     pub linefeed: LineFeed,
@@ -16,10 +16,10 @@ pub struct TextFile {
     pub path: Option<PathBuf>,
 }
 
-impl Default for TextFile {
+impl Default for TextFileInfo {
     fn default() -> Self {
-        TextFile {
-            buffer: Rope::new(),
+        TextFileInfo {
+            //buffer: Rope::new(),
             encoding: UTF_8,
             bom: None,
             linefeed: Default::default(),
@@ -66,8 +66,8 @@ impl LineFeed {
     }
 }
 
-impl TextFile {
-    pub fn load<'a, P: AsRef<Path>>(path: P) -> Result<TextFile> {
+impl TextFileInfo {
+    pub fn load<'a, P: AsRef<Path>>(path: P) -> Result<(TextFileInfo,Rope)> {
         let mut file = fs::File::open(&path)?;
         let mut detector = EncodingDetector::new();
         let mut vec = Vec::new();
@@ -82,14 +82,13 @@ impl TextFile {
                 let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
-                Ok(TextFile {
-                    buffer,
+                Ok((TextFileInfo {
                     encoding,
                     bom: None,
                     linefeed,
                     indentation,
                     path: Some(path.as_ref().to_path_buf()),
-                })
+                },buffer))
             }
             Some((encoding, bom_size)) => {
                 let bom = {
@@ -100,29 +99,28 @@ impl TextFile {
                 let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
-                Ok(TextFile {
-                    buffer,
+                Ok((TextFileInfo {
                     encoding,
                     bom: Some(bom),
                     linefeed,
                     indentation,
                     path: Some(path.as_ref().to_path_buf()),
-                })
+                }, buffer))
             }
         }
     }
 
-    pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+    pub fn save_as<P: AsRef<Path>>(&mut self, buffer: &Rope, path: P) -> Result<()> {
         self.path = Some(path.as_ref().to_path_buf());
-        self.save()?;
+        self.save(buffer)?;
         Ok(())
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self, buffer : &Rope) -> Result<()> {
         println!("save to {:?}", &self.path);
         assert_ne!(self.path, None);
         let mut file = fs::File::create(self.path.as_ref().unwrap())?;
-        let input = self.buffer.to_string();
+        let input = buffer.to_string();
         let encoded_output = match self.encoding.name() {
             "UTF-16LE" => {
                 let mut v = Vec::new();

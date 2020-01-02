@@ -5,7 +5,7 @@ use std::path::Path;
 use ropey::{str_utils::byte_to_char_idx, Rope, RopeSlice};
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
-use crate::file::TextFile;
+use crate::file::TextFileInfo;
 
 /// Finds the previous grapheme boundary before the given char position.
 fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
@@ -118,7 +118,7 @@ pub struct EditStack {
     undo_stack: Vec<Buffer>,
     redo_stack: Vec<Buffer>,
     //sp: usize,
-    pub file: TextFile,
+    pub file: TextFileInfo,
 }
 
 
@@ -127,24 +127,23 @@ impl EditStack {
         Default::default()
     }
 
-    pub fn from_file(file: TextFile) -> Self {
-        let buffer = Buffer::from_rope(file.buffer.clone());
-        Self {
+    pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = TextFileInfo::load(path)?;
+        let buffer = Buffer::from_rope(file.1.clone());
+        Ok(Self {
             buffer,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
-            file,
-        }
+            file: file.0,
+        })
     }
 
     pub fn save(&mut self) -> Result<()> {
-        self.file.buffer = self.buffer.rope.clone();
-        self.file.save()?;
+        self.file.save(&self.buffer.rope)?;
         Ok(())
     }
     pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        self.file.buffer = self.buffer.rope.clone();
-        self.file.save_as(path)?;
+        self.file.save_as(&self.buffer.rope,path)?;
         Ok(())
     }
 

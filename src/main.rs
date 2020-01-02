@@ -3,7 +3,7 @@ mod file;
 mod text_buffer;
 
 use std::any::Any;
-use std::fs;
+use std::path::Path;
 use std::io::{Read, Result};
 use std::ops::Range;
 
@@ -18,7 +18,7 @@ use druid_shell::{
     WindowHandle,
 };
 
-use crate::file::{LineFeed, TextFile};
+use crate::file::{LineFeed, TextFileInfo};
 use crate::text_buffer::EditStack;
 
 const BG_COLOR: Color = Color::rgb8(0x2f, 0x4f, 0x4f);
@@ -44,12 +44,13 @@ impl HelloState {
             ..Default::default()
         }
     }
-    fn from_file(file: TextFile) -> Self {
-        Self {
+    fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
+        let editor = EditStack::from_file(path)?;
+        Ok(Self {
             need_recalculate_font_size: true,
-            editor: EditStack::from_file(file),
+            editor,
             ..Default::default()
-        }
+        })
     }
 
     fn visible_range(&self) -> Range<usize> {
@@ -274,7 +275,7 @@ fn main() {
     let mut run_loop = RunLoop::new();
     let mut builder = WindowBuilder::new();
     let state = if let Some(filename) = std::env::args().nth(1) {
-        HelloState::from_file(TextFile::load(filename).unwrap())
+        HelloState::from_file(filename).unwrap()
     } else {
         HelloState::new()
     };
