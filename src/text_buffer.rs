@@ -114,8 +114,10 @@ impl Carret {
 
 #[derive(Debug, Default)]
 pub struct EditStack {
-    stack: Vec<Buffer>,
-    sp: usize,
+    pub buffer: Buffer,
+    undo_stack: Vec<Buffer>,
+    redo_stack: Vec<Buffer>,
+    //sp: usize,
     pub file: TextFile,
 }
 
@@ -126,102 +128,64 @@ impl EditStack {
     }
 
     pub fn from_file(file: TextFile) -> Self {
-        let b = Buffer::from_rope(file.buffer.clone());
+        let buffer = Buffer::from_rope(file.buffer.clone());
         Self {
-            stack: vec![b],
-            sp: 1,
+            buffer,
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             file,
         }
     }
 
     pub fn save(&mut self) -> Result<()> {
-        self.file.buffer = self.peek().map(|b| b.rope).unwrap_or(Rope::new());
+        self.file.buffer = self.buffer.rope.clone();
         self.file.save()?;
         Ok(())
     }
     pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        self.file.buffer = self.peek().map(|b| b.rope).unwrap_or(Rope::new());
+        self.file.buffer = self.buffer.rope.clone();
         self.file.save_as(path)?;
         Ok(())
     }
 
-    pub fn buffer(&self) -> Option<&Buffer> {
-        if self.sp > 0 {
-            Some(&self.stack[self.sp - 1])
-        } else {
-            None
+    pub fn undo(&mut self) {
+        if let Some(buffer) = self.undo_stack.pop() {
+            self.redo_stack.push(self.buffer.clone());
+            self.buffer = buffer;
         }
     }
 
-    pub fn buffer_mut(&mut self) -> Option<&mut Buffer> {
-        if self.sp > 0 {
-            Some(&mut self.stack[self.sp - 1])
-        } else {
-            None
+    pub fn redo(&mut self)  {
+        if let Some(buffer) = self.redo_stack.pop() {
+            self.undo_stack.push(self.buffer.clone());
+            self.buffer = buffer;
         }
     }
 
-    // pub fn line(&self, line: usize, out: &mut String) {
-    //     out.clear();
-    //     if self.sp > 0 {
-    //         self.stack[self.sp - 1].line(line, out);
-    //     }
-    // }
-
-    pub fn push(&mut self, buffer: Buffer) {
-        self.stack.truncate(self.sp);
-        self.stack.push(buffer);
-        self.sp += 1;
-    }
-
-    pub fn peek(&self) -> Option<Buffer> {
-        if self.sp == 0 {
-            None
-        } else {
-            Some(self.stack[self.sp - 1].clone())
-        }
-    }
-
-    pub fn undo(&mut self) -> Option<Buffer> {
-        if self.sp <=1 {
-            None
-        } else {
-            self.sp -= 1;
-            Some(self.stack[self.sp].clone())
-        }
-    }
-
-    pub fn redo(&mut self) -> Option<Buffer> {
-        if self.sp == self.stack.len() {
-            None
-        } else {
-            let result = self.stack[self.sp - 1].clone();
-            self.sp += 1;
-            Some(result)
-        }
+    fn push_edit(&mut self,buffer:Buffer) {
+        let b = std::mem::take(&mut self.buffer);
+        self.undo_stack.push(b);
+        self.buffer = buffer;
+        self.redo_stack.clear();
     }
 
     pub fn forward(&mut self, expand_selection: bool) {
-        if self.sp > 0 {
-            self.stack[self.sp - 1] = self.stack[self.sp - 1].forward(expand_selection);
-        }
+        let b = self.buffer.forward(expand_selection); 
+        self.push_edit(b);
     }
     pub fn backward(&mut self, expand_selection: bool) {
-        if self.sp > 0 {
-            self.stack[self.sp - 1] = self.stack[self.sp - 1].backward(expand_selection);
-        }
+        let b = self.buffer.backward(expand_selection); 
+        self.push_edit(b);
     }
     pub fn insert(&mut self, text: &str) {
-        let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
-        self.push(topbuf.insert(text));
+        let b = self.buffer.insert(text); 
+        self.push_edit(b);
     }
     pub fn backspace(&mut self) {
-        let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
-        if let Some(b) = topbuf.backspace() {self.push(b)};
+        if let Some(b) = self.buffer.backspace() {self.push_edit(b)};
     }
     pub fn delete(&mut self) {
-        let topbuf = self.peek().unwrap_or_else(|| Buffer::new());
-        if let Some(b) = topbuf.delete() {self.push(b)};
+        if let Some(b) = self.buffer.delete() {self.push_edit(b)};
     }
 }
 
@@ -252,7 +216,7 @@ impl Default for Selection {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Buffer {
     pub rope: Rope,
     pub carrets: Vec<Carret>,

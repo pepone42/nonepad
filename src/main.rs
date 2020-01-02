@@ -86,15 +86,13 @@ impl WinHandler for HelloState {
         //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
         let mut line = String::new();
         for line_idx in r {
-            if let Some(b) = self.editor.buffer() {
-                b.line(line_idx, &mut line);
-            }
+            self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_height + dy), &FG_COLOR);
 
-            if let Some(b) = self.editor.buffer() {
-                b.carrets_on_line(line_idx).for_each(|c| {
+
+                self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
                     println!("carret {:?} on line {}", c, line_idx);
                     println!("{:?}", layout.hit_test_text_position(c.col_index));
                     if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
@@ -108,7 +106,7 @@ impl WinHandler for HelloState {
                         );
                     }
                 });
-            };
+
 
             dy += self.font_height;
         }
