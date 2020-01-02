@@ -138,6 +138,23 @@ impl WinHandler for HelloState {
     fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx) -> bool {
         //let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
         //let id = ctx.request_timer(deadline);
+
+        if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
+            self.editor.save().unwrap();
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
+            let options = FileDialogOptions::new().show_hidden();
+            let filename = ctx.save_as_sync(options);
+            if let Some(filename) = filename {
+                // TODO: test if file don't already exist!
+                self.editor.save_as(filename.path()).unwrap();
+            }
+            ctx.invalidate();
+            return true;
+        }
+
         match event.key_code {
             KeyCode::ArrowRight => {
                 self.editor.forward(false);
@@ -174,11 +191,11 @@ impl WinHandler for HelloState {
                 ctx.invalidate();
                 return true;
             }
-            KeyCode::KeyS if event.mods.ctrl => {
-                self.editor.save().unwrap();
-                ctx.invalidate();
-                return true;
-            }
+            // KeyCode::KeyS if event.mods.ctrl => {
+            //     self.editor.save().unwrap();
+            //     ctx.invalidate();
+            //     return true;
+            // }
             _ => (),
         };
         //println!("keydown: {:?}, timer id = {:?}", event, id);
@@ -246,14 +263,14 @@ fn main() {
     file_menu.add_item(
         0x101,
         "O&pen",
-        Some(&HotKey::new(SysMods::Cmd, "o")),
+        Some(&HotKey::new(SysMods::Cmd, KeyCode::KeyO)),
         true,
         false,
     );
     let mut menubar = Menu::new();
 
     //menubar.add_dropdown(Menu::new(), "Application", true);
-    
+
     menubar.add_dropdown(file_menu, "&File", true);
 
     let mut run_loop = RunLoop::new();

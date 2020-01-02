@@ -1,5 +1,6 @@
 use std::io::{Read, Result};
 use std::ops::{Bound, Range, RangeBounds};
+use std::path::Path;
 
 use ropey::{str_utils::byte_to_char_idx, Rope, RopeSlice};
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
@@ -136,6 +137,11 @@ impl EditStack {
     pub fn save(&mut self) -> Result<()> {
         self.file.buffer = self.peek().map(|b| b.rope).unwrap_or(Rope::new());
         self.file.save()?;
+        Ok(())
+    }
+    pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        self.file.buffer = self.peek().map(|b| b.rope).unwrap_or(Rope::new());
+        self.file.save_as(path)?;
         Ok(())
     }
 
