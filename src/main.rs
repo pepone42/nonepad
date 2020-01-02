@@ -133,9 +133,53 @@ impl WinHandler for HelloState {
     }
 
     fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx) -> bool {
-        //let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
-        //let id = ctx.request_timer(deadline);
+        if let Some(text) = event.text() {
+            if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
+                self.editor.insert(text);
+                println!("keydown: {:?}", text);
+                ctx.invalidate();
+                return true;
+            }
+        }
 
+        if HotKey::new(None, KeyCode::ArrowRight).matches(event) {
+            self.editor.forward(false);
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(None, KeyCode::ArrowLeft).matches(event) {
+            self.editor.backward(false);
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(None, KeyCode::Backspace).matches(event) {
+            self.editor.backspace();
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(None, KeyCode::Delete).matches(event) {
+            self.editor.delete();
+            ctx.invalidate();
+            return true;
+        }
+
+        if HotKey::new(None, KeyCode::NumpadEnter).matches(event)
+            || HotKey::new(None, KeyCode::Return).matches(event)
+        {
+            self.editor.insert(self.editor.file.linefeed.to_str());
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
+            self.editor.undo();
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(SysMods::Cmd, KeyCode::KeyY).matches(event) {
+            self.editor.redo();
+            ctx.invalidate();
+            return true;
+        }
         if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
             self.editor.save().unwrap();
             ctx.invalidate();
@@ -152,57 +196,7 @@ impl WinHandler for HelloState {
             return true;
         }
 
-        match event.key_code {
-            KeyCode::ArrowRight => {
-                self.editor.forward(false);
-                ctx.invalidate();
-                return true;
-            }
-            KeyCode::ArrowLeft => {
-                self.editor.backward(false);
-                ctx.invalidate();
-                return true;
-            }
-            KeyCode::Backspace => {
-                self.editor.backspace();
-                ctx.invalidate();
-                return true;
-            }
-            KeyCode::Delete => {
-                self.editor.delete();
-                ctx.invalidate();
-                return true;
-            }
-            KeyCode::NumpadEnter | KeyCode::Return => {
-                self.editor.insert(self.editor.file.linefeed.to_str());
-                ctx.invalidate();
-                return true;
-            }
-            KeyCode::KeyZ if event.mods.ctrl => {
-                self.editor.undo();
-                ctx.invalidate();
-                return true;
-            }
-            KeyCode::KeyY if event.mods.ctrl => {
-                self.editor.redo();
-                ctx.invalidate();
-                return true;
-            }
-            // KeyCode::KeyS if event.mods.ctrl => {
-            //     self.editor.save().unwrap();
-            //     ctx.invalidate();
-            //     return true;
-            // }
-            _ => (),
-        };
         //println!("keydown: {:?}, timer id = {:?}", event, id);
-        if let Some(text) = event.text() {
-            if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
-                self.editor.insert(text);
-                println!("keydown: {:?}", text);
-                ctx.invalidate();
-            }
-        }
         false
     }
 
