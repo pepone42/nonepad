@@ -121,7 +121,6 @@ pub struct EditStack {
     pub file: TextFileInfo,
 }
 
-
 impl EditStack {
     pub fn new() -> Self {
         Default::default()
@@ -143,7 +142,7 @@ impl EditStack {
         Ok(())
     }
     pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        self.file.save_as(&self.buffer.rope,path)?;
+        self.file.save_as(&self.buffer.rope, path)?;
         Ok(())
     }
 
@@ -155,7 +154,7 @@ impl EditStack {
         }
     }
 
-    pub fn redo(&mut self)  {
+    pub fn redo(&mut self) {
         if let Some(buffer) = self.redo_stack.pop() {
             let b = std::mem::take(&mut self.buffer);
             self.undo_stack.push(b);
@@ -163,7 +162,7 @@ impl EditStack {
         }
     }
 
-    fn push_edit(&mut self,buffer:Buffer) {
+    fn push_edit(&mut self, buffer: Buffer) {
         let b = std::mem::take(&mut self.buffer);
         self.undo_stack.push(b);
         self.buffer = buffer;
@@ -171,22 +170,26 @@ impl EditStack {
     }
 
     pub fn forward(&mut self, expand_selection: bool) {
-        let b = self.buffer.forward(expand_selection); 
+        let b = self.buffer.forward(expand_selection);
         self.push_edit(b);
     }
     pub fn backward(&mut self, expand_selection: bool) {
-        let b = self.buffer.backward(expand_selection); 
+        let b = self.buffer.backward(expand_selection);
         self.push_edit(b);
     }
     pub fn insert(&mut self, text: &str) {
-        let b = self.buffer.insert(text); 
+        let b = self.buffer.insert(text);
         self.push_edit(b);
     }
     pub fn backspace(&mut self) {
-        if let Some(b) = self.buffer.backspace() {self.push_edit(b)};
+        if let Some(b) = self.buffer.backspace() {
+            self.push_edit(b)
+        };
     }
     pub fn delete(&mut self) {
-        if let Some(b) = self.buffer.delete() {self.push_edit(b)};
+        if let Some(b) = self.buffer.delete() {
+            self.push_edit(b)
+        };
     }
 }
 
@@ -236,7 +239,9 @@ impl Buffer {
     }
 
     pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
-        self.carrets.iter().filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
+        self.carrets
+            .iter()
+            .filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
     }
 
     pub fn from_rope(rope: Rope) -> Self {
@@ -323,42 +328,12 @@ impl Buffer {
                 s.index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
                 s.selection = Default::default();
-                did_nothing=false;
+                did_nothing = false;
             } else if s.index > 0 {
                 let r = prev_grapheme_boundary(&rope.slice(..), s.index)..s.index;
                 s.index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
-                did_nothing=false;
-            } else {
-                continue;
-            }
-            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
-            s.vcol = vcol;
-            s.col_index = s.index - rope.line_to_byte(line);
-        }
-        if did_nothing {
-            None
-        } else {
-            Some(Self { rope, carrets })
-        }
-    }
-    
-    pub  fn delete(&self) -> Option<Self> {
-        let mut rope = self.rope.clone();
-        let mut carrets = self.carrets.clone();
-        let mut did_nothing = true;
-        for s in &mut carrets {
-            if s.selection.len > 0 {
-                let r = s.range(s.selection);
-                s.index = r.start;
-                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
-                s.selection = Default::default();
-                did_nothing=false;
-            } else if s.index < rope.len_bytes()-1 {
-                let r = s.index..next_grapheme_boundary(&rope.slice(..), s.index);
-                s.index = r.start;
-                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
-                did_nothing=false;
+                did_nothing = false;
             } else {
                 continue;
             }
@@ -373,6 +348,35 @@ impl Buffer {
         }
     }
 
+    pub fn delete(&self) -> Option<Self> {
+        let mut rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        let mut did_nothing = true;
+        for s in &mut carrets {
+            if s.selection.len > 0 {
+                let r = s.range(s.selection);
+                s.index = r.start;
+                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+                s.selection = Default::default();
+                did_nothing = false;
+            } else if s.index < rope.len_bytes() - 1 {
+                let r = s.index..next_grapheme_boundary(&rope.slice(..), s.index);
+                s.index = r.start;
+                rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+                did_nothing = false;
+            } else {
+                continue;
+            }
+            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - rope.line_to_byte(line);
+        }
+        if did_nothing {
+            None
+        } else {
+            Some(Self { rope, carrets })
+        }
+    }
 }
 
 impl ToString for Buffer {

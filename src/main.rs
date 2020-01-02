@@ -3,9 +3,9 @@ mod file;
 mod text_buffer;
 
 use std::any::Any;
-use std::path::Path;
 use std::io::{Read, Result};
 use std::ops::Range;
+use std::path::Path;
 
 use druid_shell::kurbo::{Line, Rect, Vec2};
 use druid_shell::piet::{Color, FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
@@ -92,22 +92,20 @@ impl WinHandler for HelloState {
 
             piet.draw_text(&layout, (0.0, self.font_height + dy), &FG_COLOR);
 
-
-                self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
-                    println!("carret {:?} on line {}", c, line_idx);
-                    println!("{:?}", layout.hit_test_text_position(c.col_index));
-                    if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
-                        piet.stroke(
-                            Line::new(
-                                (metrics.point.x, self.font_height + dy + 2.2),
-                                (metrics.point.x, dy + 2.2),
-                            ),
-                            &FG_COLOR,
-                            2.0,
-                        );
-                    }
-                });
-
+            self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
+                println!("carret {:?} on line {}", c, line_idx);
+                println!("{:?}", layout.hit_test_text_position(c.col_index));
+                if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
+                    piet.stroke(
+                        Line::new(
+                            (metrics.point.x, self.font_height + dy + 2.2),
+                            (metrics.point.x, dy + 2.2),
+                        ),
+                        &FG_COLOR,
+                        2.0,
+                    );
+                }
+            });
 
             dy += self.font_height;
         }
