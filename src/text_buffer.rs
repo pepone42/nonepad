@@ -150,14 +150,16 @@ impl EditStack {
 
     pub fn undo(&mut self) {
         if let Some(buffer) = self.undo_stack.pop() {
-            self.redo_stack.push(self.buffer.clone());
+            let b = std::mem::take(&mut self.buffer);
+            self.redo_stack.push(b);
             self.buffer = buffer;
         }
     }
 
     pub fn redo(&mut self)  {
         if let Some(buffer) = self.redo_stack.pop() {
-            self.undo_stack.push(self.buffer.clone());
+            let b = std::mem::take(&mut self.buffer);
+            self.undo_stack.push(b);
             self.buffer = buffer;
         }
     }
