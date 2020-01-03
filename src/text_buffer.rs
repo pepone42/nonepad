@@ -53,8 +53,8 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 
     // Find the next grapheme cluster boundary.
     loop {
-        match gc.next_boundary(chunk, chunk_byte_idx) {
-            Ok(None) => return slice.len_chars(),
+        match dbg!(gc.next_boundary(dbg!(chunk), dbg!(chunk_byte_idx))) {
+            Ok(None) => return slice.len_bytes(),
             Ok(Some(n)) => {
                 let tmp = n - chunk_byte_idx;
                 return chunk_byte_idx + tmp;
@@ -77,13 +77,32 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
     let line = slice.byte_to_line(index);
     let line_index = slice.line_to_byte(line);
-    let mut i = next_grapheme_boundary(slice, line_index);
+    let mut i = line_index;
     let mut col = 0;
     while i < index {
         i = next_grapheme_boundary(slice, i);
         col += 1;
     }
     (col, line)
+}
+
+fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize, usize) {
+    let mut index = slice.line_to_byte(line);
+    let start_index = index;
+    let last_index = if line + 1 >= slice.len_lines() {
+        slice.len_bytes()
+    } else {
+        prev_grapheme_boundary(slice, slice.line_to_byte(line + 1))
+    };
+    let mut col = 0;
+    for _ in 0..vcol {
+        if index >= last_index {
+            break;
+        }
+        col += 1;
+        index = next_grapheme_boundary(slice, index);
+    }
+    (index, index - start_index, col)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -117,7 +136,6 @@ pub struct EditStack {
     pub buffer: Buffer,
     undo_stack: Vec<Buffer>,
     redo_stack: Vec<Buffer>,
-    //sp: usize,
     pub file: TextFileInfo,
 }
 
@@ -170,12 +188,16 @@ impl EditStack {
     }
 
     pub fn forward(&mut self, expand_selection: bool) {
-        let b = self.buffer.forward(expand_selection);
-        self.push_edit(b);
+        self.buffer = self.buffer.forward(expand_selection);
     }
     pub fn backward(&mut self, expand_selection: bool) {
-        let b = self.buffer.backward(expand_selection);
-        self.push_edit(b);
+        self.buffer = self.buffer.backward(expand_selection);
+    }
+    pub fn up(&mut self, expand_selection: bool) {
+        self.buffer = self.buffer.up(expand_selection);
+    }
+    pub fn down(&mut self, expand_selection: bool) {
+        self.buffer = self.buffer.down(expand_selection);
     }
     pub fn insert(&mut self, text: &str) {
         let b = self.buffer.insert(text);
@@ -300,6 +322,34 @@ impl Buffer {
         Self { rope, carrets }
     }
 
+    pub fn up(&self, expand_selection: bool) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let line = rope.byte_to_line(s.index);
+            if line > 0 {
+                let (index, col_index, _) = point_to_index(&rope.slice(..), s.vcol, line - 1);
+
+                s.col_index = col_index;
+                s.index = index;
+            }
+        }
+        Self { rope, carrets }
+    }
+    pub fn down(&self, expand_selection: bool) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let line = rope.byte_to_line(s.index);
+            if line < self.rope.len_lines() - 1 {
+                let (index, col_index, _) = point_to_index(&rope.slice(..), s.vcol, line + 1);
+
+                s.col_index = col_index;
+                s.index = index;
+            }
+        }
+        Self { rope, carrets }
+    }
     pub fn insert(&self, text: &str) -> Self {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();

@@ -152,6 +152,16 @@ impl WinHandler for HelloState {
             ctx.invalidate();
             return true;
         }
+        if HotKey::new(None, KeyCode::ArrowUp).matches(event) {
+            self.editor.up(false);
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(None, KeyCode::ArrowDown).matches(event) {
+            self.editor.down(false);
+            ctx.invalidate();
+            return true;
+        }
         if HotKey::new(None, KeyCode::Backspace).matches(event) {
             self.editor.backspace();
             ctx.invalidate();
