@@ -76,7 +76,7 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 
 fn byte_to_line_boundary(slice: &RopeSlice, index: usize) -> Range<usize> {
     let line = slice.byte_to_line(index);
-    line_boundary(slice,line)
+    line_boundary(slice, line)
 }
 
 fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
@@ -102,8 +102,8 @@ fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
 }
 
 fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize, usize) {
-    let line_boundary = line_boundary(slice,line);
-    let mut index= line_boundary.start;
+    let line_boundary = line_boundary(slice, line);
+    let mut index = line_boundary.start;
 
     let mut col = 0;
     for _ in 0..vcol {
@@ -210,6 +210,12 @@ impl EditStack {
     pub fn down(&mut self, expand_selection: bool) {
         self.buffer = self.buffer.down(expand_selection);
     }
+    pub fn home(&mut self, expand_selection: bool) {
+        self.buffer = self.buffer.home(expand_selection);
+    }
+    pub fn end(&mut self, expand_selection: bool) {
+        self.buffer = self.buffer.end(expand_selection);
+    }
     pub fn insert(&mut self, text: &str) {
         let b = self.buffer.insert(text);
         self.push_edit(b);
@@ -306,6 +312,8 @@ impl Buffer {
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Forward;
                 s.selection.len += s.index - index;
+            } else {
+                s.selection.len = 0;
             }
             s.index = index;
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
@@ -324,6 +332,8 @@ impl Buffer {
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Backward;
                 s.selection.len += index - s.index;
+            } else {
+                s.selection.len = 0;
             }
             s.index = index;
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
@@ -341,6 +351,13 @@ impl Buffer {
             if line > 0 {
                 let (index, col_index, _) = point_to_index(&rope.slice(..), s.vcol, line - 1);
 
+                if expand_selection && s.index != index {
+                    s.selection.direction = SelectionDirection::Forward;
+                    s.selection.len += s.index - index;
+                } else {
+                    s.selection.len = 0;
+                }
+
                 s.col_index = col_index;
                 s.index = index;
             }
@@ -355,12 +372,63 @@ impl Buffer {
             if line < self.rope.len_lines() - 1 {
                 let (index, col_index, _) = point_to_index(&rope.slice(..), s.vcol, line + 1);
 
+                if expand_selection && s.index != index {
+                    s.selection.direction = SelectionDirection::Backward;
+                    s.selection.len += index - s.index;
+                } else {
+                    s.selection.len = 0;
+                }
+
                 s.col_index = col_index;
                 s.index = index;
             }
         }
         Self { rope, carrets }
     }
+
+    pub fn end(&self, expand_selection: bool) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let line = rope.byte_to_line(s.index);
+            let line_boundary = line_boundary(&rope.slice(..), line);
+            let index = line_boundary.end;
+
+            if expand_selection && s.index != index {
+                s.selection.direction = SelectionDirection::Backward;
+                s.selection.len += index - s.index;
+            } else {
+                s.selection.len = 0;
+            }
+            s.index = index;
+            let (vcol, _) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - line_boundary.start;
+        }
+        Self { rope, carrets }
+    }
+
+    pub fn home(&self, expand_selection: bool) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for s in &mut carrets {
+            let line = rope.byte_to_line(s.index);
+            let line_boundary = line_boundary(&rope.slice(..), line);
+            let index = line_boundary.start;
+
+            if expand_selection && s.index != index {
+                s.selection.direction = SelectionDirection::Forward;
+                s.selection.len += s.index - index;
+            } else {
+                s.selection.len = 0;
+            }
+            s.index = index;
+            s.vcol = 0;
+            s.col_index = 0;
+        }
+        Self { rope, carrets }
+    }
+
     pub fn insert(&self, text: &str) -> Self {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
