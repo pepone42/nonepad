@@ -53,7 +53,7 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 
     // Find the next grapheme cluster boundary.
     loop {
-        match dbg!(gc.next_boundary(dbg!(chunk), dbg!(chunk_byte_idx))) {
+        match gc.next_boundary(chunk, chunk_byte_idx) {
             Ok(None) => return slice.len_bytes(),
             Ok(Some(n)) => {
                 let tmp = n - chunk_byte_idx;
@@ -74,6 +74,21 @@ fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
     }
 }
 
+fn byte_to_line_boundary(slice: &RopeSlice, index: usize) -> Range<usize> {
+    let line = slice.byte_to_line(index);
+    line_boundary(slice,line)
+}
+
+fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
+    let line_start = slice.line_to_byte(line);
+    let line_end = if line + 1 >= slice.len_lines() {
+        slice.len_bytes()
+    } else {
+        prev_grapheme_boundary(slice, slice.line_to_byte(line + 1))
+    };
+    line_start..line_end
+}
+
 fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
     let line = slice.byte_to_line(index);
     let line_index = slice.line_to_byte(line);
@@ -87,22 +102,18 @@ fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
 }
 
 fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize, usize) {
-    let mut index = slice.line_to_byte(line);
-    let start_index = index;
-    let last_index = if line + 1 >= slice.len_lines() {
-        slice.len_bytes()
-    } else {
-        prev_grapheme_boundary(slice, slice.line_to_byte(line + 1))
-    };
+    let line_boundary = line_boundary(slice,line);
+    let mut index= line_boundary.start;
+
     let mut col = 0;
     for _ in 0..vcol {
-        if index >= last_index {
+        if index >= line_boundary.end {
             break;
         }
         col += 1;
         index = next_grapheme_boundary(slice, index);
     }
-    (index, index - start_index, col)
+    (index, index - line_boundary.start, col)
 }
 
 #[derive(Debug, Clone, Copy)]
