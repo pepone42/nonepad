@@ -35,6 +35,7 @@ struct HelloState {
     font_height: f64,
     editor: EditStack,
     delta_y: f64,
+    page_len: usize,
 }
 
 impl HelloState {
@@ -162,6 +163,16 @@ impl WinHandler for HelloState {
             ctx.invalidate();
             return true;
         }
+        if HotKey::new(None, KeyCode::PageUp).matches(event) {
+            for _  in 0..self.page_len {self.editor.up(false);}
+            ctx.invalidate();
+            return true;
+        }
+        if HotKey::new(None, KeyCode::PageDown).matches(event) {
+            for _  in 0..self.page_len {self.editor.down(false)};
+            ctx.invalidate();
+            return true;
+        }
         if HotKey::new(None, KeyCode::End).matches(event) {
             self.editor.end(false);
             ctx.invalidate();
@@ -249,6 +260,8 @@ impl WinHandler for HelloState {
         let width_f = (width as f64) / dpi_scale;
         let height_f = (height as f64) / dpi_scale;
         self.size = (width_f, height_f);
+
+        self.page_len = (height_f/FONT_HEIGHT).round() as usize;
     }
 
     fn destroy(&mut self, _ctx: &mut dyn WinCtx) {
