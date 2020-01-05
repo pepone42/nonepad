@@ -82,10 +82,10 @@ impl WinHandler for HelloState {
         }
         let rect = Rect::new(0.0, 0.0, width, height);
         piet.fill(rect, &BG_COLOR);
-        // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
+
         let r = self.visible_range();
-        let mut dy = (self.delta_y / self.font_height).fract();
-        //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
+        let mut dy = self.delta_y - (self.delta_y / self.font_height).trunc() * self.font_height;
+
         let mut line = String::new();
         for line_idx in r {
             self.editor.buffer.line(line_idx, &mut line);
@@ -164,12 +164,16 @@ impl WinHandler for HelloState {
             return true;
         }
         if HotKey::new(None, KeyCode::PageUp).matches(event) {
-            for _  in 0..self.page_len {self.editor.up(false);}
+            for _ in 0..self.page_len {
+                self.editor.up(false);
+            }
             ctx.invalidate();
             return true;
         }
         if HotKey::new(None, KeyCode::PageDown).matches(event) {
-            for _  in 0..self.page_len {self.editor.down(false)};
+            for _ in 0..self.page_len {
+                self.editor.down(false)
+            }
             ctx.invalidate();
             return true;
         }
@@ -234,6 +238,15 @@ impl WinHandler for HelloState {
     fn wheel(&mut self, delta: Vec2, mods: KeyModifiers, ctx: &mut dyn WinCtx) {
         //println!("mouse_wheel {:?} {:?}", delta, mods);
         self.delta_y -= delta.y;
+        if self.delta_y > 0. {
+            self.delta_y = 0.
+        }
+        if -self.delta_y
+            > self.editor.buffer.rope.len_lines() as f64 * FONT_HEIGHT - 4. * FONT_HEIGHT
+        {
+            self.delta_y =
+                -((self.editor.buffer.rope.len_lines() as f64) * FONT_HEIGHT - 4. * FONT_HEIGHT)
+        }
         ctx.invalidate();
     }
 
@@ -261,7 +274,7 @@ impl WinHandler for HelloState {
         let height_f = (height as f64) / dpi_scale;
         self.size = (width_f, height_f);
 
-        self.page_len = (height_f/FONT_HEIGHT).round() as usize;
+        self.page_len = (height_f / FONT_HEIGHT).round() as usize;
     }
 
     fn destroy(&mut self, _ctx: &mut dyn WinCtx) {
