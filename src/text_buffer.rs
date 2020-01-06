@@ -259,10 +259,16 @@ impl Default for Selection {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Buffer {
     pub rope: Rope,
     pub carrets: Vec<Carret>,
+}
+
+impl Default for Buffer {
+    fn default() ->Self {
+        Self::new()
+    }
 }
 
 impl Buffer {

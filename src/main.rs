@@ -1,6 +1,7 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
 mod file;
 mod text_buffer;
+mod dialog;
 
 use std::any::Any;
 use std::io::{Read, Result};
@@ -221,6 +222,13 @@ impl WinHandler for HelloState {
             let filename = ctx.save_as_sync(options);
             if let Some(filename) = filename {
                 // TODO: test if file don't already exist!
+                if filename.path().exists() {
+                    if let Some(result) = dialog::messagebox("The given file allready exists, are you sure you want to overwrite it?","Are you sure?",dialog::Icon::Question,dialog::Buttons::OkCancel) {
+                        if result != dialog::Button::Ok {
+                            return true;
+                        }
+                    }
+                }
                 self.editor.save_as(filename.path()).unwrap();
             }
             ctx.invalidate();
