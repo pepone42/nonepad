@@ -59,7 +59,7 @@ impl WinHandler for MainWindowState {
     fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
         let mut repaint = self.editor.paint(piet, _ctx);
         if self.app_context.is_palette_active() {
-            //repaint = self.palette.paint(piet, _ctx);
+            repaint = self.app_context.paint_palette(piet,_ctx);
             //unimplemented!();
         }
 
@@ -114,7 +114,7 @@ impl WinHandler for MainWindowState {
     fn size(&mut self, width: u32, height: u32, _ctx: &mut dyn WinCtx) {
         self.editor.size(width, height, self.handle.get_dpi(), _ctx,);
         if self.app_context.is_palette_active() {
-            //unimplemented!();
+            self.app_context.size(width, height, self.handle.get_dpi(), _ctx,);
         }
     }
 

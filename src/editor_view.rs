@@ -3,16 +3,12 @@ use std::ops::Range;
 use std::path::Path;
 
 use druid_shell::kurbo::{Line, Rect, Size, Vec2};
-use druid_shell::piet::{
-    FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder,
-};
-use druid_shell::{
-    FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers,
-    SysMods, WinCtx};
+use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WinCtx};
 
 use crate::app_context::AppContext;
-use crate::text_buffer::EditStack;
 use crate::dialog;
+use crate::text_buffer::EditStack;
 use crate::{BG_COLOR, FG_COLOR, FONT_HEIGHT};
 
 #[derive(Debug, Default)]
