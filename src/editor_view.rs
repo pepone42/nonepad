@@ -201,6 +201,15 @@ impl EditorView {
 
     pub fn wheel(&mut self, delta: Vec2, _mods: KeyModifiers, ctx: &mut dyn WinCtx) {
         self.delta_y -= delta.y;
+        if self.delta_y > 0. {
+            self.delta_y = 0.
+        }
+        if -self.delta_y
+            > self.editor.buffer.rope.len_lines() as f64 * FONT_HEIGHT - 4. * FONT_HEIGHT
+        {
+            self.delta_y =
+                -((self.editor.buffer.rope.len_lines() as f64) * FONT_HEIGHT - 4. * FONT_HEIGHT)
+        }
         ctx.invalidate();
     }
 
