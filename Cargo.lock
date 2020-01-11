@@ -491,6 +491,7 @@ dependencies = [
  "encoding_rs 0.8.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "ropey 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-segmentation 1.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -1,8 +1,8 @@
-use std::io::{Read, Result};
-use std::ops::{Bound, Range, RangeBounds};
+use std::io::Result;
+use std::ops::Range;
 use std::path::Path;
 
-use ropey::{str_utils::byte_to_char_idx, Rope, RopeSlice};
+use ropey::{Rope, RopeSlice};
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
 use crate::file::TextFileInfo;
@@ -259,10 +259,16 @@ impl Default for Selection {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Buffer {
     pub rope: Rope,
     pub carrets: Vec<Carret>,
+}
+
+impl Default for Buffer {
+    fn default() ->Self {
+        Self::new()
+    }
 }
 
 impl Buffer {
