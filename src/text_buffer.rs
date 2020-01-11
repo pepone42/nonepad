@@ -89,6 +89,23 @@ fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
     line_start..line_end
 }
 
+fn byte_to_line_first_column(slice: &RopeSlice, index: usize) -> usize {
+    let range = byte_to_line_boundary(slice, index);
+    let mut start = range.start;
+    let char_range = slice.byte_to_char(range.start) .. slice.byte_to_char(range.end);
+    for c in slice.slice(char_range).chars() {
+        if c != '\t' && c != ' ' {
+            break;
+        }
+        start += c.len_utf8();
+    }
+    if start >= index {
+        range.start
+    } else {
+        start
+    }
+}
+
 fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
     let line = slice.byte_to_line(index);
     let line_index = slice.line_to_byte(line);
@@ -266,7 +283,7 @@ pub struct Buffer {
 }
 
 impl Default for Buffer {
-    fn default() ->Self {
+    fn default() -> Self {
         Self::new()
     }
 }
@@ -418,9 +435,8 @@ impl Buffer {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         for s in &mut carrets {
-            let line = rope.byte_to_line(s.index);
-            let line_boundary = line_boundary(&rope.slice(..), line);
-            let index = line_boundary.start;
+            let line_boundary = byte_to_line_boundary(&rope.slice(..), s.index);
+            let index = byte_to_line_first_column(&rope.slice(..),s.index);
 
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Forward;
@@ -429,8 +445,10 @@ impl Buffer {
                 s.selection.len = 0;
             }
             s.index = index;
-            s.vcol = 0;
-            s.col_index = 0;
+            let (vcol, _) = index_to_point(&rope.slice(..), s.index);
+            s.vcol = vcol;
+            s.col_index = s.index - line_boundary.start;
+            
         }
         Self { rope, carrets }
     }
