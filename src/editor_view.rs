@@ -9,7 +9,7 @@ use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, Sy
 use crate::app_context::AppContext;
 use crate::dialog;
 use crate::text_buffer::EditStack;
-use crate::{BG_COLOR, FG_COLOR, FONT_HEIGHT};
+use crate::{BG_COLOR, FG_COLOR, FONT_HEIGHT, SEL_COLOR};
 
 #[derive(Debug, Default)]
 pub struct EditorView {
@@ -55,7 +55,7 @@ impl EditorView {
 
             self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
                 println!("carret {:?} on line {}", c, line_idx);
-                println!("{:?}", layout.hit_test_text_position(c.col_index));
+                // println!("{:?}", layout.hit_test_text_position(c.col_index));
                 if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
                     piet.stroke(
                         Line::new(
@@ -63,6 +63,20 @@ impl EditorView {
                             (metrics.point.x, dy + 2.2),
                         ),
                         &FG_COLOR,
+                        2.0,
+                    );
+                }
+            });
+            self.editor.buffer.selection_on_line(line_idx).for_each(|c| {
+                println!("carret {:?} on line {}", c, line_idx);
+                // println!("{:?}", layout.hit_test_text_position(c.col_index));
+                if let Some(metrics) = layout.hit_test_text_position(self.editor.buffer.byte_to_line_relative_index(c.selection.unwrap())) {
+                    piet.stroke(
+                        Line::new(
+                            (metrics.point.x+2., FONT_HEIGHT + dy + 2.2),
+                            (metrics.point.x-2., dy + 2.2),
+                        ),
+                        &SEL_COLOR,
                         2.0,
                     );
                 }
@@ -95,54 +109,63 @@ impl EditorView {
             return true;
         }
 
-        if HotKey::new(None, KeyCode::ArrowRight).matches(event) {
-            self.editor.forward(false);
-            ctx.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::ArrowLeft).matches(event) {
-            self.editor.backward(false);
-            ctx.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::ArrowUp).matches(event) {
-            self.editor.up(false);
-            ctx.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::ArrowDown).matches(event) {
-            self.editor.down(false);
-            ctx.invalidate();
-            return true;
-        }
-        
-        if HotKey::new(None, KeyCode::PageUp).matches(event) {
-            for _ in 0..self.page_len {
-                self.editor.up(false);
-            }
-            ctx.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::PageDown).matches(event) {
-            for _ in 0..self.page_len {
-                self.editor.down(false)
-            }
-            ctx.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::End).matches(event) {
-            self.editor.end(false);
-            ctx.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::Home).matches(event) {
-            self.editor.home(false);
+        if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
+            self.editor.duplicate_down();
             ctx.invalidate();
             return true;
         }
 
-        if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
-            self.editor.duplicate_down();
+        match event {
+            KeyEvent{ key_code: KeyCode::ArrowRight, mods, ..} => {
+                self.editor.forward(mods.shift);
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent{ key_code: KeyCode::ArrowLeft, mods, ..} => {
+                self.editor.backward(mods.shift);
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent{ key_code: KeyCode::ArrowUp, mods, ..} => {
+                self.editor.up(mods.shift);
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent{ key_code: KeyCode::ArrowDown, mods, ..} => {
+                self.editor.down(mods.shift);
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent{ key_code: KeyCode::PageUp, mods, ..} => {
+                for _ in 0..self.page_len {
+                    self.editor.up(mods.shift);
+                }
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent{ key_code: KeyCode::PageDown, mods, ..} => {
+                for _ in 0..self.page_len {
+                    self.editor.down(mods.shift)
+                }
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent{ key_code: KeyCode::End, mods, ..} => {
+                self.editor.end(mods.shift);
+            ctx.invalidate();
+            return true;
+            },
+            KeyEvent{ key_code: KeyCode::Home, mods, ..} => {
+                self.editor.home(mods.shift);
+                ctx.invalidate();
+                return true;
+            },
+
+            _ => ()
+        }
+        
+        if HotKey::new(None, KeyCode::Escape).matches(event) {
+            self.editor.revert_to_single_carrets();
             ctx.invalidate();
             return true;
         }
