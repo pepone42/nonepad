@@ -92,7 +92,7 @@ fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
 fn byte_to_line_first_column(slice: &RopeSlice, index: usize) -> usize {
     let range = byte_to_line_boundary(slice, index);
     let mut start = range.start;
-    let char_range = slice.byte_to_char(range.start) .. slice.byte_to_char(range.end);
+    let char_range = slice.byte_to_char(range.start)..slice.byte_to_char(range.end);
     for c in slice.slice(char_range).chars() {
         if c != '\t' && c != ' ' {
             break;
@@ -133,7 +133,45 @@ fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize,
     (index, index - line_boundary.start, col)
 }
 
+// TODO: falses
+fn collapse_selections(carrets: &mut Vec<Carret>) {
+    if carrets.len() > 1 {
+        carrets.sort_unstable_by(|a, b| a.range().cmp(b.range()));
+        if carrets[0].range().contains(&carrets[1].range().start) {
+            carrets.clear();
+            carrets.push(Carret::merge(&carrets[0], &carrets[carrets.len() - 1]));
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionDirection {
+    Forward,
+    Backward,
+}
+
 #[derive(Debug, Clone, Copy)]
+pub struct Selection {
+    direction: SelectionDirection,
+    pub byte_len: usize,
+}
+
+impl Selection {
+    pub fn new() -> Self {
+        Selection {
+            direction: SelectionDirection::Forward,
+            byte_len: 0,
+        }
+    }
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Carret {
     pub index: usize,
     vcol: usize,
@@ -151,11 +189,43 @@ impl Carret {
         }
     }
 
-    pub fn range(&self, selection: Selection) -> Range<usize> {
-        match selection.direction {
-            SelectionDirection::Forward => self.index..self.index + selection.len,
-            SelectionDirection::Backward => self.index - selection.len..self.index,
+    pub fn merge(c1: &Carret, c2: &Carret) -> Self {
+        let (cstart, cend) = if c1.range().start < c2.range().start {
+            (c1, c2)
+        } else {
+            (c2, c1)
+        };
+        Self {
+            index: cstart.index,
+            vcol: cstart.vcol,
+            col_index: cstart.col_index,
+            selection: Selection {
+                direction: cstart.selection.direction,
+                byte_len: cend.range().end - cstart.range().start,
+            },
         }
+    }
+
+    pub fn range(&self) -> Range<usize> {
+        match self.selection.direction {
+            SelectionDirection::Forward => self.index..self.index + self.selection.byte_len,
+            SelectionDirection::Backward => self.index - self.selection.byte_len..self.index,
+        }
+    }
+    pub fn char_range(&self, slice: &RopeSlice) -> Range<usize> {
+        let r = self.range();
+        slice.byte_to_char(r.start)..slice.byte_to_char(r.end)
+    }
+
+    pub fn selection_grapheme_len(&self, slice: &RopeSlice) -> usize {
+        let r =self.range();
+        let mut index = r.start;
+        let mut i = 0;
+        while index<r.end {
+            index = next_grapheme_boundary(slice,index);
+            i+=1;
+        }
+        return i;
     }
 }
 
@@ -227,6 +297,9 @@ impl EditStack {
     pub fn down(&mut self, expand_selection: bool) {
         self.buffer = self.buffer.down(expand_selection);
     }
+    pub fn duplicate_down(&mut self) {
+        self.buffer = self.buffer.duplicate_down();
+    }
     pub fn home(&mut self, expand_selection: bool) {
         self.buffer = self.buffer.home(expand_selection);
     }
@@ -249,33 +322,6 @@ impl EditStack {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectionDirection {
-    Forward,
-    Backward,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Selection {
-    direction: SelectionDirection,
-    pub len: usize,
-}
-
-impl Selection {
-    pub fn new() -> Self {
-        Selection {
-            direction: SelectionDirection::Forward,
-            len: 0,
-        }
-    }
-}
-
-impl Default for Selection {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub rope: Rope,
@@ -294,7 +340,7 @@ impl Buffer {
             rope: Rope::new(),
             carrets: {
                 let mut v = Vec::new();
-                v.push(Carret::new());
+                v.push(Carret::default());
                 v
             },
         }
@@ -311,7 +357,7 @@ impl Buffer {
             rope,
             carrets: {
                 let mut v = Vec::new();
-                v.push(Carret::new());
+                v.push(Carret::default());
                 v
             },
         }
@@ -334,15 +380,16 @@ impl Buffer {
 
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Forward;
-                s.selection.len += s.index - index;
+                s.selection.byte_len += s.index - index;
             } else {
-                s.selection.len = 0;
+                s.selection.byte_len = 0;
             }
             s.index = index;
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;
             s.col_index = s.index - rope.line_to_byte(line);
         }
+        collapse_selections(&mut carrets);
         Self { rope, carrets }
     }
 
@@ -354,15 +401,16 @@ impl Buffer {
 
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Backward;
-                s.selection.len += index - s.index;
+                s.selection.byte_len += index - s.index;
             } else {
-                s.selection.len = 0;
+                s.selection.byte_len = 0;
             }
             s.index = index;
             let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;
             s.col_index = s.index - rope.line_to_byte(line);
         }
+        collapse_selections(&mut carrets);
         Self { rope, carrets }
     }
 
@@ -376,15 +424,16 @@ impl Buffer {
 
                 if expand_selection && s.index != index {
                     s.selection.direction = SelectionDirection::Forward;
-                    s.selection.len += s.index - index;
+                    s.selection.byte_len += s.index - index;
                 } else {
-                    s.selection.len = 0;
+                    s.selection.byte_len = 0;
                 }
 
                 s.col_index = col_index;
                 s.index = index;
             }
         }
+        collapse_selections(&mut carrets);
         Self { rope, carrets }
     }
     pub fn down(&self, expand_selection: bool) -> Self {
@@ -397,14 +446,31 @@ impl Buffer {
 
                 if expand_selection && s.index != index {
                     s.selection.direction = SelectionDirection::Backward;
-                    s.selection.len += index - s.index;
+                    s.selection.byte_len += index - s.index;
                 } else {
-                    s.selection.len = 0;
+                    s.selection.byte_len = 0;
                 }
 
                 s.col_index = col_index;
                 s.index = index;
             }
+        }
+        collapse_selections(&mut carrets);
+        Self { rope, carrets }
+    }
+    pub fn duplicate_down(&self) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        carrets.sort_unstable_by(|a, b| a.range().cmp(b.range()));
+        let mut c = carrets.last().unwrap().clone();
+
+        let line = rope.byte_to_line(c.index);
+        if line < self.rope.len_lines() - 1 {
+            let (index, col_index, _) = point_to_index(&rope.slice(..), c.vcol, line + 1);
+
+            c.col_index = col_index;
+            c.index = index;
+            carrets.push(c);
         }
         Self { rope, carrets }
     }
@@ -419,15 +485,16 @@ impl Buffer {
 
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Backward;
-                s.selection.len += index - s.index;
+                s.selection.byte_len += index - s.index;
             } else {
-                s.selection.len = 0;
+                s.selection.byte_len = 0;
             }
             s.index = index;
             let (vcol, _) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;
             s.col_index = s.index - line_boundary.start;
         }
+        collapse_selections(&mut carrets);
         Self { rope, carrets }
     }
 
@@ -436,37 +503,45 @@ impl Buffer {
         let mut carrets = self.carrets.clone();
         for s in &mut carrets {
             let line_boundary = byte_to_line_boundary(&rope.slice(..), s.index);
-            let index = byte_to_line_first_column(&rope.slice(..),s.index);
+            let index = byte_to_line_first_column(&rope.slice(..), s.index);
 
             if expand_selection && s.index != index {
                 s.selection.direction = SelectionDirection::Forward;
-                s.selection.len += s.index - index;
+                s.selection.byte_len += s.index - index;
             } else {
-                s.selection.len = 0;
+                s.selection.byte_len = 0;
             }
             s.index = index;
             let (vcol, _) = index_to_point(&rope.slice(..), s.index);
             s.vcol = vcol;
             s.col_index = s.index - line_boundary.start;
-            
         }
+        collapse_selections(&mut carrets);
         Self { rope, carrets }
     }
 
     pub fn insert(&self, text: &str) -> Self {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
-        for s in &mut carrets {
-            let r = s.range(s.selection);
-            s.index = r.start;
+        carrets.sort_unstable_by(|a,b| a.index.cmp(&b.index));
+        for i in 0..carrets.len() {
+            dbg!(carrets[i].index);
+            let r = carrets[i].range();
+            carrets[i].index = r.start;
             rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
-            rope.insert(rope.byte_to_char(s.index), text);
+            rope.insert(rope.byte_to_char(carrets[i].index), text);
 
-            s.index += text.len(); // assume text have the correct grapheme boundary
-            s.selection = Default::default();
-            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
-            s.vcol = vcol;
-            s.col_index = s.index - rope.line_to_byte(line);
+            carrets[i].index += text.len(); // assume text have the correct grapheme boundary
+
+            for j in i+1..carrets.len() {
+                carrets[j].index-= carrets[i].selection.byte_len; // TODO verify this
+                carrets[j].index+= text.len();
+            }
+
+            carrets[i].selection = Default::default();
+            let (vcol, line) = index_to_point(&rope.slice(..), carrets[i].index);
+            carrets[i].vcol = vcol;
+            carrets[i].col_index = carrets[i].index - rope.line_to_byte(line);
         }
         Self { rope, carrets }
     }
@@ -474,25 +549,38 @@ impl Buffer {
     pub fn backspace(&self) -> Option<Self> {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
+        carrets.sort_unstable_by(|a,b| a.index.cmp(&b.index));
         let mut did_nothing = true;
-        for s in &mut carrets {
-            if s.selection.len > 0 {
-                let r = s.range(s.selection);
-                s.index = r.start;
+        for i in 0..carrets.len() {
+            if carrets[i].selection.byte_len > 0 {
+                // delete selection
+                let r = carrets[i].range();
+                carrets[i].index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
-                s.selection = Default::default();
+
+                // update all others cursors
+                for j in i+1..carrets.len() {
+                    carrets[j].index-= carrets[i].selection.byte_len; // TODO verify this
+                }
+                carrets[i].selection = Default::default();
                 did_nothing = false;
-            } else if s.index > 0 {
-                let r = prev_grapheme_boundary(&rope.slice(..), s.index)..s.index;
-                s.index = r.start;
+            } else if carrets[i].index > 0 {
+                // delete the preceding grapheme
+                let r = prev_grapheme_boundary(&rope.slice(..), carrets[i].index)..carrets[i].index;
+                carrets[i].index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+
+                // update all others cursors
+                for j in i+1..carrets.len() {
+                    carrets[j].index-= r.end - r.start;
+                }
                 did_nothing = false;
             } else {
                 continue;
             }
-            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
-            s.vcol = vcol;
-            s.col_index = s.index - rope.line_to_byte(line);
+            let (vcol, line) = index_to_point(&rope.slice(..), carrets[i].index);
+            carrets[i].vcol = vcol;
+            carrets[i].col_index = carrets[i].index - rope.line_to_byte(line);
         }
         if did_nothing {
             None
@@ -504,25 +592,35 @@ impl Buffer {
     pub fn delete(&self) -> Option<Self> {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
+        carrets.sort_unstable_by(|a,b| a.index.cmp(&b.index));
         let mut did_nothing = true;
-        for s in &mut carrets {
-            if s.selection.len > 0 {
-                let r = s.range(s.selection);
-                s.index = r.start;
+        for i in 0..carrets.len() {
+            if carrets[i].selection.byte_len > 0 {
+                let r = carrets[i].range();
+                carrets[i].index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
-                s.selection = Default::default();
+                
+                // update all others cursors
+                for j in i+1..carrets.len() {
+                    carrets[j].index-= carrets[i].selection.byte_len; // TODO verify this
+                }
+                carrets[i].selection = Default::default();
                 did_nothing = false;
-            } else if s.index < rope.len_bytes() - 1 {
-                let r = s.index..next_grapheme_boundary(&rope.slice(..), s.index);
-                s.index = r.start;
+            } else if carrets[i].index < rope.len_bytes() - 1 {
+                let r = carrets[i].index..next_grapheme_boundary(&rope.slice(..), carrets[i].index);
+                carrets[i].index = r.start;
                 rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));
+                // update all others cursors
+                for j in i+1..carrets.len() {
+                    carrets[j].index-= r.end - r.start;
+                }
                 did_nothing = false;
             } else {
                 continue;
             }
-            let (vcol, line) = index_to_point(&rope.slice(..), s.index);
-            s.vcol = vcol;
-            s.col_index = s.index - rope.line_to_byte(line);
+            let (vcol, line) = index_to_point(&rope.slice(..), carrets[i].index);
+            carrets[i].vcol = vcol;
+            carrets[i].col_index = carrets[i].index - rope.line_to_byte(line);
         }
         if did_nothing {
             None
@@ -593,7 +691,7 @@ mod test {
 
         for i in &indexes {
             b = b.forward(true);
-            assert_eq!(b.carrets[0].selection.len, *i);
+            assert_eq!(b.carrets[0].selection.byte_len, *i);
             assert_eq!(
                 b.carrets[0].selection.direction,
                 SelectionDirection::Backward
@@ -613,7 +711,7 @@ mod test {
         let len = vec![1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 12];
         for i in &len {
             b = b.backward(true);
-            assert_eq!(b.carrets[0].selection.len, *i);
+            assert_eq!(b.carrets[0].selection.byte_len, *i);
             assert_eq!(
                 b.carrets[0].selection.direction,
                 SelectionDirection::Forward

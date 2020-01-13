@@ -115,6 +115,7 @@ impl EditorView {
             ctx.invalidate();
             return true;
         }
+        
         if HotKey::new(None, KeyCode::PageUp).matches(event) {
             for _ in 0..self.page_len {
                 self.editor.up(false);
@@ -139,6 +140,13 @@ impl EditorView {
             ctx.invalidate();
             return true;
         }
+
+        if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
+            self.editor.duplicate_down();
+            ctx.invalidate();
+            return true;
+        }
+
         if HotKey::new(None, KeyCode::Backspace).matches(event) {
             self.editor.backspace();
             ctx.invalidate();
