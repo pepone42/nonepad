@@ -570,10 +570,14 @@ impl Buffer {
             rope.insert(rope.byte_to_char(carrets[i].index), text);
 
             carrets[i].index += text.len(); // assume text have the correct grapheme boundary
-
+            
             for j in i + 1..carrets.len() {
-                carrets[j].index -= carrets[i].range().end - carrets[i].range().start ; // TODO verify this
+                carrets[j].index -= r.end - r.start ; // TODO verify this
                 carrets[j].index += text.len();
+                if let Some(ref mut sel) = carrets[j].selection {
+                    *sel -= r.end - r.start;
+                    *sel += text.len();
+                }
             }
 
             carrets[i].selection = Default::default();
@@ -588,6 +592,7 @@ impl Buffer {
         let mut rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
+
         let mut did_nothing = true;
         for i in 0..carrets.len() {
             if carrets[i].selection.is_some() {
@@ -598,7 +603,10 @@ impl Buffer {
 
                 // update all others cursors
                 for j in i + 1..carrets.len() {
-                    carrets[j].index -= carrets[i].range().end - carrets[i].range().start; // TODO verify this
+                    carrets[j].index -= r.end - r.start; // TODO verify this
+                    if let Some(ref mut sel) = carrets[j].selection {
+                        *sel -= r.end - r.start;
+                    }
                 }
                 carrets[i].selection = Default::default();
                 did_nothing = false;
@@ -640,7 +648,10 @@ impl Buffer {
 
                 // update all others cursors
                 for j in i + 1..carrets.len() {
-                    carrets[j].index -= carrets[i].range().end - carrets[i].range().start; // TODO verify this
+                    carrets[j].index -= r.end - r.start; // TODO verify this
+                    if let Some(ref mut sel) = carrets[j].selection {
+                        *sel -= r.end - r.start;
+                    }
                 }
                 carrets[i].selection = Default::default();
                 did_nothing = false;
