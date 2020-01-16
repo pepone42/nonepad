@@ -51,7 +51,7 @@ impl EditorView {
         piet.fill(rect, &BG_COLOR);
         // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
         let visible_range = self.visible_range();
-        let mut dy = (self.delta_y / FONT_HEIGHT).fract();
+        let mut dy = (self.delta_y / FONT_HEIGHT).fract() * FONT_HEIGHT;
         //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
         let mut line = String::new();
         let mut ranges = Vec::new();
@@ -166,7 +166,7 @@ impl EditorView {
             piet.stroke(&path, &brush, 1.0);
         }
 
-        let mut dy = (self.delta_y / FONT_HEIGHT).fract();
+        let mut dy = (self.delta_y / FONT_HEIGHT).fract() * FONT_HEIGHT;
         for line_idx in visible_range {
             self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
@@ -187,27 +187,6 @@ impl EditorView {
                     );
                 }
             });
-            // self.editor
-            //     .buffer
-            //     .selection_index_on_line(line_idx)
-            //     .for_each(|c| {
-            //         println!("carret {:?} on line {}", c, line_idx);
-            //         // println!("{:?}", layout.hit_test_text_position(c.col_index));
-            //         if let Some(metrics) = layout.hit_test_text_position(
-            //             self.editor
-            //                 .buffer
-            //                 .byte_to_line_relative_index(c.selection.unwrap()),
-            //         ) {
-            //             piet.stroke(
-            //                 Line::new(
-            //                     (metrics.point.x + 2., FONT_HEIGHT + dy + 2.2),
-            //                     (metrics.point.x - 2., dy + 2.2),
-            //                 ),
-            //                 &SEL_COLOR,
-            //                 2.0,
-            //             );
-            //         }
-            //     });
 
             dy += FONT_HEIGHT;
         }
