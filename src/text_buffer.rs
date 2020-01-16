@@ -1,5 +1,5 @@
 use std::io::Result;
-use std::ops::Range;
+use std::ops::{Range,RangeTo,RangeFrom, RangeFull};
 use std::path::Path;
 
 use ropey::{Rope, RopeSlice};
@@ -209,13 +209,13 @@ impl Carret {
 
     pub fn range(&self) -> Range<usize> {
         if let Some(selection) = self.selection {
-            if selection<self.index {
-                return selection..self.index
+            if selection < self.index {
+                return selection..self.index;
             } else {
-                return self.index..selection
+                return self.index..selection;
             }
         } else {
-            return self.index..self.index
+            return self.index..self.index;
         }
     }
     pub fn char_range(&self, slice: &RopeSlice) -> Range<usize> {
@@ -333,6 +333,16 @@ impl EditStack {
     }
 }
 
+
+#[derive(Debug, Clone)]
+pub enum OpenRange<T> {
+    Range(Range<T>),
+    RangeTo(RangeTo<T>),
+    RangeFrom(RangeFrom<T>),
+    RangeFull
+}
+
+
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub rope: Rope,
@@ -363,7 +373,10 @@ impl Buffer {
             .filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
     }
 
-    pub fn selection_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
+    pub fn selection_index_on_line<'a>(
+        &'a self,
+        line_idx: usize,
+    ) -> impl Iterator<Item = &'a Carret> {
         self.carrets.iter().filter(move |c| {
             if let Some(sel) = c.selection {
                 self.rope.byte_to_line(sel) == line_idx
@@ -371,6 +384,35 @@ impl Buffer {
                 false
             }
         })
+    }
+
+    pub fn selection_on_line<'a>(
+        &'a self,
+        line_idx: usize,
+        ranges: &mut Vec<OpenRange<usize>>,
+    ) {
+        ranges.clear();
+        for r in self.carrets.iter().filter_map(move |c| {
+            if let Some(sel) = c.selection {
+                let r = c.range();
+                dbg!(self.rope.byte_to_line(r.start),
+                self.rope.byte_to_line(r.end));
+                match (
+                    self.rope.byte_to_line(r.start),
+                    self.rope.byte_to_line(r.end),
+                ) {
+                    (s, e) if s == e && s == line_idx => dbg!(Some(OpenRange::Range(self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end)))),
+                    (s, _) if s == line_idx => Some(OpenRange::RangeFrom(self.byte_to_line_relative_index(r.start)..)),
+                    (_, e) if e == line_idx => Some(OpenRange::RangeTo(..self.byte_to_line_relative_index(r.end))),
+                    (s, e) if line_idx < e && line_idx > s => Some(OpenRange::RangeFull),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }) {
+            ranges.push(r);
+        }
     }
 
     pub fn byte_to_line_relative_index(&self, index: usize) -> usize {
@@ -570,9 +612,9 @@ impl Buffer {
             rope.insert(rope.byte_to_char(carrets[i].index), text);
 
             carrets[i].index += text.len(); // assume text have the correct grapheme boundary
-            
+
             for j in i + 1..carrets.len() {
-                carrets[j].index -= r.end - r.start ; // TODO verify this
+                carrets[j].index -= r.end - r.start; // TODO verify this
                 carrets[j].index += text.len();
                 if let Some(ref mut sel) = carrets[j].selection {
                     *sel -= r.end - r.start;

@@ -2,13 +2,13 @@ use std::io::Result;
 use std::ops::Range;
 use std::path::Path;
 
-use druid_shell::kurbo::{Line, Rect, Size, Vec2};
+use druid_shell::kurbo::{BezPath, Line, Rect, Size, Vec2, PathEl};
 use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WinCtx};
 
 use crate::app_context::AppContext;
 use crate::dialog;
-use crate::text_buffer::EditStack;
+use crate::text_buffer::{EditStack, OpenRange};
 use crate::{BG_COLOR, FG_COLOR, FONT_HEIGHT, SEL_COLOR};
 
 #[derive(Debug, Default)]
@@ -43,11 +43,56 @@ impl EditorView {
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         piet.fill(rect, &BG_COLOR);
         // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
-        let r = self.visible_range();
+        let visible_range = self.visible_range();
         let mut dy = (self.delta_y / FONT_HEIGHT).fract();
         //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
         let mut line = String::new();
-        for line_idx in r {
+        let mut ranges = Vec::new();
+        //let mut path = Vec::new();
+
+        for line_idx in visible_range.clone() {
+            self.editor.buffer.line(line_idx, &mut line);
+            let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
+
+            self.editor.buffer.selection_on_line(line_idx, &mut ranges);
+            
+            for r in &ranges {
+                dbg!(&line_idx,&r);
+                match r {
+                    OpenRange::Range(r) => {
+                        // Simple case, the selection is contain on one line
+                        
+                        let s = layout.hit_test_text_position(
+                            r.start
+                        );
+                        let e = layout.hit_test_text_position(
+                            r.end
+                        );
+                        
+                        match (s, e) {
+                            (Some(s), Some(e)) => {
+                                let mut path = BezPath::new();
+                                path.move_to((s.point.x, dy + 2.2));
+                                path.line_to((e.point.x, dy + 2.2));
+                                path.line_to((e.point.x, FONT_HEIGHT + dy + 2.2));
+                                path.line_to((s.point.x, FONT_HEIGHT + dy + 2.2));
+                                path.close_path();
+                                
+                                //path.quad_to((s.point.x, dy + 2.2),(e.point.x, FONT_HEIGHT +dy + 2.2 ));
+                                let brush = piet.solid_brush(SEL_COLOR);
+                                piet.stroke(&path,&brush,1.0);
+                            }
+                            _ => (),
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            dy += FONT_HEIGHT;
+        }
+
+        let mut dy = (self.delta_y / FONT_HEIGHT).fract();
+        for line_idx in visible_range {
             self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
@@ -67,20 +112,27 @@ impl EditorView {
                     );
                 }
             });
-            self.editor.buffer.selection_on_line(line_idx).for_each(|c| {
-                println!("carret {:?} on line {}", c, line_idx);
-                // println!("{:?}", layout.hit_test_text_position(c.col_index));
-                if let Some(metrics) = layout.hit_test_text_position(self.editor.buffer.byte_to_line_relative_index(c.selection.unwrap())) {
-                    piet.stroke(
-                        Line::new(
-                            (metrics.point.x+2., FONT_HEIGHT + dy + 2.2),
-                            (metrics.point.x-2., dy + 2.2),
-                        ),
-                        &SEL_COLOR,
-                        2.0,
-                    );
-                }
-            });
+            // self.editor
+            //     .buffer
+            //     .selection_index_on_line(line_idx)
+            //     .for_each(|c| {
+            //         println!("carret {:?} on line {}", c, line_idx);
+            //         // println!("{:?}", layout.hit_test_text_position(c.col_index));
+            //         if let Some(metrics) = layout.hit_test_text_position(
+            //             self.editor
+            //                 .buffer
+            //                 .byte_to_line_relative_index(c.selection.unwrap()),
+            //         ) {
+            //             piet.stroke(
+            //                 Line::new(
+            //                     (metrics.point.x + 2., FONT_HEIGHT + dy + 2.2),
+            //                     (metrics.point.x - 2., dy + 2.2),
+            //                 ),
+            //                 &SEL_COLOR,
+            //                 2.0,
+            //             );
+            //         }
+            //     });
 
             dy += FONT_HEIGHT;
         }
@@ -116,54 +168,86 @@ impl EditorView {
         }
 
         match event {
-            KeyEvent{ key_code: KeyCode::ArrowRight, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::ArrowRight,
+                mods,
+                ..
+            } => {
                 self.editor.forward(mods.shift);
                 ctx.invalidate();
                 return true;
             }
-            KeyEvent{ key_code: KeyCode::ArrowLeft, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::ArrowLeft,
+                mods,
+                ..
+            } => {
                 self.editor.backward(mods.shift);
                 ctx.invalidate();
                 return true;
             }
-            KeyEvent{ key_code: KeyCode::ArrowUp, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::ArrowUp,
+                mods,
+                ..
+            } => {
                 self.editor.up(mods.shift);
                 ctx.invalidate();
                 return true;
             }
-            KeyEvent{ key_code: KeyCode::ArrowDown, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::ArrowDown,
+                mods,
+                ..
+            } => {
                 self.editor.down(mods.shift);
                 ctx.invalidate();
                 return true;
             }
-            KeyEvent{ key_code: KeyCode::PageUp, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::PageUp,
+                mods,
+                ..
+            } => {
                 for _ in 0..self.page_len {
                     self.editor.up(mods.shift);
                 }
                 ctx.invalidate();
                 return true;
             }
-            KeyEvent{ key_code: KeyCode::PageDown, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::PageDown,
+                mods,
+                ..
+            } => {
                 for _ in 0..self.page_len {
                     self.editor.down(mods.shift)
                 }
                 ctx.invalidate();
                 return true;
             }
-            KeyEvent{ key_code: KeyCode::End, mods, ..} => {
+            KeyEvent {
+                key_code: KeyCode::End,
+                mods,
+                ..
+            } => {
                 self.editor.end(mods.shift);
-            ctx.invalidate();
-            return true;
-            },
-            KeyEvent{ key_code: KeyCode::Home, mods, ..} => {
+                ctx.invalidate();
+                return true;
+            }
+            KeyEvent {
+                key_code: KeyCode::Home,
+                mods,
+                ..
+            } => {
                 self.editor.home(mods.shift);
                 ctx.invalidate();
                 return true;
-            },
+            }
 
-            _ => ()
+            _ => (),
         }
-        
+
         if HotKey::new(None, KeyCode::Escape).matches(event) {
             self.editor.revert_to_single_carrets();
             ctx.invalidate();
