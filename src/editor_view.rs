@@ -115,41 +115,65 @@ impl EditorView {
                     }
                     OpenRange::RangeTo(r) => {
                         if let Some(e) = layout.hit_test_text_position(r.end) {
-                            let p = selection_path.last_mut().unwrap();
+                            if selection_path.len() > 0 {
+                                let p = selection_path.last_mut().unwrap();
 
-                            // todo: finish
-                            // match (p[0],p.last().clone()) {
-                            //     (PathEl::MoveTo(Point{x,y:_}),Some(PathEl::LineTo(Point{x:_,y}))) if x>e.point.x => {
-                            //         p.push(PathEl::LineTo(Point::new(x,*y)));
-                            //         p.push(PathEl::ClosePath);
-                            //     }
-                            //     _ => ()
-                            // }
+                                // todo: finish
+                                // match (p[0],p.last().clone()) {
+                                //     (PathEl::MoveTo(Point{x,y:_}),Some(PathEl::LineTo(Point{x:_,y}))) if x>e.point.x => {
+                                //         p.push(PathEl::LineTo(Point::new(x,*y)));
+                                //         p.push(PathEl::ClosePath);
+                                //     }
+                                //     _ => ()
+                                // }
 
-                            p.push(PathEl::LineTo(Point::new(e.point.x, dy + 2.2)));
-                            p.push(PathEl::LineTo(Point::new(
-                                e.point.x,
-                                FONT_HEIGHT + dy + 2.2,
-                            )));
-                            p.push(PathEl::LineTo(Point::new(0., FONT_HEIGHT + dy + 2.2)));
-                            p.push(PathEl::LineTo(Point::new(0., dy + 2.2)));
-                            p.push(PathEl::ClosePath);
+                                p.push(PathEl::LineTo(Point::new(e.point.x, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(
+                                    e.point.x,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                                p.push(PathEl::LineTo(Point::new(0., FONT_HEIGHT + dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(0., dy + 2.2)));
+                                p.push(PathEl::ClosePath);
+                            } else {
+                                selection_path.push(Vec::new());
+                                let p = selection_path.last_mut().unwrap();
+                                p.push(PathEl::MoveTo(Point::new(0., dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(e.point.x, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(
+                                    e.point.x,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                                p.push(PathEl::LineTo(Point::new(0., FONT_HEIGHT + dy + 2.2)));
+                                p.push(PathEl::ClosePath);
+                            }
                         }
                     }
                     OpenRange::RangeFull => {
                         if let Some(e) = layout.hit_test_text_position(line.len() - 1) {
-                            let p = selection_path.last_mut().unwrap();
-                            if let PathEl::MoveTo(point) = p[0] {
-                                if point.x > 0.1 {
-                                    p[0] = PathEl::LineTo(point);
-                                    p.insert(0, PathEl::MoveTo(Point::new(0., point.y)));
+                            if selection_path.len() > 0 {
+                                let p = selection_path.last_mut().unwrap();
+                                if let PathEl::MoveTo(point) = p[0] {
+                                    if point.x > 0.1 {
+                                        p[0] = PathEl::LineTo(point);
+                                        p.insert(0, PathEl::MoveTo(Point::new(0., point.y)));
+                                    }
                                 }
+                                p.push(PathEl::LineTo(Point::new(e.point.x + advance, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(
+                                    e.point.x + advance,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                            } else {
+                                selection_path.push(Vec::new());
+                                let p = selection_path.last_mut().unwrap();
+                                p.push(PathEl::MoveTo(Point::new(0., dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(e.point.x + advance, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(
+                                    e.point.x + advance,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
                             }
-                            p.push(PathEl::LineTo(Point::new(e.point.x + advance, dy + 2.2)));
-                            p.push(PathEl::LineTo(Point::new(
-                                e.point.x + advance,
-                                FONT_HEIGHT + dy + 2.2,
-                            )));
                         }
                     }
                     _ => (),
