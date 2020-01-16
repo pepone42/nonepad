@@ -24,7 +24,8 @@ use crate::editor_view::EditorView;
 
 const BG_COLOR: Color = Color::rgb8(0x2f, 0x4f, 0x4f);
 const FG_COLOR: Color = Color::rgb8(0xdb, 0xd0, 0xa7);
-const SEL_COLOR: Color = Color::rgb8(0xdb, 0x00, 0x00);
+const FG_SEL_COLOR: Color = Color::rgb8(0xdb, 0x80, 0x80);
+const BG_SEL_COLOR: Color = Color::rgb8(0xdb, 0x00, 0x00);
 
 const FONT_HEIGHT: f64 = 13.0;
 

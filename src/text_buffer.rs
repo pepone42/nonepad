@@ -395,8 +395,6 @@ impl Buffer {
         for r in self.carrets.iter().filter_map(move |c| {
             if let Some(sel) = c.selection {
                 let r = c.range();
-                dbg!(self.rope.byte_to_line(r.start),
-                self.rope.byte_to_line(r.end));
                 match (
                     self.rope.byte_to_line(r.start),
                     self.rope.byte_to_line(r.end),

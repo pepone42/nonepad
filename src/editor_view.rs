@@ -2,14 +2,14 @@ use std::io::Result;
 use std::ops::Range;
 use std::path::Path;
 
-use druid_shell::kurbo::{BezPath, Line, Rect, Size, Vec2, PathEl};
+use druid_shell::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WinCtx};
 
 use crate::app_context::AppContext;
 use crate::dialog;
 use crate::text_buffer::{EditStack, OpenRange};
-use crate::{BG_COLOR, FG_COLOR, FONT_HEIGHT, SEL_COLOR};
+use crate::{BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
 
 #[derive(Debug, Default)]
 pub struct EditorView {
@@ -40,6 +40,13 @@ impl EditorView {
             .build()
             .unwrap();
 
+        let advance = piet
+            .text()
+            .new_text_layout(&font, " ")
+            .build()
+            .unwrap()
+            .width();
+
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         piet.fill(rect, &BG_COLOR);
         // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
@@ -48,47 +55,115 @@ impl EditorView {
         //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
         let mut line = String::new();
         let mut ranges = Vec::new();
-        //let mut path = Vec::new();
+        let mut selection_path = Vec::new();
 
         for line_idx in visible_range.clone() {
             self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             self.editor.buffer.selection_on_line(line_idx, &mut ranges);
-            
+
             for r in &ranges {
-                dbg!(&line_idx,&r);
+                dbg!(&line_idx, &r);
                 match r {
                     OpenRange::Range(r) => {
                         // Simple case, the selection is contain on one line
-                        
-                        let s = layout.hit_test_text_position(
-                            r.start
-                        );
-                        let e = layout.hit_test_text_position(
-                            r.end
-                        );
-                        
+
+                        let s = layout.hit_test_text_position(r.start);
+                        let e = layout.hit_test_text_position(r.end);
+
                         match (s, e) {
                             (Some(s), Some(e)) => {
-                                let mut path = BezPath::new();
-                                path.move_to((s.point.x, dy + 2.2));
-                                path.line_to((e.point.x, dy + 2.2));
-                                path.line_to((e.point.x, FONT_HEIGHT + dy + 2.2));
-                                path.line_to((s.point.x, FONT_HEIGHT + dy + 2.2));
-                                path.close_path();
-                                
-                                //path.quad_to((s.point.x, dy + 2.2),(e.point.x, FONT_HEIGHT +dy + 2.2 ));
-                                let brush = piet.solid_brush(SEL_COLOR);
-                                piet.stroke(&path,&brush,1.0);
+                                selection_path.push(Vec::new());
+                                let p = selection_path.last_mut().unwrap();
+                                p.push(PathEl::MoveTo(Point::new(s.point.x, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(e.point.x, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(
+                                    e.point.x,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                                p.push(PathEl::LineTo(Point::new(
+                                    s.point.x,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                                p.push(PathEl::ClosePath);
                             }
                             _ => (),
+                        }
+                    }
+                    OpenRange::RangeFrom(r) => {
+                        let s = layout.hit_test_text_position(r.start);
+                        let e = layout.hit_test_text_position(line.len() - 1);
+
+                        match (s, e) {
+                            (Some(s), Some(e)) => {
+                                selection_path.push(Vec::new());
+                                let p = selection_path.last_mut().unwrap();
+                                p.push(PathEl::MoveTo(Point::new(
+                                    s.point.x,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                                p.push(PathEl::LineTo(Point::new(s.point.x, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(e.point.x + advance, dy + 2.2)));
+                                p.push(PathEl::LineTo(Point::new(
+                                    e.point.x + advance,
+                                    FONT_HEIGHT + dy + 2.2,
+                                )));
+                            }
+                            _ => (),
+                        }
+                    }
+                    OpenRange::RangeTo(r) => {
+                        if let Some(e) = layout.hit_test_text_position(r.end) {
+                            let p = selection_path.last_mut().unwrap();
+
+                            // todo: finish
+                            // match (p[0],p.last().clone()) {
+                            //     (PathEl::MoveTo(Point{x,y:_}),Some(PathEl::LineTo(Point{x:_,y}))) if x>e.point.x => {
+                            //         p.push(PathEl::LineTo(Point::new(x,*y)));
+                            //         p.push(PathEl::ClosePath);
+                            //     }
+                            //     _ => ()
+                            // }
+
+                            p.push(PathEl::LineTo(Point::new(e.point.x, dy + 2.2)));
+                            p.push(PathEl::LineTo(Point::new(
+                                e.point.x,
+                                FONT_HEIGHT + dy + 2.2,
+                            )));
+                            p.push(PathEl::LineTo(Point::new(0., FONT_HEIGHT + dy + 2.2)));
+                            p.push(PathEl::LineTo(Point::new(0., dy + 2.2)));
+                            p.push(PathEl::ClosePath);
+                        }
+                    }
+                    OpenRange::RangeFull => {
+                        if let Some(e) = layout.hit_test_text_position(line.len() - 1) {
+                            let p = selection_path.last_mut().unwrap();
+                            if let PathEl::MoveTo(point) = p[0] {
+                                if point.x > 0.1 {
+                                    p[0] = PathEl::LineTo(point);
+                                    p.insert(0, PathEl::MoveTo(Point::new(0., point.y)));
+                                }
+                            }
+                            p.push(PathEl::LineTo(Point::new(e.point.x + advance, dy + 2.2)));
+                            p.push(PathEl::LineTo(Point::new(
+                                e.point.x + advance,
+                                FONT_HEIGHT + dy + 2.2,
+                            )));
                         }
                     }
                     _ => (),
                 }
             }
             dy += FONT_HEIGHT;
+        }
+
+        for path in selection_path {
+            let path = BezPath::from_vec(path);
+            let brush = piet.solid_brush(FG_SEL_COLOR);
+            piet.fill(&path, &brush);
+            let brush = piet.solid_brush(BG_SEL_COLOR);
+            piet.stroke(&path, &brush, 1.0);
         }
 
         let mut dy = (self.delta_y / FONT_HEIGHT).fract();
