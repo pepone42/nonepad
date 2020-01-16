@@ -187,7 +187,7 @@ impl EditorView {
             let brush = piet.solid_brush(FG_SEL_COLOR);
             piet.fill(&path, &brush);
             let brush = piet.solid_brush(BG_SEL_COLOR);
-            piet.stroke(&path, &brush, 1.0);
+            piet.stroke(&path, &brush, 0.5);
         }
 
         let mut dy = (self.delta_y / FONT_HEIGHT).fract() * FONT_HEIGHT;
