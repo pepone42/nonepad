@@ -418,6 +418,10 @@ impl Buffer {
         index - self.rope.line_to_byte(self.rope.byte_to_line(index))
     }
 
+    pub fn byte_to_line(&self, index: usize) -> usize {
+        self.rope.byte_to_line(index)
+    }
+
     pub fn from_rope(rope: Rope) -> Self {
         Self {
             rope,

@@ -17,6 +17,9 @@ pub struct EditorView {
     delta_y: f64,
     page_len: usize,
     font_advance: f64,
+    font_ascent: f64,
+    font_descent: f64,
+    font_height: f64,
     size: Size,
 }
 
@@ -30,7 +33,7 @@ impl EditorView {
     }
 
     fn visible_range(&self) -> Range<usize> {
-        (-self.delta_y / FONT_HEIGHT) as usize..((-self.delta_y + self.size.height) / FONT_HEIGHT) as usize+1
+        (-self.delta_y / self.font_height) as usize..((-self.delta_y + self.size.height) / self.font_height) as usize + 1
     }
 
     fn add_bounded_range_selection(
@@ -46,10 +49,10 @@ impl EditorView {
         ) {
             (Some(s), Some(e)) => {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(s.point.x, y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, FONT_HEIGHT + y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(s.point.x, FONT_HEIGHT + y + 2.2)));
+                path.push(PathEl::MoveTo(Point::new(s.point.x, y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x, y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y )));
+                path.push(PathEl::LineTo(Point::new(s.point.x, self.font_height + y )));
                 path.push(PathEl::ClosePath);
             }
             _ => (),
@@ -69,12 +72,12 @@ impl EditorView {
         ) {
             (Some(s), Some(e)) => {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(s.point.x, FONT_HEIGHT + y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(s.point.x, y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y + 2.2)));
+                path.push(PathEl::MoveTo(Point::new(s.point.x, self.font_height + y )));
+                path.push(PathEl::LineTo(Point::new(s.point.x, y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y )));
                 path.push(PathEl::LineTo(Point::new(
                     e.point.x + self.font_advance,
-                    FONT_HEIGHT + y + 2.2,
+                    self.font_height + y ,
                 )));
             }
             _ => (),
@@ -87,17 +90,17 @@ impl EditorView {
                 // todo: if on the preceding line, the selection begin after the end
                 //       of the selection on this line, create 2 distinct path
 
-                path.push(PathEl::LineTo(Point::new(e.point.x, y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, FONT_HEIGHT + y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(0., FONT_HEIGHT + y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(0., y + 2.2)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y )));
+                path.push(PathEl::LineTo(Point::new(0., self.font_height + y )));
+                path.push(PathEl::LineTo(Point::new(0., y )));
                 path.push(PathEl::ClosePath);
             } else {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, FONT_HEIGHT + y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(0., FONT_HEIGHT + y + 2.2)));
+                path.push(PathEl::MoveTo(Point::new(0., y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x, y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y )));
+                path.push(PathEl::LineTo(Point::new(0., self.font_height + y )));
                 path.push(PathEl::ClosePath);
             }
         }
@@ -118,18 +121,18 @@ impl EditorView {
                         path.insert(0, PathEl::MoveTo(Point::new(0., point.y)));
                     }
                 }
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y + 2.2)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y )));
                 path.push(PathEl::LineTo(Point::new(
                     e.point.x + self.font_advance,
-                    FONT_HEIGHT + y + 2.2,
+                    self.font_height + y ,
                 )));
             } else {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y + 2.2)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y + 2.2)));
+                path.push(PathEl::MoveTo(Point::new(0., y )));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y )));
                 path.push(PathEl::LineTo(Point::new(
                     e.point.x + self.font_advance,
-                    FONT_HEIGHT + y + 2.2,
+                    self.font_height + y ,
                 )));
             }
         }
@@ -139,12 +142,17 @@ impl EditorView {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
         self.font_advance = piet.text().new_text_layout(&font, " ").build().unwrap().width();
+        // Calculated with font_kit
+        self.font_descent = -3.2626953;
+        self.font_ascent = 11.958984;
+        self.font_height = 15.22168;
+
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         piet.fill(rect, &BG_COLOR);
 
         let visible_range = self.visible_range();
-        let mut dy = (self.delta_y / FONT_HEIGHT).fract() * FONT_HEIGHT;
+        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
         let mut line = String::new();
         let mut ranges = Vec::new();
@@ -161,8 +169,7 @@ impl EditorView {
 
             for r in &ranges {
                 match r {
-                    SelectionLineRange::Range(r) =>
-                    {
+                    SelectionLineRange::Range(r) => {
                         // Simple case, the selection is contain on one line
                         self.add_bounded_range_selection(dy, r, &layout, &mut current_path)
                     }
@@ -180,7 +187,7 @@ impl EditorView {
             if let Some(PathEl::ClosePath) = current_path.last() {
                 selection_path.push(std::mem::take(&mut current_path));
             }
-            dy += FONT_HEIGHT;
+            dy += self.font_height;
         }
 
         // if path is unclosed, it can only be because the laste visible line was a RangeFull
@@ -188,7 +195,7 @@ impl EditorView {
         match current_path.last() {
             Some(PathEl::ClosePath) => (),
             _ => {
-                current_path.push(PathEl::LineTo(Point::new(0.,dy +2.2)));
+                current_path.push(PathEl::LineTo(Point::new(0., dy )));
                 current_path.push(PathEl::ClosePath);
                 selection_path.push(std::mem::take(&mut current_path));
             }
@@ -202,27 +209,46 @@ impl EditorView {
             piet.stroke(&path, &brush, 0.5);
         }
 
-        let mut dy = (self.delta_y / FONT_HEIGHT).fract() * FONT_HEIGHT;
+        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
             self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
-            piet.draw_text(&layout, (0.0, FONT_HEIGHT + dy), &FG_COLOR);
+            piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
             self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
                 if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
                     piet.stroke(
-                        Line::new((metrics.point.x+1.0, FONT_HEIGHT + dy + 2.2), (metrics.point.x+1.0, dy + 2.2)),
+                        Line::new(
+                            (metrics.point.x + 1.0, self.font_height + dy),
+                            (metrics.point.x + 1.0, dy),
+                        ),
                         &FG_COLOR,
                         2.0,
                     );
                 }
             });
 
-            dy += FONT_HEIGHT;
+            dy += self.font_height;
         }
 
         false
+    }
+
+    fn put_carret_in_visible_range(&mut self) {
+        if self.editor.buffer.carrets.len() > 1 {
+            return;
+        }
+        if let Some(carret) = self.editor.buffer.carrets.first() {
+            let y = self.editor.buffer.byte_to_line(carret.index) as f64 * self.font_height;
+            //(-self.delta_y / FONT_HEIGHT) as usize..((-self.delta_y + self.size.height) / FONT_HEIGHT) as usize+1
+            if y > -self.delta_y + self.size.height - self.font_height{
+                self.delta_y = -y + self.size.height - self.font_height;
+            }
+            if y < -self.delta_y {
+                self.delta_y = -y;
+            }
+        }
     }
 
     pub fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx, app_ctx: &mut AppContext) -> bool {
@@ -272,6 +298,7 @@ impl EditorView {
                 ..
             } => {
                 self.editor.up(mods.shift);
+                self.put_carret_in_visible_range();
                 ctx.invalidate();
                 return true;
             }
@@ -281,6 +308,7 @@ impl EditorView {
                 ..
             } => {
                 self.editor.down(mods.shift);
+                self.put_carret_in_visible_range();
                 ctx.invalidate();
                 return true;
             }
@@ -292,6 +320,7 @@ impl EditorView {
                 for _ in 0..self.page_len {
                     self.editor.up(mods.shift);
                 }
+                self.put_carret_in_visible_range();
                 ctx.invalidate();
                 return true;
             }
@@ -303,6 +332,7 @@ impl EditorView {
                 for _ in 0..self.page_len {
                     self.editor.down(mods.shift)
                 }
+                self.put_carret_in_visible_range();
                 ctx.invalidate();
                 return true;
             }
@@ -397,8 +427,8 @@ impl EditorView {
         if self.delta_y > 0. {
             self.delta_y = 0.
         }
-        if -self.delta_y > self.editor.buffer.rope.len_lines() as f64 * FONT_HEIGHT - 4. * FONT_HEIGHT {
-            self.delta_y = -((self.editor.buffer.rope.len_lines() as f64) * FONT_HEIGHT - 4. * FONT_HEIGHT)
+        if -self.delta_y > self.editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
+            self.delta_y = -((self.editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
         }
         ctx.invalidate();
     }
@@ -409,6 +439,6 @@ impl EditorView {
         let height_f = (height as f64) / dpi_scale;
         self.size = Size::new(width_f, height_f);
 
-        self.page_len = (height_f / FONT_HEIGHT).round() as usize;
+        self.page_len = (height_f / self.font_height).round() as usize;
     }
 }
