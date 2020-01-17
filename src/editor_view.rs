@@ -30,7 +30,7 @@ impl EditorView {
 
     fn visible_range(&self) -> Range<usize> {
         (-self.delta_y / FONT_HEIGHT) as usize
-            ..((-self.delta_y + self.size.width) / FONT_HEIGHT) as usize
+            ..((-self.delta_y + self.size.height) / FONT_HEIGHT) as usize
     }
 
     pub fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
@@ -57,7 +57,7 @@ impl EditorView {
         let mut ranges = Vec::new();
         let mut selection_path = Vec::new();
 
-        for line_idx in visible_range.clone() {
+        for line_idx in dbg!(visible_range.clone()) {
             self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
