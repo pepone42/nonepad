@@ -335,12 +335,13 @@ impl EditStack {
 
 
 #[derive(Debug, Clone)]
-pub enum OpenRange<T> {
-    Range(Range<T>),
-    RangeTo(RangeTo<T>),
-    RangeFrom(RangeFrom<T>),
+pub enum SelectionLineRange {
+    Range(Range<usize>),
+    RangeTo(RangeTo<usize>),
+    RangeFrom(RangeFrom<usize>),
     RangeFull
 }
+
 
 
 #[derive(Debug, Clone)]
@@ -389,7 +390,7 @@ impl Buffer {
     pub fn selection_on_line<'a>(
         &'a self,
         line_idx: usize,
-        ranges: &mut Vec<OpenRange<usize>>,
+        ranges: &mut Vec<SelectionLineRange>,
     ) {
         ranges.clear();
         for r in self.carrets.iter().filter_map(move |c| {
@@ -399,10 +400,10 @@ impl Buffer {
                     self.rope.byte_to_line(r.start),
                     self.rope.byte_to_line(r.end),
                 ) {
-                    (s, e) if s == e && s == line_idx => dbg!(Some(OpenRange::Range(self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end)))),
-                    (s, _) if s == line_idx => Some(OpenRange::RangeFrom(self.byte_to_line_relative_index(r.start)..)),
-                    (_, e) if e == line_idx => Some(OpenRange::RangeTo(..self.byte_to_line_relative_index(r.end))),
-                    (s, e) if line_idx < e && line_idx > s => Some(OpenRange::RangeFull),
+                    (s, e) if s == e && s == line_idx => dbg!(Some(SelectionLineRange::Range(self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end)))),
+                    (s, _) if s == line_idx => Some(SelectionLineRange::RangeFrom(self.byte_to_line_relative_index(r.start)..)),
+                    (_, e) if e == line_idx => Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end))),
+                    (s, e) if line_idx < e && line_idx > s => Some(SelectionLineRange::RangeFull),
                     _ => None,
                 }
             } else {
