@@ -84,15 +84,8 @@ impl EditorView {
     fn add_range_to_selection(&mut self, y: f64, range: Range<usize>, layout: &dyn TextLayout, path: &mut Vec<PathEl>) {
         if let Some(e) = layout.hit_test_text_position(range.end) {
             if path.len() > 0 {
-                // todo: finish, if on the preceding line, the selection begin after the end
-                //       of the selection on current line, create 2 distinct path
-                // match (p[0],p.last().clone()) {
-                //     (PathEl::MoveTo(Point{x,y:_}),Some(PathEl::LineTo(Point{x:_,y}))) if x>e.point.x => {
-                //         p.push(PathEl::LineTo(Point::new(x,*y)));
-                //         p.push(PathEl::ClosePath);
-                //     }
-                //     _ => ()
-                // }
+                // todo: if on the preceding line, the selection begin after the end
+                //       of the selection on this line, create 2 distinct path
 
                 path.push(PathEl::LineTo(Point::new(e.point.x, y + 2.2)));
                 path.push(PathEl::LineTo(Point::new(e.point.x, FONT_HEIGHT + y + 2.2)));
@@ -149,27 +142,28 @@ impl EditorView {
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         piet.fill(rect, &BG_COLOR);
-        // piet.stroke(Line::new((10.0, 50.0), (90.0, 90.0)), &FG_COLOR, 1.0);
+
         let visible_range = self.visible_range();
         let mut dy = (self.delta_y / FONT_HEIGHT).fract() * FONT_HEIGHT;
-        //for line in self.text.lines().skip(r.start).take(r.end - r.start) {
+
         let mut line = String::new();
         let mut ranges = Vec::new();
         let mut selection_path = Vec::new();
         let mut current_path: Vec<PathEl> = Vec::new();
 
-        for line_idx in dbg!(visible_range.clone()) {
+        // Draw selection first
+        // TODO: cache layout to reuse it when we will draw the text
+        for line_idx in visible_range.clone() {
             self.editor.buffer.line(line_idx, &mut line);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             self.editor.buffer.selection_on_line(line_idx, &mut ranges);
 
             for r in &ranges {
-                dbg!(&line_idx, &r);
                 match r {
                     SelectionLineRange::Range(r) =>
-                    // Simple case, the selection is contain on one line
                     {
+                        // Simple case, the selection is contain on one line
                         self.add_bounded_range_selection(dy, r, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFrom(r) => {
@@ -189,7 +183,8 @@ impl EditorView {
             dy += FONT_HEIGHT;
         }
 
-
+        // if path is unclosed, it can only be because the laste visible line was a RangeFull
+        // We need to close it
         match current_path.last() {
             Some(PathEl::ClosePath) => (),
             _ => {
@@ -215,11 +210,9 @@ impl EditorView {
             piet.draw_text(&layout, (0.0, FONT_HEIGHT + dy), &FG_COLOR);
 
             self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
-                println!("carret {:?} on line {}", c, line_idx);
-                // println!("{:?}", layout.hit_test_text_position(c.col_index));
                 if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
                     piet.stroke(
-                        Line::new((metrics.point.x, FONT_HEIGHT + dy + 2.2), (metrics.point.x, dy + 2.2)),
+                        Line::new((metrics.point.x+1.0, FONT_HEIGHT + dy + 2.2), (metrics.point.x+1.0, dy + 2.2)),
                         &FG_COLOR,
                         2.0,
                     );

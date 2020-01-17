@@ -400,7 +400,7 @@ impl Buffer {
                     self.rope.byte_to_line(r.start),
                     self.rope.byte_to_line(r.end),
                 ) {
-                    (s, e) if s == e && s == line_idx => dbg!(Some(SelectionLineRange::Range(self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end)))),
+                    (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end))),
                     (s, _) if s == line_idx => Some(SelectionLineRange::RangeFrom(self.byte_to_line_relative_index(r.start)..)),
                     (_, e) if e == line_idx => Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end))),
                     (s, e) if line_idx < e && line_idx > s => Some(SelectionLineRange::RangeFull),
@@ -415,7 +415,7 @@ impl Buffer {
     }
 
     pub fn byte_to_line_relative_index(&self, index: usize) -> usize {
-        dbg!(index) - dbg!(self.rope.line_to_byte(self.rope.byte_to_line(index)))
+        index - self.rope.line_to_byte(self.rope.byte_to_line(index))
     }
 
     pub fn from_rope(rope: Rope) -> Self {
@@ -604,7 +604,6 @@ impl Buffer {
         let mut carrets = self.carrets.clone();
         carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
         for i in 0..carrets.len() {
-            dbg!(carrets[i].index);
             let r = carrets[i].range();
             carrets[i].index = r.start;
             rope.remove(rope.byte_to_char(r.start)..rope.byte_to_char(r.end));

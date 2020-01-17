@@ -22,10 +22,10 @@ use druid_shell::{
 use crate::app_context::AppContext;
 use crate::editor_view::EditorView;
 
-const BG_COLOR: Color = Color::rgb8(0x2f, 0x4f, 0x4f);
-const FG_COLOR: Color = Color::rgb8(0xdb, 0xd0, 0xa7);
-const FG_SEL_COLOR: Color = Color::rgb8(0xdb, 0x80, 0x80);
-const BG_SEL_COLOR: Color = Color::rgb8(0xdb, 0x00, 0x00);
+const BG_COLOR: Color = Color::rgb8(34, 40, 42);
+const FG_COLOR: Color = Color::rgb8(241, 242, 243);
+const FG_SEL_COLOR: Color = Color::rgb8(59, 73, 75);
+const BG_SEL_COLOR: Color = Color::rgb8(79, 97, 100);
 
 const FONT_HEIGHT: f64 = 13.0;
 
