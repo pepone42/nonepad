@@ -1,5 +1,5 @@
 use std::io::Result;
-use std::ops::Range;
+use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
 use druid_shell::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
@@ -10,6 +10,34 @@ use crate::app_context::AppContext;
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
+
+#[derive(Debug, Default)]
+struct SelectionPath {
+    elem: Vec<PathEl>,
+    last_range: Option<SelectionLineRange>,
+}
+
+impl Deref for SelectionPath {
+    type Target = Vec<PathEl>;
+    fn deref(&self) -> &Self::Target {
+        &self.elem
+    }
+}
+
+impl DerefMut for SelectionPath {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.elem
+    }
+}
+
+impl SelectionPath {
+    fn new() -> Self {
+        Self {
+            elem: Vec::new(),
+            last_range: None,
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct EditorView {
@@ -42,7 +70,7 @@ impl EditorView {
         y: f64,
         range: &Range<usize>,
         layout: &dyn TextLayout,
-        path: &mut Vec<PathEl>,
+        path: &mut SelectionPath,
     ) {
         match (
             layout.hit_test_text_position(range.start),
@@ -85,24 +113,49 @@ impl EditorView {
         }
     }
 
-    fn add_range_to_selection(&mut self, y: f64, range: Range<usize>, layout: &dyn TextLayout, path: &mut Vec<PathEl>) {
+    fn add_range_to_selection(
+        &mut self,
+        y: f64,
+        range: Range<usize>,
+        layout: &dyn TextLayout,
+        path: &mut SelectionPath,
+    ) {
         if let Some(e) = layout.hit_test_text_position(range.end) {
-            if path.len() > 0 {
-                // todo: if on the preceding line, the selection begin after the end
-                //       of the selection on this line, create 2 distinct path
-
-                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., y)));
-                path.push(PathEl::ClosePath);
-            } else {
-                path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
-                path.push(PathEl::ClosePath);
+            match &path.last_range {
+                Some(SelectionLineRange::RangeFrom(_)) if range.end == 0 => {
+                    path.push(PathEl::ClosePath);
+                }
+                Some(SelectionLineRange::RangeFull) if range.end == 0 => {
+                    path.push(PathEl::LineTo(Point::new(0., y)));
+                    path.push(PathEl::ClosePath);
+                }
+                Some(SelectionLineRange::RangeFrom(r)) if r.start > range.end => {
+                    path.push(PathEl::ClosePath);
+                    path.push(PathEl::MoveTo(Point::new(e.point.x, y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+                    path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                    path.push(PathEl::LineTo(Point::new(0., y)));
+                    path.push(PathEl::ClosePath);
+                }
+                Some(SelectionLineRange::RangeFrom(_)) |
+                Some(SelectionLineRange::RangeFull) => {
+                    path.push(PathEl::LineTo(Point::new(e.point.x, y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+                    path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                    path.push(PathEl::LineTo(Point::new(0., y)));
+                    path.push(PathEl::ClosePath);
+                }
+                None => {
+                    path.clear();
+                    path.push(PathEl::MoveTo(Point::new(0., y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x, y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+                    path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                    path.push(PathEl::ClosePath);
+                }
+                _ => {
+                    unreachable!();
+                }
             }
         }
     }
@@ -151,7 +204,8 @@ impl EditorView {
         let mut line = String::new();
         let mut ranges = Vec::new();
         let mut selection_path = Vec::new();
-        let mut current_path: Vec<PathEl> = Vec::new();
+        //let mut current_path: Vec<PathEl> = Vec::new();
+        let mut current_path = SelectionPath::new();
 
         // Draw selection first
         // TODO: cache layout to reuse it when we will draw the text
@@ -161,8 +215,8 @@ impl EditorView {
 
             self.editor.buffer.selection_on_line(line_idx, &mut ranges);
 
-            for r in &ranges {
-                match r {
+            for range in &ranges {
+                match range {
                     SelectionLineRange::Range(r) => {
                         // Simple case, the selection is contain on one line
                         self.add_bounded_range_selection(dy, r, &layout, &mut current_path)
@@ -177,10 +231,12 @@ impl EditorView {
                         self.add_range_full_selection(dy, 0..line.len() - 1, &layout, &mut current_path)
                     }
                 }
+                current_path.last_range = Some(range.clone());
+                if let Some(PathEl::ClosePath) = current_path.last() {
+                    selection_path.push(std::mem::take(&mut current_path));
+                }
             }
-            if let Some(PathEl::ClosePath) = current_path.last() {
-                selection_path.push(std::mem::take(&mut current_path));
-            }
+
             dy += self.font_height;
         }
 
@@ -196,7 +252,7 @@ impl EditorView {
         }
 
         for path in selection_path {
-            let path = BezPath::from_vec(path);
+            let path = BezPath::from_vec(path.elem);
             let brush = piet.solid_brush(FG_SEL_COLOR);
             piet.fill(&path, &brush);
             let brush = piet.solid_brush(BG_SEL_COLOR);

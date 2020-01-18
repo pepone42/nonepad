@@ -135,14 +135,21 @@ fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize,
     (index, index - line_boundary.start, col)
 }
 
-// TODO: falses
 fn collapse_selections(carrets: &mut Vec<Carret>) {
     if carrets.len() > 1 {
-        carrets.sort_unstable_by(|a, b| a.range().cmp(b.range()));
-        if carrets[0].range().contains(&carrets[1].range().start) {
-            carrets.clear();
-            carrets.push(Carret::merge(&carrets[0], &carrets[carrets.len() - 1]));
+        carrets.sort_unstable_by(|a,b| a.range().start.cmp(&b.range().start))
+    }
+    let mut redo = true;
+    'outer: while redo {
+        for i in 0..carrets.len()-1 {
+            if carrets[i].range().contains(&carrets[i+1].range().start) {
+                carrets[i] = Carret::merge(&carrets[i],&carrets[i+1]);
+                carrets.remove(i+1);
+                redo = true;
+                continue 'outer;
+            }
         }
+        redo = false;
     }
 }
 
