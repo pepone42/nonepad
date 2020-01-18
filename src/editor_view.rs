@@ -15,6 +15,7 @@ use crate::{BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
 struct SelectionPath {
     elem: Vec<PathEl>,
     last_range: Option<SelectionLineRange>,
+    last_x: f64,
 }
 
 impl Deref for SelectionPath {
@@ -35,6 +36,7 @@ impl SelectionPath {
         Self {
             elem: Vec::new(),
             last_range: None,
+            last_x: 0.,
         }
     }
 }
@@ -94,7 +96,7 @@ impl EditorView {
         range: Range<usize>,
         layout: &dyn TextLayout,
         path: &mut Vec<PathEl>,
-    ) {
+    ) -> f64 {
         match (
             layout.hit_test_text_position(range.start),
             layout.hit_test_text_position(range.end),
@@ -108,8 +110,9 @@ impl EditorView {
                     e.point.x + self.font_advance,
                     self.font_height + y,
                 )));
+                s.point.x
             }
-            _ => (),
+            _ => 0.,
         }
     }
 
@@ -129,7 +132,7 @@ impl EditorView {
                     path.push(PathEl::LineTo(Point::new(0., y)));
                     path.push(PathEl::ClosePath);
                 }
-                Some(SelectionLineRange::RangeFrom(r)) if r.start > range.end => {
+                Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                     path.push(PathEl::ClosePath);
                     path.push(PathEl::MoveTo(Point::new(e.point.x, y)));
                     path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
@@ -137,8 +140,7 @@ impl EditorView {
                     path.push(PathEl::LineTo(Point::new(0., y)));
                     path.push(PathEl::ClosePath);
                 }
-                Some(SelectionLineRange::RangeFrom(_)) |
-                Some(SelectionLineRange::RangeFull) => {
+                Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
                     path.push(PathEl::LineTo(Point::new(e.point.x, y)));
                     path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
                     path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
@@ -165,29 +167,46 @@ impl EditorView {
         y: f64,
         range: Range<usize>,
         layout: &dyn TextLayout,
-        path: &mut Vec<PathEl>,
+        path: &mut SelectionPath,
     ) {
         if let Some(e) = layout.hit_test_text_position(range.end) {
-            if path.len() > 0 {
-                if let PathEl::MoveTo(point) = path[0] {
-                    if point.x > 0.1 {
-                        path[0] = PathEl::LineTo(point);
-                        path.insert(0, PathEl::MoveTo(Point::new(0., point.y)));
-                    }
+            match &path.last_range {
+                Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
+                    path.push(PathEl::ClosePath);
+                    path.push(PathEl::MoveTo(Point::new(0., y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                    path.push(PathEl::LineTo(Point::new(
+                        e.point.x + self.font_advance,
+                        self.font_height + y,
+                    )));
                 }
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
-                )));
-            } else {
-                path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
-                )));
+                Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
+                    // insert a point at the begining of the line
+                    path[0] = PathEl::LineTo(Point::new(path.last_x, y));
+                    path.insert(0, PathEl::MoveTo(Point::new(0., y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                    path.push(PathEl::LineTo(Point::new(
+                        e.point.x + self.font_advance,
+                        self.font_height + y,
+                    )));
+                }
+                None => {
+                    // the precedent line was outside the visible range
+                    path.clear();
+                    path.push(PathEl::MoveTo(Point::new(0., y)));
+                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                    path.push(PathEl::LineTo(Point::new(
+                        e.point.x + self.font_advance,
+                        self.font_height + y,
+                    )));
+                }
+                _ => {
+                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                    path.push(PathEl::LineTo(Point::new(
+                        e.point.x + self.font_advance,
+                        self.font_height + y,
+                    )));
+                }
             }
         }
     }
@@ -222,7 +241,8 @@ impl EditorView {
                         self.add_bounded_range_selection(dy, r, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFrom(r) => {
-                        self.add_range_from_selection(dy, r.start..line.len() - 1, &layout, &mut current_path)
+                        current_path.last_x =
+                            self.add_range_from_selection(dy, r.start..line.len() - 1, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeTo(r) => {
                         self.add_range_to_selection(dy, 0..r.end, &layout, &mut current_path)
