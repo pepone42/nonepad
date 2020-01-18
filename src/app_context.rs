@@ -1,6 +1,6 @@
+use druid_shell::kurbo::{Line, Rect, Size, Vec2};
 use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WinCtx};
-use druid_shell::kurbo::{Line, Rect, Size, Vec2};
 
 #[derive(Debug)]
 pub struct PaletteItem {
@@ -39,7 +39,7 @@ impl AppContext {
     }
 
     pub fn paint_palette(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
-        let rect = Rect::new(self.size.width/2. - 200., 0.0, 400., 400.);
+        let rect = Rect::new(self.size.width / 2. - 200., 0.0, 400., 400.);
         piet.fill(rect, &crate::BG_COLOR);
         false
     }

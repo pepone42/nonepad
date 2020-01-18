@@ -1,5 +1,5 @@
 use std::io::Result;
-use std::ops::{Range,RangeTo,RangeFrom, RangeFull};
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 use std::path::Path;
 
 use ropey::{Rope, RopeSlice};
@@ -333,16 +333,13 @@ impl EditStack {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub enum SelectionLineRange {
     Range(Range<usize>),
     RangeTo(RangeTo<usize>),
     RangeFrom(RangeFrom<usize>),
-    RangeFull
+    RangeFull,
 }
-
-
 
 #[derive(Debug, Clone)]
 pub struct Buffer {
@@ -374,10 +371,7 @@ impl Buffer {
             .filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
     }
 
-    pub fn selection_index_on_line<'a>(
-        &'a self,
-        line_idx: usize,
-    ) -> impl Iterator<Item = &'a Carret> {
+    pub fn selection_index_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
         self.carrets.iter().filter(move |c| {
             if let Some(sel) = c.selection {
                 self.rope.byte_to_line(sel) == line_idx
@@ -387,22 +381,21 @@ impl Buffer {
         })
     }
 
-    pub fn selection_on_line<'a>(
-        &'a self,
-        line_idx: usize,
-        ranges: &mut Vec<SelectionLineRange>,
-    ) {
+    pub fn selection_on_line<'a>(&'a self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {
         ranges.clear();
         for r in self.carrets.iter().filter_map(move |c| {
             if let Some(sel) = c.selection {
                 let r = c.range();
-                match (
-                    self.rope.byte_to_line(r.start),
-                    self.rope.byte_to_line(r.end),
-                ) {
-                    (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end))),
-                    (s, _) if s == line_idx => Some(SelectionLineRange::RangeFrom(self.byte_to_line_relative_index(r.start)..)),
-                    (_, e) if e == line_idx => Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end))),
+                match (self.rope.byte_to_line(r.start), self.rope.byte_to_line(r.end)) {
+                    (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(
+                        self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end),
+                    )),
+                    (s, _) if s == line_idx => Some(SelectionLineRange::RangeFrom(
+                        self.byte_to_line_relative_index(r.start)..,
+                    )),
+                    (_, e) if e == line_idx => {
+                        Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end)))
+                    }
                     (s, e) if line_idx < e && line_idx > s => Some(SelectionLineRange::RangeFull),
                     _ => None,
                 }
@@ -741,10 +734,7 @@ mod test {
     fn rope_double_insert() {
         let b = Buffer::new();
         println!("{:?}", b.insert("hello"));
-        assert_eq!(
-            b.insert("hello").insert(" world").to_string(),
-            "hello world"
-        );
+        assert_eq!(b.insert("hello").insert(" world").to_string(), "hello world");
     }
     #[test]
     fn rope_backspace() {

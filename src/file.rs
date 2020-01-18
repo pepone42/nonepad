@@ -128,16 +128,12 @@ impl TextFileInfo {
         let encoded_output = match self.encoding.name() {
             "UTF-16LE" => {
                 let mut v = Vec::new();
-                input
-                    .encode_utf16()
-                    .for_each(|i| v.extend_from_slice(&i.to_le_bytes()));
+                input.encode_utf16().for_each(|i| v.extend_from_slice(&i.to_le_bytes()));
                 Cow::from(v)
             }
             "UTF-16BE" => {
                 let mut v = Vec::new();
-                input
-                    .encode_utf16()
-                    .for_each(|i| v.extend_from_slice(&i.to_be_bytes()));
+                input.encode_utf16().for_each(|i| v.extend_from_slice(&i.to_be_bytes()));
                 Cow::from(v)
             }
             _ => self.encoding.encode(&input).0,
@@ -213,11 +209,7 @@ pub fn detect_indentation(input: &RopeSlice) -> Indentation {
 
     for line in input.lines() {
         let width = line.chars().take_while(|c| *c == ' ').count();
-        let indent = if width < last {
-            last - width
-        } else {
-            width - last
-        };
+        let indent = if width < last { last - width } else { width - last };
         if indent > 1 {
             (*indents.entry(indent).or_insert(0)) += 1;
         }
