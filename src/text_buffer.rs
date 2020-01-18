@@ -137,14 +137,16 @@ fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize,
 
 fn collapse_selections(carrets: &mut Vec<Carret>) {
     if carrets.len() > 1 {
-        carrets.sort_unstable_by(|a,b| a.range().start.cmp(&b.range().start))
+        carrets.sort_unstable_by(|a, b| a.range().start.cmp(&b.range().start))
     }
     let mut redo = true;
     'outer: while redo {
-        for i in 0..carrets.len()-1 {
-            if carrets[i].range().contains(&carrets[i+1].range().start) {
-                carrets[i] = Carret::merge(&carrets[i],&carrets[i+1]);
-                carrets.remove(i+1);
+        for i in 0..carrets.len() - 1 {
+            if carrets[i].range().contains(&carrets[i + 1].range().start)
+                || (carrets[i].selection.is_none() && carrets[i].index == carrets[i + 1].index)
+            {
+                carrets[i] = Carret::merge(&carrets[i], &carrets[i + 1]);
+                carrets.remove(i + 1);
                 redo = true;
                 continue 'outer;
             }
@@ -211,7 +213,7 @@ impl Carret {
             index: cstart.index,
             vcol: cstart.vcol,
             col_index: cstart.col_index,
-            selection: None, // cend.range().end,
+            selection: Some(cend.range().end),
             is_clone: cstart.is_clone || cend.is_clone,
         }
     }
