@@ -141,13 +141,6 @@ impl EditorView {
     pub fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
-        self.font_advance = piet.text().new_text_layout(&font, " ").build().unwrap().width();
-        // Calculated with font_kit
-        self.font_descent = -3.2626953;
-        self.font_ascent = 11.958984;
-        self.font_height = 15.22168;
-
-
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         piet.fill(rect, &BG_COLOR);
 
@@ -433,12 +426,20 @@ impl EditorView {
         ctx.invalidate();
     }
 
-    pub fn size(&mut self, width: u32, height: u32, dpi: f32, _ctx: &mut dyn WinCtx) {
+    pub fn size(&mut self, width: u32, height: u32, dpi: f32, ctx: &mut dyn WinCtx) {
         let dpi_scale = dpi as f64 / 96.0;
         let width_f = (width as f64) / dpi_scale;
         let height_f = (height as f64) / dpi_scale;
         self.size = Size::new(width_f, height_f);
+        
+        let font = ctx.text_factory().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
+        self.font_advance = ctx.text_factory().new_text_layout(&font, " ").build().unwrap().width();
+        // Calculated with font_kit
+        self.font_descent = -3.2626953;
+        self.font_ascent = 11.958984;
+        self.font_height = 15.22168;
 
         self.page_len = (height_f / self.font_height).round() as usize;
+
     }
 }
