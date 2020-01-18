@@ -99,7 +99,9 @@ fn byte_to_line_first_column(slice: &RopeSlice, index: usize) -> usize {
         }
         start += c.len_utf8();
     }
-    if start >= index {
+    if index == range.start {
+        start
+    } else if start >= index {
         range.start
     } else {
         start
