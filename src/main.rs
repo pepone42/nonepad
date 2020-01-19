@@ -4,6 +4,7 @@ mod dialog;
 mod editor_view;
 mod file;
 mod text_buffer;
+mod text_layout_helper;
 
 use std::any::Any;
 use std::io::Result;

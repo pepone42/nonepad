@@ -44,9 +44,19 @@ impl Default for LineFeed {
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Indentation {
-    Tab,
+    Tab(usize),
     Space(usize),
 }
+
+impl Indentation {
+    pub fn len(&self) -> usize {
+        match *self {
+            Indentation::Tab(l) => l,
+            Indentation::Space(l) => l,
+        }
+    }
+}
+
 impl Default for Indentation {
     fn default() -> Self {
         // Todo, get from settings
@@ -198,7 +208,8 @@ pub fn detect_indentation(input: &RopeSlice) -> Indentation {
         }
     }
     if tab > space {
-        return Indentation::Tab;
+        // todo: get len from settings
+        return Indentation::Tab(4);
     }
 
     // Algorythm from

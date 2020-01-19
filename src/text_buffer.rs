@@ -154,6 +154,14 @@ fn collapse_selections(carrets: &mut Vec<Carret>) {
     }
 }
 
+
+#[derive(Debug)]
+pub enum InvisibleChar {
+    Space(usize),
+    Tab(Range<usize>),
+    LineFeed(usize),
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Carret {
     pub index: usize,
@@ -405,6 +413,39 @@ impl Buffer {
                 out.push_str(r);
             }
         }
+    }
+
+    /// Construct a string with tab replaced as space
+    /// return the position of invisible char
+    pub fn displayable_line(&self, line: usize, tabsize: usize, out: &mut String, indices: &mut Vec<usize>) {
+        out.clear();
+        indices.clear();
+        if line >= self.rope.len_lines() {
+            return;
+        }
+        
+        let mut index = 0;
+        for c in self.rope.line(line).chars() {
+            match c {
+                ' ' => {
+                    indices.push(index);
+                    out.push(' ');
+                    index+=1;
+                }
+                '\t'=> {
+                    let nb_space = tabsize - index%tabsize;
+                    indices.push(index);
+                    out.push_str(&" ".repeat(nb_space));
+                    index += nb_space;
+                }
+                _ => {
+                    indices.push(index);
+                    out.push(c);
+                    index += c.len_utf8();
+                }
+            }
+        }
+        indices.push(index);
     }
 
     pub fn backward(&self, expand_selection: bool) -> Self {
@@ -686,6 +727,14 @@ impl Buffer {
             Some(Self { rope, carrets })
         }
     }
+
+    // pub fn tab(&self) -> Self {
+    //     if self.carrets.len()>1 {
+
+    //     } else {
+
+    //     }
+    // }
 }
 
 impl ToString for Buffer {

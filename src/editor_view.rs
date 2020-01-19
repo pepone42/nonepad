@@ -41,6 +41,9 @@ impl SelectionPath {
     }
 }
 
+
+
+
 #[derive(Debug, Default)]
 pub struct EditorView {
     editor: EditStack,
@@ -70,7 +73,7 @@ impl EditorView {
     fn add_bounded_range_selection(
         &mut self,
         y: f64,
-        range: &Range<usize>,
+        range: Range<usize>,
         layout: &dyn TextLayout,
         path: &mut SelectionPath,
     ) {
@@ -211,6 +214,8 @@ impl EditorView {
         }
     }
 
+    
+
     pub fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
@@ -221,6 +226,7 @@ impl EditorView {
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
         let mut line = String::new();
+        let mut indices = Vec::new();
         let mut ranges = Vec::new();
         let mut selection_path = Vec::new();
         //let mut current_path: Vec<PathEl> = Vec::new();
@@ -229,7 +235,8 @@ impl EditorView {
         // Draw selection first
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
-            self.editor.buffer.line(line_idx, &mut line);
+            //self.editor.buffer.line(line_idx, &mut line);
+            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.len(), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             self.editor.buffer.selection_on_line(line_idx, &mut ranges);
@@ -238,14 +245,14 @@ impl EditorView {
                 match range {
                     SelectionLineRange::Range(r) => {
                         // Simple case, the selection is contain on one line
-                        self.add_bounded_range_selection(dy, r, &layout, &mut current_path)
+                        self.add_bounded_range_selection(dy, indices[r.start]..indices[r.end], &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFrom(r) => {
                         current_path.last_x =
-                            self.add_range_from_selection(dy, r.start..line.len() - 1, &layout, &mut current_path)
+                            self.add_range_from_selection(dy, indices[r.start]..line.len() - 1, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeTo(r) => {
-                        self.add_range_to_selection(dy, 0..r.end, &layout, &mut current_path)
+                        self.add_range_to_selection(dy, 0..indices[r.end], &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFull => {
                         self.add_range_full_selection(dy, 0..line.len() - 1, &layout, &mut current_path)
@@ -281,13 +288,15 @@ impl EditorView {
 
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
-            self.editor.buffer.line(line_idx, &mut line);
+            
+            //self.editor.buffer.line(line_idx, &mut line);
+            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.len(), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
             self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(c.col_index) {
+                if let Some(metrics) = layout.hit_test_text_position(indices[c.col_index]) {
                     piet.stroke(
                         Line::new(
                             (metrics.point.x + 1.0, self.font_height + dy),
@@ -343,6 +352,12 @@ impl EditorView {
         }
 
         match event {
+            KeyEvent {
+                key_code: KeyCode::Tab,
+                mods,
+                ..} => {
+                    
+                }
             KeyEvent {
                 key_code: KeyCode::ArrowRight,
                 mods,
