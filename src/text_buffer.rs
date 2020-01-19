@@ -142,8 +142,7 @@ fn collapse_selections(carrets: &mut Vec<Carret>) {
     let mut redo = true;
     'outer: while redo {
         for i in 0..carrets.len() - 1 {
-            if carrets[i].range().contains(&carrets[i + 1].range().start)
-                || (carrets[i].selection.is_none() && carrets[i].index == carrets[i + 1].index)
+            if carrets[i].collide_with(&carrets[i + 1])
             {
                 carrets[i] = Carret::merge(&carrets[i], &carrets[i + 1]);
                 carrets.remove(i + 1);
@@ -152,33 +151,6 @@ fn collapse_selections(carrets: &mut Vec<Carret>) {
             }
         }
         redo = false;
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectionDirection {
-    Forward,
-    Backward,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Selection {
-    direction: SelectionDirection,
-    pub byte_len: usize,
-}
-
-impl Selection {
-    pub fn new() -> Self {
-        Selection {
-            direction: SelectionDirection::Forward,
-            byte_len: 0,
-        }
-    }
-}
-
-impl Default for Selection {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -202,7 +174,6 @@ impl Carret {
         }
     }
 
-    // TODO: false
     pub fn merge(c1: &Carret, c2: &Carret) -> Self {
         let (cstart, cend) = if c1.range().start < c2.range().start {
             (c1, c2)
@@ -218,6 +189,11 @@ impl Carret {
         }
     }
 
+    pub fn collide_with(&self,c1: &Carret ) -> bool {
+        self.range().contains(&c1.range().start)
+                || (self.selection.is_none() && self.index == c1.index)
+    }
+
     pub fn range(&self) -> Range<usize> {
         if let Some(selection) = self.selection {
             if selection < self.index {
@@ -228,21 +204,6 @@ impl Carret {
         } else {
             return self.index..self.index;
         }
-    }
-    pub fn char_range(&self, slice: &RopeSlice) -> Range<usize> {
-        let r = self.range();
-        slice.byte_to_char(r.start)..slice.byte_to_char(r.end)
-    }
-
-    pub fn selection_grapheme_len(&self, slice: &RopeSlice) -> usize {
-        let r = self.range();
-        let mut index = r.start;
-        let mut i = 0;
-        while index < r.end {
-            index = next_grapheme_boundary(slice, index);
-            i += 1;
-        }
-        return i;
     }
 }
 
