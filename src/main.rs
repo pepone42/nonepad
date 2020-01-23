@@ -1,10 +1,11 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
-mod app_context;
 mod dialog;
-mod editor_view;
 mod file;
 mod text_buffer;
-mod text_layout_helper;
+mod editor_view;
+mod app_context;
+mod carret;
+mod rope_utils;
 
 use std::any::Any;
 use std::io::Result;
@@ -12,11 +13,12 @@ use std::io::Result;
 use std::path::Path;
 
 use druid_shell::kurbo::Vec2;
-use druid_shell::piet::{Color, Piet};
+use druid_shell::piet::{Piet, Color};
 
 use druid_shell::{
-    Application, Cursor, HotKey, KeyCode, KeyEvent, KeyModifiers, Menu, MouseEvent, RunLoop, SysMods, TimerToken,
-    WinCtx, WinHandler, WindowBuilder, WindowHandle,
+    Application, Cursor, HotKey, KeyCode, KeyEvent, KeyModifiers,
+    Menu, MouseEvent, RunLoop, SysMods, TimerToken, WinCtx, WinHandler, WindowBuilder,
+    WindowHandle,
 };
 
 use crate::app_context::AppContext;
@@ -39,7 +41,9 @@ struct MainWindowState {
 
 impl MainWindowState {
     fn new() -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
     fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -59,7 +63,7 @@ impl WinHandler for MainWindowState {
     fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
         let mut repaint = self.editor.paint(piet, _ctx);
         if self.app_context.is_palette_active() {
-            repaint = self.app_context.paint_palette(piet, _ctx);
+            repaint = self.app_context.paint_palette(piet,_ctx);
             //unimplemented!();
         }
 
@@ -112,9 +116,9 @@ impl WinHandler for MainWindowState {
     }
 
     fn size(&mut self, width: u32, height: u32, _ctx: &mut dyn WinCtx) {
-        self.editor.size(width, height, self.handle.get_dpi(), _ctx);
+        self.editor.size(width, height, self.handle.get_dpi(), _ctx,);
         if self.app_context.is_palette_active() {
-            self.app_context.size(width, height, self.handle.get_dpi(), _ctx);
+            self.app_context.size(width, height, self.handle.get_dpi(), _ctx,);
         }
     }
 
@@ -131,7 +135,13 @@ fn main() {
     Application::init();
 
     let mut file_menu = Menu::new();
-    file_menu.add_item(0x100, "E&xit", Some(&HotKey::new(SysMods::Cmd, "q")), true, false);
+    file_menu.add_item(
+        0x100,
+        "E&xit",
+        Some(&HotKey::new(SysMods::Cmd, "q")),
+        true,
+        false,
+    );
     file_menu.add_item(
         0x101,
         "O&pen",

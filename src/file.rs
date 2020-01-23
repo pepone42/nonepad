@@ -49,9 +49,16 @@ pub enum Indentation {
 }
 
 impl Indentation {
-    pub fn len(&self) -> usize {
+    pub fn visible_len(&self) -> usize {
         match *self {
             Indentation::Tab(l) => l,
+            Indentation::Space(l) => l,
+        }
+    }
+
+    pub fn len_as_byte(&self) -> usize {
+        match *self {
+            Indentation::Tab(l) => 1,
             Indentation::Space(l) => l,
         }
     }

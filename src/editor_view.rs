@@ -236,7 +236,7 @@ impl EditorView {
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.len(), &mut line, &mut indices);
+            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.visible_len(), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             self.editor.buffer.selection_on_line(line_idx, &mut ranges);
@@ -290,13 +290,13 @@ impl EditorView {
         for line_idx in visible_range {
             
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.len(), &mut line, &mut indices);
+            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.visible_len(), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
             self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(indices[c.col_index]) {
+                if let Some(metrics) = layout.hit_test_text_position(indices[c.index_column()]) {
                     piet.stroke(
                         Line::new(
                             (metrics.point.x + 1.0, self.font_height + dy),
