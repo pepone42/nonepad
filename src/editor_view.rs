@@ -448,6 +448,7 @@ impl EditorView {
 
         if HotKey::new(None, KeyCode::Escape).matches(event) {
             self.editor.revert_to_single_carrets();
+            self.editor.cancel_selection();
             ctx.invalidate();
             return true;
         }

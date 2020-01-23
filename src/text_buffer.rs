@@ -113,6 +113,12 @@ impl EditStack {
             self.buffer = self.buffer.revert_to_single_carrets();
         }
     }
+    pub fn cancel_selection(&mut self) {
+        self.buffer = self.buffer.cancel_selection();
+    }
+    pub fn have_selection(&self) -> bool {
+        self.buffer.have_selection()
+    }
     pub fn home(&mut self, expand_selection: bool) {
         self.buffer = self.buffer.home(expand_selection);
     }
@@ -368,6 +374,19 @@ impl Buffer {
             carrets.push(c);
         }
         Self { rope, carrets }
+    }
+
+    pub fn cancel_selection(&self) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        for c in &mut carrets {
+            c.selection = None;
+        }
+        Self { rope, carrets }
+    }
+
+    pub fn have_selection(&self) -> bool {
+        self.carrets.iter().any(|c| c.selection.is_some())
     }
 
     pub fn revert_to_single_carrets(&self) -> Self {
