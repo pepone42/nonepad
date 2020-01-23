@@ -350,7 +350,11 @@ impl EditorView {
             ctx.invalidate();
             return true;
         }
-
+        if HotKey::new(SysMods::AltCmd, KeyCode::ArrowUp).matches(event) {
+            self.editor.duplicate_up();
+            ctx.invalidate();
+            return true;
+        }
         match event {
             KeyEvent {
                 key_code: KeyCode::Tab,

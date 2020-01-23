@@ -53,6 +53,7 @@ impl Carret {
         
     }
 
+
     pub fn collide_with(&self, c1: &Carret) -> bool {
         self.range().contains(&c1.range().start) || (self.selection.is_none() && self.index == c1.index)
     }
@@ -166,6 +167,21 @@ impl Carret {
             None
         }
     }
+
+    pub fn duplicate_up(&self,rope: &Rope) -> Option<Self> {
+        if self.index_line(rope) >0 {
+            let mut c = self.clone();
+            c.is_clone = true; // TODO: impl Clone?
+
+            let i = self.index_from_top_neighbor(rope);
+            c.sub(c.index - i,&rope);
+
+            Some(c)
+        } else {
+            None
+        }
+    }
+
     pub fn add(&mut self,delta: usize,rope: &Rope)  {
         self.set_index(self.index + delta, rope);
 

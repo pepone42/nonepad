@@ -105,6 +105,9 @@ impl EditStack {
     pub fn duplicate_down(&mut self) {
         self.buffer = self.buffer.duplicate_down();
     }
+    pub fn duplicate_up(&mut self) {
+        self.buffer = self.buffer.duplicate_up();
+    }
     pub fn revert_to_single_carrets(&mut self) {
         if self.buffer.carrets.len() > 1 {
             self.buffer = self.buffer.revert_to_single_carrets();
@@ -338,7 +341,7 @@ impl Buffer {
     pub fn duplicate_down(&self) -> Self {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
-        carrets.sort_unstable_by(|a, b| a.range().cmp(b.range()));
+        carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
         //let mut c = carrets.last().unwrap();
 
         // let line = rope.byte_to_line(c.index);
@@ -351,6 +354,17 @@ impl Buffer {
         //     carrets.push(c);
         // }
         if let Some(c) = carrets.last().and_then(|c| c.duplicate_down(&rope)) {
+            carrets.push(c);
+        }
+        Self { rope, carrets }
+    }
+
+    pub fn duplicate_up(&self) -> Self {
+        let rope = self.rope.clone();
+        let mut carrets = self.carrets.clone();
+        carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
+
+        if let Some(c) = carrets.first().and_then(|c| c.duplicate_up(&rope)) {
             carrets.push(c);
         }
         Self { rope, carrets }
