@@ -272,8 +272,11 @@ impl Buffer {
                     index += nb_space;
                 }
                 _ => {
-                    indices.push(index);
+
                     out.push(c);
+                    for i in index..index + c.len_utf8() {
+                        indices.push(index);
+                    }
                     index += c.len_utf8();
                 }
             }
