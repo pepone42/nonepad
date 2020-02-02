@@ -85,6 +85,25 @@ pub fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
     line_start..line_end
 }
 
+pub fn line_indent_len(slice: &RopeSlice, line: usize, tabsize: usize) -> usize {
+    let mut col = 0;
+    for c in slice.line(line).chars() {
+        match c {
+            ' ' => {
+                col += 1;
+            }
+            '\t' => {
+                let nb_space = tabsize - col % tabsize;
+                col += nb_space;
+            }
+            _ => {
+                break;
+            }
+        }
+    }
+    col
+}
+
 pub fn byte_to_line_first_column(slice: &RopeSlice, index: usize) -> usize {
     let range = byte_to_line_boundary(slice, index);
     let mut start = range.start;

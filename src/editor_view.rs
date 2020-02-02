@@ -357,12 +357,6 @@ impl EditorView {
         }
         match event {
             KeyEvent {
-                key_code: KeyCode::Tab,
-                mods,
-                ..} => {
-                    
-                }
-            KeyEvent {
                 key_code: KeyCode::ArrowRight,
                 mods,
                 ..
@@ -442,7 +436,14 @@ impl EditorView {
                 ctx.invalidate();
                 return true;
             }
-
+            KeyEvent {
+                key_code: KeyCode::Tab,
+                ..
+            } => {
+                self.editor.tab();
+                ctx.invalidate();
+                return true;
+            }
             _ => (),
         }
 
