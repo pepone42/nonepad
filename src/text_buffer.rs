@@ -140,7 +140,8 @@ impl EditStack {
         };
     }
     pub fn tab(&mut self) {
-        self.buffer = self.buffer.tab(self.file.indentation);
+        let b = self.buffer.tab(self.file.indentation);
+        self.push_edit(b);
     }
 }
 
@@ -576,13 +577,6 @@ impl Buffer {
         } else {
             Some(Self { rope, carrets })
         }
-    }
-
-    pub fn indent_line(&self, line: usize, indentation: crate::file::Indentation) -> Self {
-        let mut rope = self.rope.clone();
-        let mut carrets = self.carrets.clone();
-
-        Self { rope, carrets }
     }
 
     pub fn tab(&self, indentation: crate::file::Indentation) -> Self {
