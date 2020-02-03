@@ -597,7 +597,9 @@ impl Buffer {
                 let r = carrets[i].range();
                 let text = match indentation {
                     Indentation::Space(n) => {
-                        let nb_space = n - r.start % n;
+                        let i = r.start - rope.line_to_byte(*line_range.start());
+                        let start = line_index_to_column(&rope.line(*line_range.start()),i,n);
+                        let nb_space = n - start % n;
                         " ".repeat(nb_space).to_owned()
                     }
                     Indentation::Tab(_) => "\t".to_owned(),

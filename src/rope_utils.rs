@@ -85,6 +85,30 @@ pub fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
     line_start..line_end
 }
 
+pub fn line_index_to_column(line_slice: &RopeSlice, index: usize, tabsize: usize) -> usize {
+    let mut col = 0;
+    let mut i = 0;
+    while i<index {
+        let c = line_slice.char(line_slice.byte_to_char(index));
+        match c {
+            ' ' => {
+                col += 1;
+                i +=1;
+            }
+            '\t' => {
+                let nb_space = tabsize - col % tabsize;
+                col += nb_space;
+                i += 1;
+            }
+            _ => {
+                i = next_grapheme_boundary(line_slice,i);
+                col += 1;
+            }
+        }
+    }
+    col
+}
+
 pub fn line_indent_len(slice: &RopeSlice, line: usize, tabsize: usize) -> usize {
     let mut col = 0;
     for c in slice.line(line).chars() {
