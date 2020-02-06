@@ -1,14 +1,24 @@
 use crate::rope_utils::*;
 use ropey::Rope;
 use std::ops::{AddAssign, Range, SubAssign};
+use crate::rope_utils::{AbsoluteIndex,RelativeIndex,Column};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Carret {
-    pub index: usize,
-    vcol: usize,
-    col_index: usize,
-    pub selection: Option<usize>,
+    index: AbsoluteIndex,
+    vcol: Column,
+    col_index: RelativeIndex,
+    selection: AbsoluteIndex,
     pub is_clone: bool,
+}
+
+impl PartialOrd for Carret {
+    fn partial_cmp(&self, other: &Carret) -> Option<core::cmp::Ordering> { Some(self.index.cmp(&other.index)) }
+}
+
+impl Ord for Carret {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering { self.index.cmp(&other.index) }
+    
 }
 
 impl Carret {
@@ -17,7 +27,7 @@ impl Carret {
             index: 0,
             vcol: 0,
             col_index: 0,
-            selection: Default::default(),
+            selection: 0,
             is_clone: false,
         }
     }
@@ -29,7 +39,7 @@ impl Carret {
                 index: cstart.index,
                 vcol: cstart.vcol,
                 col_index: cstart.col_index,
-                selection: Some(cend.range().end),
+                selection: cend.end(),
                 is_clone: cstart.is_clone && cend.is_clone,
             }
         } else {
@@ -38,25 +48,29 @@ impl Carret {
                 index: cend.end(),
                 vcol: cend.vcol,
                 col_index: cend.col_index,
-                selection: Some(cstart.start()),
+                selection: cstart.start(),
                 is_clone: cstart.is_clone && cend.is_clone,
             }
         }
     }
 
+    pub fn cancel_selection(&mut self) {
+        self.selection = self.index;
+    }
+
+    pub fn selection_is_empty(&self) -> bool {
+        self.selection != self.index
+    }
+
     pub fn collide_with(&self, c1: &Carret) -> bool {
-        self.range().contains(&c1.range().start) || (self.selection.is_none() && self.index == c1.index)
+        self.range().contains(&c1.range().start) || (self.selection_is_empty() && self.index == c1.index)
     }
 
     pub fn range(&self) -> Range<usize> {
-        if let Some(selection) = self.selection {
-            if selection < self.index {
-                return selection..self.index;
-            } else {
-                return self.index..selection;
-            }
+        if self.selection < self.index {
+            return self.selection..self.index;
         } else {
-            return self.index..self.index;
+            return self.index..self.selection;
         }
     }
 
@@ -76,8 +90,9 @@ impl Carret {
         rope.byte_to_line(self.end())
     }
 
-    pub fn index_line(&self, rope: &Rope) -> usize {
-        rope.byte_to_line(self.index)
+    pub fn line(&self, rope: &Rope) -> usize {
+        //rope.byte_to_line(self.index)
+        crate::rope_utils::Line::for_index(self.index);
     }
 
     pub fn selected_lines(&self, rope: &Rope) -> Option<Range<usize>> {
@@ -116,13 +131,16 @@ impl Carret {
     pub fn move_up(&mut self, expand_selection: bool, rope: &Rope) {
         //let line = rope.byte_to_line(s.index);
         if self.index_line(rope) > 0 {
-            if expand_selection {
-                if self.selection.is_none() {
-                    self.selection = Some(self.index);
-                }
-            } else {
-                self.selection = None;
-            };
+            // if expand_selection {
+            //     if self.selection_is_empty() {
+            //         self.selection = self.index;
+            //     }
+            // } else {
+            //     self.selection = self.index;
+            // };
+            if !expand_selection {
+                self.selection = self.index;
+            }
             self.index = self.index_from_top_neighbor(rope);
             self.recalculate_col_index(rope);
         }
@@ -131,17 +149,31 @@ impl Carret {
     pub fn move_down(&mut self, expand_selection: bool, rope: &Rope) {
         let line = self.index_line(rope);
         if line < rope.len_lines() - 1 {
-            if expand_selection {
-                if self.selection.is_none() {
-                    self.selection = Some(self.index);
-                }
-            } else {
-                self.selection = None;
-            };
+            if !expand_selection {
+                self.selection = self.index;
+            }
 
             self.index = self.index_from_bottom_neighbor(rope);
             self.recalculate_col_index(rope);
         }
+    }
+
+    pub fn move_backward(&mut self, expand_selection: bool, rope: &Rope) {
+        let index = prev_grapheme_boundary(&rope.slice(..), self.index);
+
+        if !expand_selection {
+            self.selection = self.index;
+        }
+        self.set_index(index, &rope);
+    }
+
+    pub fn move_forward(&mut self, expand_selection: bool, rope: &Rope) {
+        let index = next_grapheme_boundary(&rope.slice(..), self.index);
+
+        if !expand_selection {
+            self.selection = self.index;
+        }
+        self.set_index(index, &rope);
     }
 
     pub fn duplicate_down(&self, rope: &Rope) -> Option<Self> {
@@ -176,10 +208,8 @@ impl Carret {
         if self.index > index {
             self.set_index(self.index + delta, rope);
         }
-        if let Some(ref mut s) = self.selection {
-            if *s > index {
-                *s += delta;
-            }
+        if self.selection > index {
+            self.selection += delta;
         }
     }
     pub fn update_after_delete(&mut self, index: usize, delta: usize, rope: &Rope) {
@@ -187,23 +217,17 @@ impl Carret {
             self.set_index(self.index - delta, rope);
         }
 
-        if let Some(ref mut s) = self.selection {
-            if *s > index {
-                *s -= delta;
-            }
+        if self.selection > index {
+            self.selection -= delta;
         }
     }
 
     fn add(&mut self, delta: usize, rope: &Rope) {
         self.set_index(self.index + delta, rope);
-        if let Some(ref mut s) = self.selection {
-            *s += delta;
-        }
+        self.selection += delta;
     }
     fn sub(&mut self, delta: usize, rope: &Rope) {
         self.set_index(self.index - delta, rope);
-        if let Some(ref mut s) = self.selection {
-            *s -= delta;
-        }
+        self.selection -= delta;
     }
 }

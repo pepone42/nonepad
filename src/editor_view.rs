@@ -319,7 +319,7 @@ impl EditorView {
             return;
         }
         if let Some(carret) = self.editor.buffer.carrets.first() {
-            let y = self.editor.buffer.byte_to_line(carret.index) as f64 * self.font_height;
+            let y = carret.index_line(&self.editor.buffer.rope) as f64 * self.font_height;
 
             if y > -self.delta_y + self.size.height - self.font_height {
                 self.delta_y = -y + self.size.height - self.font_height;

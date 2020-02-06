@@ -181,23 +181,23 @@ impl Buffer {
     pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
         self.carrets
             .iter()
-            .filter(move |c| self.rope.byte_to_line(c.index) == line_idx)
+            .filter(move |c| c.index_line(&self.rope) == line_idx)
     }
 
-    pub fn selection_index_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
-        self.carrets.iter().filter(move |c| {
-            if let Some(sel) = c.selection {
-                self.rope.byte_to_line(sel) == line_idx
-            } else {
-                false
-            }
-        })
-    }
+    // pub fn selection_index_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
+    //     self.carrets.iter().filter(move |c| {
+    //         if let Some(sel) = c.selection {
+    //             self.rope.byte_to_line(sel) == line_idx
+    //         } else {
+    //             false
+    //         }
+    //     })
+    // }
 
     pub fn selection_on_line<'a>(&'a self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {
         ranges.clear();
         for r in self.carrets.iter().filter_map(move |c| {
-            if let Some(sel) = c.selection {
+            if !c.selection_is_empty() {
                 let r = c.range();
                 match (self.rope.byte_to_line(r.start), self.rope.byte_to_line(r.end)) {
                     (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(
@@ -297,16 +297,7 @@ impl Buffer {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         for s in &mut carrets {
-            let index = prev_grapheme_boundary(&rope.slice(..), s.index);
-
-            if expand_selection {
-                if s.selection.is_none() {
-                    s.selection = Some(s.index);
-                }
-            } else {
-                s.selection = None;
-            };
-            s.set_index(index, &rope);
+            s.move_backward(expand_selection,&rope);
             // let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             // s.vcol = vcol;
             // s.col_index = s.index - rope.line_to_byte(line);
@@ -319,16 +310,7 @@ impl Buffer {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         for s in &mut carrets {
-            let index = next_grapheme_boundary(&rope.slice(..), s.index);
-
-            if expand_selection {
-                if s.selection.is_none() {
-                    s.selection = Some(s.index);
-                }
-            } else {
-                s.selection = None;
-            };
-            s.set_index(index, &rope);
+            s.move_forward(expand_selection,&rope);
             // s.index = index;
             // let (vcol, line) = index_to_point(&rope.slice(..), s.index);
             // s.vcol = vcol;
@@ -359,7 +341,7 @@ impl Buffer {
     pub fn duplicate_down(&self) -> Self {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
-        carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
+        carrets.sort_unstable();//_by(|a, b| a.index.cmp(&b.index));
         //let mut c = carrets.last().unwrap();
 
         // let line = rope.byte_to_line(c.index);
@@ -380,7 +362,7 @@ impl Buffer {
     pub fn duplicate_up(&self) -> Self {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
-        carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
+        carrets.sort_unstable();//_by(|a, b| a.index.cmp(&b.index));
 
         if let Some(c) = carrets.first().and_then(|c| c.duplicate_up(&rope)) {
             carrets.push(c);
@@ -392,13 +374,14 @@ impl Buffer {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         for c in &mut carrets {
-            c.selection = None;
+            //c.selection = None;
+            c.cancel_selection();
         }
         Self { rope, carrets }
     }
 
     pub fn have_selection(&self) -> bool {
-        self.carrets.iter().any(|c| c.selection.is_some())
+        self.carrets.iter().any(|c| !c.selection_is_empty())
     }
 
     pub fn revert_to_single_carrets(&self) -> Self {
@@ -412,6 +395,8 @@ impl Buffer {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();
         for s in &mut carrets {
+
+
             let line = s.index_line(&rope);
             let line_boundary = line_boundary(&rope.slice(..), line);
             let index = line_boundary.end;
