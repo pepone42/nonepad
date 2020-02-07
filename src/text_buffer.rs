@@ -181,7 +181,7 @@ impl Buffer {
     pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
         self.carrets
             .iter()
-            .filter(move |c| c.index_line(&self.rope) == line_idx)
+            .filter(move |c| c.line == line_idx)
     }
 
     // pub fn selection_index_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
@@ -199,15 +199,15 @@ impl Buffer {
         for r in self.carrets.iter().filter_map(move |c| {
             if !c.selection_is_empty() {
                 let r = c.range();
-                match (self.rope.byte_to_line(r.start), self.rope.byte_to_line(r.end)) {
+                match (self.rope.byte_to_line(r.start.0), self.rope.byte_to_line(r.end.0)) {
                     (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(
-                        self.byte_to_line_relative_index(r.start)..self.byte_to_line_relative_index(r.end),
+                        self.byte_to_line_relative_index(r.start.0)..self.byte_to_line_relative_index(r.end.0),
                     )),
                     (s, _) if s == line_idx => Some(SelectionLineRange::RangeFrom(
-                        self.byte_to_line_relative_index(r.start)..,
+                        self.byte_to_line_relative_index(r.start.0)..,
                     )),
                     (_, e) if e == line_idx => {
-                        Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end)))
+                        Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end.0)))
                     }
                     (s, e) if line_idx < e && line_idx > s => Some(SelectionLineRange::RangeFull),
                     _ => None,

@@ -1,44 +1,214 @@
 use crate::rope_utils::*;
-use ropey::Rope;
-use std::ops::{AddAssign, Range, SubAssign};
-use crate::rope_utils::{AbsoluteIndex,RelativeIndex,Column};
+use crate::rope_utils::{AbsoluteIndex, Column, RelativeIndex};
+use ropey::{Rope, RopeSlice};
+use std::ops::{AddAssign, Range, SubAssign, RangeInclusive};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug,Clone)]
+pub struct CarretMut<'rs> {
+    carret: Carret,
+    owner: RopeSlice<'rs>,
+    tabsize: usize,
+}
+
+
+impl<'rs> CarretMut<'rs> {
+    pub fn new(carret: Carret, owner: RopeSlice<'rs>, tabsize: usize) -> Self {
+        Self { carret, owner, tabsize }
+    }
+
+    pub fn start_line(&self) -> usize {
+        self.owner.byte_to_line(self.carret.start().0)
+    }
+
+    pub fn end_line(&self) -> usize {
+        self.owner.byte_to_line(self.carret.end().0)
+    }
+
+    pub fn selected_lines_range(&self) -> Option<RangeInclusive<usize>> {
+        if self.carret.selection_is_empty() {
+            None
+        } else { 
+            Some(self.start_line()..=self.end_line())
+        }
+    }
+
+    pub fn line(&self) -> Line {
+        //rope.byte_to_line(self.index)
+        Line::for_index(self.carret.index, self.owner)
+    }
+
+    pub fn relative_index(&self) -> RelativeIndex {
+        self.line().absolute_to_relative_index(self.carret.index)
+    }
+
+    pub fn column_index(&self) -> Column {
+        self.line().relative_index_to_column(self.relative_index(),self.tabsize)
+    }
+
+    // fn recalculate_col_index(&mut self, rope: &Rope) {
+    //     self.col_index = self.index - rope.line_to_byte(self.index_line(rope));
+    // }
+
+    fn recalculate_vcol(&mut self) {
+        self.carret.vcol = self.column_index();
+    }
+
+    pub fn set_index(&mut self, index: AbsoluteIndex) {
+        self.carret.index = index;
+        self.carret.col = self.column_index();
+        let line = self.line();
+        self.carret.rel_index = line.absolute_to_relative_index(self.carret.index);
+        self.carret.line = line.line;
+    }
+
+    pub fn move_up(&mut self, expand_selection: bool) {
+        //let line = rope.byte_to_line(s.index);
+        if let Some(prev_line) = self.line().prev_line() {
+            if !expand_selection {
+                self.carret.selection = self.carret.index
+            }
+            self.set_index(prev_line.column_to_absolute_index(self.carret.vcol,self.tabsize));
+        }
+    }
+
+    pub fn move_down(&mut self, expand_selection: bool) {
+        //let line = rope.byte_to_line(s.index);
+        if let Some(next_line) = self.line().next_line() {
+            if !expand_selection {
+                self.carret.selection = self.carret.index
+            }
+            self.set_index(next_line.column_to_absolute_index(self.carret.vcol,self.tabsize));
+        }
+    }
+
+    pub fn move_backward(&mut self, expand_selection: bool) {
+        let index = prev_grapheme_boundary(&self.owner, self.carret.index.0);
+
+        if !expand_selection {
+            self.carret.selection = self.carret.index
+        }
+        self.set_index(AbsoluteIndex(index));
+    }
+
+    pub fn move_forward(&mut self, expand_selection: bool) {
+        let index = next_grapheme_boundary(&self.owner, self.carret.index.0);
+
+        if !expand_selection {
+            self.carret.selection = self.carret.index
+        }
+        self.set_index(AbsoluteIndex(index));
+    }
+
+    pub fn duplicate_down(&self) -> Option<Self> {
+        if let Some(next_line) = self.line().next_line() {
+            let mut c = self.clone();
+            c.set_index(next_line.column_to_absolute_index(self.carret.vcol,self.tabsize));
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    pub fn duplicate_up(&self, rope: &Rope) -> Option<Self> {
+        if let Some(prev_line) = self.line().prev_line() {
+            let mut c = self.clone();
+            self.set_index(prev_line.column_to_absolute_index(self.carret.vcol,self.tabsize));
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    pub fn update_after_insert(&mut self, index: AbsoluteIndex, delta: usize) {
+        if self.carret.index > index {
+            let col = self.carret.col;
+            self.set_index(self.carret.index + delta);
+            // Update virtal column position only if the real column position changed
+            if col!=self.carret.col {
+                self.carret.vcol = col;
+            }
+        }
+        if self.carret.selection > index {
+            self.carret.selection += delta;
+        }
+    }
+    pub fn update_after_delete(&mut self, index: AbsoluteIndex, delta: usize) {
+        if self.carret.index > index {
+            let col = self.carret.col;
+            self.set_index(self.carret.index - delta);
+            // Update virtal column position only if the real column position changed
+            if col!=self.carret.col {
+                self.carret.vcol = col;
+            }
+        }
+
+        if self.carret.selection > index {
+            self.carret.selection -= delta;
+        }
+    }
+}
+
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Carret {
     index: AbsoluteIndex,
+    col: Column,
+    pub line: usize,
     vcol: Column,
-    col_index: RelativeIndex,
+    pub rel_index: RelativeIndex,
     selection: AbsoluteIndex,
     pub is_clone: bool,
 }
 
+impl Clone for Carret {
+    fn clone(&self) -> Self { 
+        Self {
+            index: self.index,
+            col: self.col,
+            vcol: self.vcol,
+            line: self.line,
+            rel_index: self.rel_index,
+            selection: self.selection,
+            is_clone: true,
+        }
+    }
+}
+
 impl PartialOrd for Carret {
-    fn partial_cmp(&self, other: &Carret) -> Option<core::cmp::Ordering> { Some(self.index.cmp(&other.index)) }
+    fn partial_cmp(&self, other: &Carret) -> Option<core::cmp::Ordering> {
+        Some(self.index.cmp(&other.index))
+    }
 }
 
 impl Ord for Carret {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering { self.index.cmp(&other.index) }
-    
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.index.cmp(&other.index)
+    }
 }
 
 impl Carret {
     pub fn new() -> Self {
         Self {
-            index: 0,
-            vcol: 0,
-            col_index: 0,
-            selection: 0,
+            index: Default::default(),
+            vcol: Default::default(),
+            col: Default::default(),
+            line: Default::default(),
+            rel_index: Default::default(),
+            selection: Default::default(),
             is_clone: false,
         }
     }
 
     pub fn merge(c1: &Carret, c2: &Carret) -> Self {
-        if c1.index == c1.start() {
+        if c1.index < c1.selection {
             let (cstart, cend) = if c1.start() < c2.start() { (c1, c2) } else { (c2, c1) };
             Self {
                 index: cstart.index,
                 vcol: cstart.vcol,
-                col_index: cstart.col_index,
+                col: cstart.col,
+                rel_index: cstart.rel_index,
+                line: cstart.line,
+                //col_index: cstart.col_index,
                 selection: cend.end(),
                 is_clone: cstart.is_clone && cend.is_clone,
             }
@@ -47,7 +217,10 @@ impl Carret {
             Self {
                 index: cend.end(),
                 vcol: cend.vcol,
-                col_index: cend.col_index,
+                col: cend.col,
+                rel_index: cend.rel_index,
+                line: cend.line,
+                //col_index: cend.col_index,
                 selection: cstart.start(),
                 is_clone: cstart.is_clone && cend.is_clone,
             }
@@ -66,7 +239,7 @@ impl Carret {
         self.range().contains(&c1.range().start) || (self.selection_is_empty() && self.index == c1.index)
     }
 
-    pub fn range(&self) -> Range<usize> {
+    pub fn range(&self) -> Range<AbsoluteIndex> {
         if self.selection < self.index {
             return self.selection..self.index;
         } else {
@@ -74,160 +247,17 @@ impl Carret {
         }
     }
 
-    pub fn start(&self) -> usize {
+    pub fn start(&self) -> AbsoluteIndex {
         self.range().start
     }
 
-    pub fn end(&self) -> usize {
+    pub fn end(&self) -> AbsoluteIndex {
         self.range().end
     }
 
-    pub fn start_line(&self, rope: &Rope) -> usize {
-        rope.byte_to_line(self.start())
-    }
+   
+    
+    
 
-    pub fn end_line(&self, rope: &Rope) -> usize {
-        rope.byte_to_line(self.end())
-    }
-
-    pub fn line(&self, rope: &Rope) -> usize {
-        //rope.byte_to_line(self.index)
-        crate::rope_utils::Line::for_index(self.index);
-    }
-
-    pub fn selected_lines(&self, rope: &Rope) -> Option<Range<usize>> {
-        match (self.start_line(rope), self.end_line(rope)) {
-            (s, e) if s == e => None,
-            (s, e) => Some(s..e),
-        }
-    }
-
-    pub fn index_column(&self) -> usize {
-        self.col_index
-    }
-
-    fn recalculate_col_index(&mut self, rope: &Rope) {
-        self.col_index = self.index - rope.line_to_byte(self.index_line(rope));
-    }
-
-    fn recalculate_vcol(&mut self, rope: &Rope) {
-        let (vcol, line) = index_to_point(&rope.slice(..), self.index);
-        self.vcol = vcol;
-    }
-
-    pub fn set_index(&mut self, index: usize, rope: &Rope) {
-        self.index = index;
-        self.recalculate_vcol(rope);
-        self.recalculate_col_index(rope);
-    }
-
-    fn index_from_top_neighbor(&self, rope: &Rope) -> usize {
-        point_to_index(&rope.slice(..), self.vcol, self.index_line(rope) - 1).0
-    }
-    fn index_from_bottom_neighbor(&self, rope: &Rope) -> usize {
-        point_to_index(&rope.slice(..), self.vcol, self.index_line(rope) + 1).0
-    }
-
-    pub fn move_up(&mut self, expand_selection: bool, rope: &Rope) {
-        //let line = rope.byte_to_line(s.index);
-        if self.index_line(rope) > 0 {
-            // if expand_selection {
-            //     if self.selection_is_empty() {
-            //         self.selection = self.index;
-            //     }
-            // } else {
-            //     self.selection = self.index;
-            // };
-            if !expand_selection {
-                self.selection = self.index;
-            }
-            self.index = self.index_from_top_neighbor(rope);
-            self.recalculate_col_index(rope);
-        }
-    }
-
-    pub fn move_down(&mut self, expand_selection: bool, rope: &Rope) {
-        let line = self.index_line(rope);
-        if line < rope.len_lines() - 1 {
-            if !expand_selection {
-                self.selection = self.index;
-            }
-
-            self.index = self.index_from_bottom_neighbor(rope);
-            self.recalculate_col_index(rope);
-        }
-    }
-
-    pub fn move_backward(&mut self, expand_selection: bool, rope: &Rope) {
-        let index = prev_grapheme_boundary(&rope.slice(..), self.index);
-
-        if !expand_selection {
-            self.selection = self.index;
-        }
-        self.set_index(index, &rope);
-    }
-
-    pub fn move_forward(&mut self, expand_selection: bool, rope: &Rope) {
-        let index = next_grapheme_boundary(&rope.slice(..), self.index);
-
-        if !expand_selection {
-            self.selection = self.index;
-        }
-        self.set_index(index, &rope);
-    }
-
-    pub fn duplicate_down(&self, rope: &Rope) -> Option<Self> {
-        if self.index_line(rope) < rope.len_lines() - 1 {
-            let mut c = self.clone();
-            c.is_clone = true; // TODO: impl Clone?
-
-            let i = self.index_from_bottom_neighbor(rope);
-            c.add(i - c.index, &rope);
-
-            Some(c)
-        } else {
-            None
-        }
-    }
-
-    pub fn duplicate_up(&self, rope: &Rope) -> Option<Self> {
-        if self.index_line(rope) > 0 {
-            let mut c = self.clone();
-            c.is_clone = true; // TODO: impl Clone?
-
-            let i = self.index_from_top_neighbor(rope);
-            c.sub(c.index - i, &rope);
-
-            Some(c)
-        } else {
-            None
-        }
-    }
-
-    pub fn update_after_insert(&mut self, index: usize, delta: usize, rope: &Rope) {
-        if self.index > index {
-            self.set_index(self.index + delta, rope);
-        }
-        if self.selection > index {
-            self.selection += delta;
-        }
-    }
-    pub fn update_after_delete(&mut self, index: usize, delta: usize, rope: &Rope) {
-        if self.index > index {
-            self.set_index(self.index - delta, rope);
-        }
-
-        if self.selection > index {
-            self.selection -= delta;
-        }
-    }
-
-    fn add(&mut self, delta: usize, rope: &Rope) {
-        self.set_index(self.index + delta, rope);
-        self.selection += delta;
-    }
-    fn sub(&mut self, delta: usize, rope: &Rope) {
-        self.set_index(self.index - delta, rope);
-        self.selection -= delta;
-    }
+    
 }

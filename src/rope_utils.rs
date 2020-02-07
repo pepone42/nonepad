@@ -1,18 +1,40 @@
-use std::ops::Range;
+use std::ops::{Range,Add,Sub,AddAssign,SubAssign};
 
-use crate::file::Indentation;
 use ropey::RopeSlice;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AbsoluteIndex(usize);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RelativeIndex(usize);
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Column(usize);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct AbsoluteIndex(pub usize);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct RelativeIndex(pub usize);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct Column(pub usize);
+
+impl Add<usize> for AbsoluteIndex {
+    type Output=AbsoluteIndex;
+    fn add(self, rhs: usize) -> Self::Output { 
+        AbsoluteIndex(self.0 + rhs)
+    }
+}
+impl Sub<usize> for AbsoluteIndex {
+    type Output=AbsoluteIndex;
+    fn sub(self, rhs: usize) -> Self::Output { 
+        AbsoluteIndex(self.0 - rhs)
+    }
+}
+impl AddAssign<usize> for AbsoluteIndex {
+    fn add_assign(&mut self, rhs: usize) { 
+        self.0 += rhs
+    }
+}
+impl SubAssign<usize> for AbsoluteIndex {
+    fn sub_assign(&mut self, rhs: usize) { 
+        self.0 -= rhs
+    }
+}
 
 pub struct Line<'rs> {
     owner: RopeSlice<'rs>,
-    line: usize,
+    pub line: usize,
 }
 
 impl<'rs> Line<'rs> {
@@ -28,7 +50,9 @@ impl<'rs> Line<'rs> {
     }
 
     pub fn slice(&self) -> RopeSlice {
-        self.owner.line(self.line)
+        //self.owner.line(self.line)
+        let boundary = self.boundary();
+        self.owner.slice(boundary.start.0..boundary.end.0)
     }
     pub fn get_string(&self, out: &mut String) {
         out.clear();
@@ -76,11 +100,11 @@ impl<'rs> Line<'rs> {
         self.start()..self.end()
     }
 
-    pub fn index_to_column(&self, index: RelativeIndex, tabsize: usize) -> Column {
+    pub fn relative_index_to_column(&self, index: RelativeIndex, tabsize: usize) -> Column {
         let mut col = 0;
         let mut i = 0;
         while i < index.0 {
-            let c = self.slice().char(index.0);
+            let c = self.slice().char(i);
             match c {
                 ' ' => {
                     col += 1;
@@ -98,6 +122,38 @@ impl<'rs> Line<'rs> {
             }
         }
         Column(col)
+    }
+
+    pub fn column_to_relative_index(&self, column: Column, tabsize: usize) -> RelativeIndex {
+        let mut col = 0;
+        let mut i = 0;
+        while col < column.0 {
+            let c = self.slice().char(i);
+            match c {
+                ' ' => {
+                    col += 1;
+                    i += 1;
+                }
+                '\t' => {
+                    let nb_space = tabsize - col % tabsize;
+                    col += nb_space;
+                    i += 1;
+                }
+                _ => {
+                    i = next_grapheme_boundary(&self.slice(), i);
+                    col += 1;
+                }
+            }
+        }
+        RelativeIndex(i)
+    }
+
+    pub fn column_to_absolute_index(&self, column: Column, tabsize: usize) -> AbsoluteIndex {
+        self.relative_to_absolute_index(self.column_to_relative_index(column,tabsize))
+    }
+
+    pub fn absolute_index_to_column(&self, index: AbsoluteIndex, tabsize: usize) -> Column {
+        self.relative_index_to_column(self.absolute_to_relative_index(index),tabsize)
     }
 
     pub fn relative_to_absolute_index(&self, rel_index: RelativeIndex) -> AbsoluteIndex {

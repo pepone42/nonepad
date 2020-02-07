@@ -296,7 +296,7 @@ impl EditorView {
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
             self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(indices[c.index_column()]) {
+                if let Some(metrics) = layout.hit_test_text_position(indices[c.rel_index.0]) {
                     piet.stroke(
                         Line::new(
                             (metrics.point.x + 1.0, self.font_height + dy),
@@ -319,7 +319,7 @@ impl EditorView {
             return;
         }
         if let Some(carret) = self.editor.buffer.carrets.first() {
-            let y = carret.index_line(&self.editor.buffer.rope) as f64 * self.font_height;
+            let y = carret.line as f64 * self.font_height;
 
             if y > -self.delta_y + self.size.height - self.font_height {
                 self.delta_y = -y + self.size.height - self.font_height;
