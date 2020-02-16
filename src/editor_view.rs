@@ -516,8 +516,8 @@ impl EditorView {
         if self.delta_y > 0. {
             self.delta_y = 0.
         }
-        if -self.delta_y > self.editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
-            self.delta_y = -((self.editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
+        if -self.delta_y > self.editor.buffer.rope.borrow().len_lines() as f64 * self.font_height - 4. * self.font_height {
+            self.delta_y = -((self.editor.buffer.rope.borrow().len_lines() as f64) * self.font_height - 4. * self.font_height)
         }
         ctx.invalidate();
     }
