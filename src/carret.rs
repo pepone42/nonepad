@@ -1,21 +1,21 @@
-use std::cell::RefCell;
-use std::rc::Rc;
 use crate::rope_utils::*;
 use crate::rope_utils::{AbsoluteIndex, Column, RelativeIndex};
 use ropey::{Rope, RopeSlice};
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::{AddAssign, Range, RangeInclusive, SubAssign};
+use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Carrets {
     intern: Vec<Carret>,
 }
 
 impl Carrets {
-    pub fn new(rope: Rc<RefCell<Rope>>, tabsize: Rc<usize>) -> Self{
+    pub fn new(rope: Rc<RefCell<Rope>>, tabsize: Rc<usize>) -> Self {
         let mut intern = Vec::new();
-        intern.push(Carret::new(rope,tabsize));
+        intern.push(Carret::new(rope, tabsize));
         Self { intern }
     }
     // pub fn get_mut(self, rope: &Rope, tabsize: usize) -> CarretsMut {
@@ -23,7 +23,7 @@ impl Carrets {
     //         intern: self.intern.iter().map(|c| c.clone().get_mut(rope, tabsize)).collect(),
     //     }
     // }
-    fn merge(&mut self) {
+    pub fn merge(&mut self) {
         if self.intern.len() > 1 {
             self.intern
                 .sort_unstable_by(|a, b| a.range().start.cmp(&b.range().start))
@@ -40,6 +40,17 @@ impl Carrets {
             }
             redo = false;
         }
+    }
+}
+
+impl Clone for Carrets {
+    fn clone(&self) -> Self {
+        let mut intern: Vec::<Carret> = self.intern.iter().filter(|c| c.is_clone).map(|c| c.clone()).collect();
+        let mut first = self.intern.iter().filter(|c| !c.is_clone).nth(0).unwrap().clone();
+        first.is_clone=false;
+        intern.push(first);
+        intern.sort_unstable();
+        Self { intern }
     }
 }
 
@@ -174,7 +185,7 @@ impl Ord for Carret {
 }
 
 impl Carret {
-    pub fn new(owner : Rc<RefCell<Rope>>, tabsize: Rc<usize>) -> Self {
+    pub fn new(owner: Rc<RefCell<Rope>>, tabsize: Rc<usize>) -> Self {
         Self {
             owner: owner.clone(),
             tabsize: tabsize.clone(),
@@ -301,7 +312,7 @@ impl Carret {
         //let line = rope.byte_to_line(s.index);
         if let Some(prev_line) = self.line().prev_line() {
             let index = prev_line.column_to_absolute_index(self.vcol, *self.tabsize);
-            self.set_index(index,!expand_selection);
+            self.set_index(index, !expand_selection);
         }
     }
 
@@ -309,26 +320,26 @@ impl Carret {
         //let line = rope.byte_to_line(s.index);
         if let Some(next_line) = self.line().next_line() {
             let index = next_line.column_to_absolute_index(self.vcol, *self.tabsize);
-            self.set_index(index,!expand_selection);
+            self.set_index(index, !expand_selection);
         }
     }
 
     pub fn move_backward(&mut self, expand_selection: bool) {
         let index = prev_grapheme_boundary(&self.owner.borrow().slice(..), self.index.0);
-        self.set_index(AbsoluteIndex(index),!expand_selection);
+        self.set_index(AbsoluteIndex(index), !expand_selection);
         self.recalculate_vcol();
     }
 
     pub fn move_forward(&mut self, expand_selection: bool) {
         let index = next_grapheme_boundary(&self.owner.borrow().slice(..), self.index.0);
-        self.set_index(AbsoluteIndex(index),!expand_selection);
+        self.set_index(AbsoluteIndex(index), !expand_selection);
         self.recalculate_vcol();
     }
 
     pub fn duplicate_down(&self) -> Option<Self> {
         if let Some(next_line) = self.line().next_line() {
             let mut c = self.clone();
-            c.set_index(next_line.column_to_absolute_index(self.vcol, *self.tabsize),true);
+            c.set_index(next_line.column_to_absolute_index(self.vcol, *self.tabsize), true);
             Some(c)
         } else {
             None
@@ -338,7 +349,7 @@ impl Carret {
     pub fn duplicate_up(&self) -> Option<Self> {
         if let Some(prev_line) = self.line().prev_line() {
             let mut c = self.clone();
-            c.set_index(prev_line.column_to_absolute_index(self.vcol, *self.tabsize),true);
+            c.set_index(prev_line.column_to_absolute_index(self.vcol, *self.tabsize), true);
             Some(c)
         } else {
             None
@@ -347,20 +358,20 @@ impl Carret {
 
     pub fn move_end(&mut self, expand_selection: bool) {
         let index = self.line().end();
-        self.set_index(index,!expand_selection);
+        self.set_index(index, !expand_selection);
         self.recalculate_vcol();
     }
 
     pub fn move_home(&mut self, expand_selection: bool) {
         let index = self.line().start();
-        self.set_index(index,!expand_selection);
+        self.set_index(index, !expand_selection);
         self.recalculate_vcol();
     }
 
     pub fn update_after_insert(&mut self, index: AbsoluteIndex, delta: usize) {
         if self.index > index {
             let col = self.col;
-            self.set_index(self.index + delta,false);
+            self.set_index(self.index + delta, false);
             // Update virtal column position only if the real column position changed
             if col != self.col {
                 self.vcol = col;
@@ -373,7 +384,7 @@ impl Carret {
     pub fn update_after_delete(&mut self, index: AbsoluteIndex, delta: usize) {
         if self.index > index {
             let col = self.col;
-            self.set_index(self.index - delta,false);
+            self.set_index(self.index - delta, false);
             // Update virtal column position only if the real column position changed
             if col != self.col {
                 self.vcol = col;

@@ -300,7 +300,7 @@ impl Buffer {
             s.move_backward(expand_selection);
         }
         //collapse_selections(&mut carrets);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -311,7 +311,7 @@ impl Buffer {
             s.move_forward(expand_selection);
         }
         //collapse_selections(&mut carrets);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -322,7 +322,7 @@ impl Buffer {
             s.move_up(expand_selection);
         }
         //collapse_selections(&mut carrets);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
     pub fn down(&self, expand_selection: bool) -> Self {
@@ -332,7 +332,7 @@ impl Buffer {
             s.move_down(expand_selection);
         }
         //collapse_selections(&mut carrets);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
     pub fn duplicate_down(&self) -> Self {
@@ -343,7 +343,7 @@ impl Buffer {
         if let Some(c) = carrets.last().and_then(|c| c.duplicate_down()) {
             carrets.push(c);
         }
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -355,7 +355,7 @@ impl Buffer {
         if let Some(c) = carrets.first().and_then(|c| c.duplicate_up()) {
             carrets.push(c);
         }
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -376,8 +376,9 @@ impl Buffer {
     pub fn revert_to_single_carrets(&self) -> Self {
         let rope = self.rope.clone();
         let mut carrets = self.carrets.clone();//.get_mut(&rope,self.tabsize);
+        dbg!(&carrets);
         carrets.retain(|c| !c.is_clone);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -389,7 +390,7 @@ impl Buffer {
             s.move_end(expand_selection);
         }
         //collapse_selections(&mut carrets);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -400,7 +401,7 @@ impl Buffer {
             s.move_home(expand_selection);
         }
         //collapse_selections(&mut carrets);
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -433,7 +434,7 @@ impl Buffer {
             // carrets[i].vcol = vcol;
             // carrets[i].col_index = carrets[i].index - rope.line_to_byte(line);
         }
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
@@ -488,7 +489,7 @@ impl Buffer {
         if did_nothing {
             None
         } else {
-            //let carrets = carrets.fix();
+            carrets.merge();
             Some(Self { rope, carrets, tabsize: self.tabsize.clone() })
         }
     }
@@ -536,7 +537,7 @@ impl Buffer {
         if did_nothing {
             None
         } else {
-            //let carrets = carrets.fix();
+            carrets.merge();
             Some(Self { rope, carrets, tabsize: self.tabsize.clone() })
         }
     }
@@ -598,7 +599,7 @@ impl Buffer {
                 }
             }
         }
-        //let carrets = carrets.fix();
+        carrets.merge();
         Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
