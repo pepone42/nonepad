@@ -6,6 +6,7 @@ mod editor_view;
 mod app_context;
 mod carret;
 mod rope_utils;
+mod position;
 
 use std::any::Any;
 use std::io::Result;

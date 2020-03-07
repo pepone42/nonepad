@@ -13,9 +13,9 @@ pub struct Carrets {
 }
 
 impl Carrets {
-    pub fn new(rope: Rc<RefCell<Rope>>, tabsize: Rc<usize>) -> Self {
+    pub fn new() -> Self {
         let mut intern = Vec::new();
-        intern.push(Carret::new(rope, tabsize));
+        intern.push(Carret::new());
         Self { intern }
     }
     // pub fn get_mut(self, rope: &Rope, tabsize: usize) -> CarretsMut {
@@ -145,8 +145,6 @@ impl DerefMut for Carrets {
 
 #[derive(Debug, PartialEq, Eq, Default)]
 pub struct Carret {
-    owner: Rc<RefCell<Rope>>,
-    tabsize: Rc<usize>,
     pub index: AbsoluteIndex,
     col: Column,
     pub line: usize,
@@ -159,8 +157,6 @@ pub struct Carret {
 impl Clone for Carret {
     fn clone(&self) -> Self {
         Self {
-            owner: self.owner.clone(),
-            tabsize: self.tabsize.clone(),
             index: self.index,
             col: self.col,
             vcol: self.vcol,
@@ -185,10 +181,8 @@ impl Ord for Carret {
 }
 
 impl Carret {
-    pub fn new(owner: Rc<RefCell<Rope>>, tabsize: Rc<usize>) -> Self {
+    pub fn new() -> Self {
         Self {
-            owner: owner.clone(),
-            tabsize: tabsize.clone(),
             index: Default::default(),
             vcol: Default::default(),
             col: Default::default(),
@@ -203,8 +197,6 @@ impl Carret {
         if c1.index < c1.selection {
             let (cstart, cend) = if c1.start() < c2.start() { (c1, c2) } else { (c2, c1) };
             Self {
-                owner: cstart.owner.clone(),
-                tabsize: cstart.tabsize.clone(),
                 index: cstart.index,
                 vcol: cstart.vcol,
                 col: cstart.col,
@@ -217,8 +209,6 @@ impl Carret {
         } else {
             let (cstart, cend) = if c1.end() < c2.end() { (c1, c2) } else { (c2, c1) };
             Self {
-                owner: cend.owner.clone(),
-                tabsize: cend.tabsize.clone(),
                 index: cend.end(),
                 vcol: cend.vcol,
                 col: cend.col,
@@ -259,119 +249,119 @@ impl Carret {
         self.range().end
     }
 
-    pub fn start_line(&self) -> usize {
-        self.owner.borrow().byte_to_line(self.start().0)
+    pub fn start_line(&self,rope: &Rope) -> usize {
+        rope.byte_to_line(self.start().0)
     }
 
-    pub fn end_line(&self) -> usize {
-        self.owner.borrow().byte_to_line(self.end().0)
+    pub fn end_line(&self,rope: &Rope) -> usize {
+        rope.byte_to_line(self.end().0)
     }
 
-    pub fn selected_lines_range(&self) -> Option<RangeInclusive<usize>> {
+    pub fn selected_lines_range(&self,rope: &Rope) -> Option<RangeInclusive<usize>> {
         if self.selection_is_empty() {
             None
         } else {
-            Some(self.start_line()..=self.end_line())
+            Some(self.start_line(rope)..=self.end_line(rope))
         }
     }
 
-    pub fn line(&self) -> Line {
+    pub fn line(&self,rope: &Rope) -> Line {
         //rope.byte_to_line(self.index)
-        Line::for_index(self.index, self.owner.clone())
+        Line::for_index(self.index, rope)
     }
 
-    pub fn relative_index(&self) -> RelativeIndex {
-        self.line().absolute_to_relative_index(self.index)
+    pub fn relative_index(&self,rope: &Rope) -> RelativeIndex {
+        self.line(rope).absolute_to_relative_index(self.index,rope)
     }
 
-    pub fn column_index(&self) -> Column {
-        self.line()
-            .relative_index_to_column(self.relative_index(), *self.tabsize)
+    pub fn column_index(&self,rope: &Rope, tabsize: usize) -> Column {
+        self.line(rope)
+            .relative_index_to_column(self.relative_index(rope), rope, tabsize)
     }
 
     // fn recalculate_col_index(&mut self, rope: &Rope) {
     //     self.col_index = self.index - rope.line_to_byte(self.index_line(rope));
     // }
 
-    fn recalculate_vcol(&mut self) {
-        self.vcol = self.column_index();
+    fn recalculate_vcol(&mut self,rope: &Rope,tabsize: usize) {
+        self.vcol = self.column_index(rope,tabsize);
     }
 
-    pub fn set_index(&mut self, index: AbsoluteIndex, reset_selection: bool) {
+    pub fn set_index(&mut self, index: AbsoluteIndex, reset_selection: bool,rope: &Rope,tabsize: usize) {
         self.index = index;
         if reset_selection {
             self.selection = index;
         }
-        self.col = self.column_index();
+        self.col = self.column_index(rope, tabsize);
         //let line = self.line();
-        self.rel_index = self.line().absolute_to_relative_index(self.index);
-        self.line = self.line().line;
+        self.rel_index = self.line(rope).absolute_to_relative_index(self.index,rope);
+        self.line = self.line(rope).line;
     }
 
-    pub fn move_up(&mut self, expand_selection: bool) {
+    pub fn move_up(&mut self, expand_selection: bool,rope: &Rope,tabsize: usize) {
         //let line = rope.byte_to_line(s.index);
-        if let Some(prev_line) = self.line().prev_line() {
-            let index = prev_line.column_to_absolute_index(self.vcol, *self.tabsize);
-            self.set_index(index, !expand_selection);
+        if let Some(prev_line) = self.line(rope).prev_line() {
+            let index = prev_line.column_to_absolute_index(self.vcol, rope, tabsize);
+            self.set_index(index, !expand_selection,rope,tabsize);
         }
     }
 
-    pub fn move_down(&mut self, expand_selection: bool) {
+    pub fn move_down(&mut self, expand_selection: bool,rope: &Rope,tabsize: usize) {
         //let line = rope.byte_to_line(s.index);
-        if let Some(next_line) = self.line().next_line() {
-            let index = next_line.column_to_absolute_index(self.vcol, *self.tabsize);
-            self.set_index(index, !expand_selection);
+        if let Some(next_line) = self.line(rope).next_line(rope) {
+            let index = next_line.column_to_absolute_index(self.vcol,rope, tabsize);
+            self.set_index(index, !expand_selection,rope,tabsize);
         }
     }
 
-    pub fn move_backward(&mut self, expand_selection: bool) {
-        let index = prev_grapheme_boundary(&self.owner.borrow().slice(..), self.index.0);
-        self.set_index(AbsoluteIndex(index), !expand_selection);
-        self.recalculate_vcol();
+    pub fn move_backward(&mut self, expand_selection: bool,rope: &Rope,tabsize: usize) {
+        let index = prev_grapheme_boundary(&rope.slice(..), self.index.0);
+        self.set_index(AbsoluteIndex(index), !expand_selection,rope,tabsize);
+        self.recalculate_vcol(rope,tabsize);
     }
 
-    pub fn move_forward(&mut self, expand_selection: bool) {
-        let index = next_grapheme_boundary(&self.owner.borrow().slice(..), self.index.0);
-        self.set_index(AbsoluteIndex(index), !expand_selection);
-        self.recalculate_vcol();
+    pub fn move_forward(&mut self, expand_selection: bool,rope: &Rope,tabsize: usize) {
+        let index = next_grapheme_boundary(&rope.slice(..), self.index.0);
+        self.set_index(AbsoluteIndex(index), !expand_selection,rope,tabsize);
+        self.recalculate_vcol(rope,tabsize);
     }
 
-    pub fn duplicate_down(&self) -> Option<Self> {
-        if let Some(next_line) = self.line().next_line() {
+    pub fn duplicate_down(&self,rope: &Rope,tabsize: usize) -> Option<Self> {
+        if let Some(next_line) = self.line(rope).next_line(rope) {
             let mut c = self.clone();
-            c.set_index(next_line.column_to_absolute_index(self.vcol, *self.tabsize), true);
+            c.set_index(next_line.column_to_absolute_index(self.vcol, rope, tabsize), true,rope, tabsize);
             Some(c)
         } else {
             None
         }
     }
 
-    pub fn duplicate_up(&self) -> Option<Self> {
-        if let Some(prev_line) = self.line().prev_line() {
+    pub fn duplicate_up(&self,rope: &Rope,tabsize: usize) -> Option<Self> {
+        if let Some(prev_line) = self.line(rope).prev_line() {
             let mut c = self.clone();
-            c.set_index(prev_line.column_to_absolute_index(self.vcol, *self.tabsize), true);
+            c.set_index(prev_line.column_to_absolute_index(self.vcol, rope, tabsize), true,rope,tabsize);
             Some(c)
         } else {
             None
         }
     }
 
-    pub fn move_end(&mut self, expand_selection: bool) {
-        let index = self.line().end();
-        self.set_index(index, !expand_selection);
-        self.recalculate_vcol();
+    pub fn move_end(&mut self, expand_selection: bool,rope: &Rope,tabsize: usize) {
+        let index = self.line(rope).end(rope);
+        self.set_index(index, !expand_selection,rope,tabsize);
+        self.recalculate_vcol(rope,tabsize);
     }
 
-    pub fn move_home(&mut self, expand_selection: bool) {
-        let index = self.line().start();
-        self.set_index(index, !expand_selection);
-        self.recalculate_vcol();
+    pub fn move_home(&mut self, expand_selection: bool,rope: &Rope,tabsize: usize) {
+        let index = self.line(rope).start(rope);
+        self.set_index(index, !expand_selection,rope,tabsize);
+        self.recalculate_vcol(rope,tabsize);
     }
 
-    pub fn update_after_insert(&mut self, index: AbsoluteIndex, delta: usize) {
+    pub fn update_after_insert(&mut self, index: AbsoluteIndex, delta: usize,rope: &Rope,tabsize: usize) {
         if self.index > index {
             let col = self.col;
-            self.set_index(self.index + delta, false);
+            self.set_index(self.index + delta, false,rope,tabsize);
             // Update virtal column position only if the real column position changed
             if col != self.col {
                 self.vcol = col;
@@ -381,10 +371,10 @@ impl Carret {
             self.selection += delta;
         }
     }
-    pub fn update_after_delete(&mut self, index: AbsoluteIndex, delta: usize) {
+    pub fn update_after_delete(&mut self, index: AbsoluteIndex, delta: usize,rope: &Rope,tabsize: usize) {
         if self.index > index {
             let col = self.col;
-            self.set_index(self.index - delta, false);
+            self.set_index(self.index - delta, false,rope,tabsize);
             // Update virtal column position only if the real column position changed
             if col != self.col {
                 self.vcol = col;

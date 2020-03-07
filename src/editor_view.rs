@@ -236,23 +236,23 @@ impl EditorView {
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.visible_len(), &mut line, &mut indices);
+            self.editor.displayable_line(line_idx, &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
-            self.editor.buffer.selection_on_line(line_idx, &mut ranges);
+            self.editor.selection_on_line(line_idx, &mut ranges);
 
             for range in &ranges {
                 match range {
                     SelectionLineRange::Range(r) => {
                         // Simple case, the selection is contain on one line
-                        self.add_bounded_range_selection(dy, indices[r.start]..indices[r.end], &layout, &mut current_path)
+                        self.add_bounded_range_selection(dy, indices[r.start].0..indices[r.end].0, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFrom(r) => {
                         current_path.last_x =
-                            self.add_range_from_selection(dy, indices[r.start]..line.len() - 1, &layout, &mut current_path)
+                            self.add_range_from_selection(dy, indices[r.start].0..line.len() - 1, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeTo(r) => {
-                        self.add_range_to_selection(dy, 0..indices[r.end], &layout, &mut current_path)
+                        self.add_range_to_selection(dy, 0..indices[r.end].0, &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFull => {
                         self.add_range_full_selection(dy, 0..line.len() - 1, &layout, &mut current_path)
@@ -290,13 +290,13 @@ impl EditorView {
         for line_idx in visible_range {
             
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.buffer.displayable_line(line_idx, self.editor.file.indentation.visible_len(), &mut line, &mut indices);
+            self.editor.displayable_line(line_idx, &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
-            self.editor.buffer.carrets_on_line(line_idx).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(indices[c.rel_index.0]) {
+            self.editor.carrets_on_line(line_idx).for_each(|c| {
+                if let Some(metrics) = layout.hit_test_text_position(indices[c.rel_index.0].0) {
                     piet.stroke(
                         Line::new(
                             (metrics.point.x + 1.0, self.font_height + dy),
@@ -516,8 +516,8 @@ impl EditorView {
         if self.delta_y > 0. {
             self.delta_y = 0.
         }
-        if -self.delta_y > self.editor.buffer.rope.borrow().len_lines() as f64 * self.font_height - 4. * self.font_height {
-            self.delta_y = -((self.editor.buffer.rope.borrow().len_lines() as f64) * self.font_height - 4. * self.font_height)
+        if -self.delta_y > self.editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
+            self.delta_y = -((self.editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
         }
         ctx.invalidate();
     }

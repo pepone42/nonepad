@@ -33,29 +33,26 @@ impl SubAssign<usize> for AbsoluteIndex {
         self.0 -= rhs
     }
 }
-
+#[derive(Debug)]
 pub struct Line {
-    owner: Rc<RefCell<Rope>>,
     pub line: usize,
 }
 
 impl Line {
-    pub fn new(line: usize, owner: Rc<RefCell<Rope>>) -> Self {
-        Self { owner, line }
+    pub fn new(line: usize) -> Self {
+        Self { line }
     }
-    pub fn for_index(index: AbsoluteIndex, owner: Rc<RefCell<Rope>>) -> Self {
-        let line = owner.borrow().byte_to_line(index.0);
+    pub fn for_index(index: AbsoluteIndex,rope: &Rope) -> Self {
+        let line = rope.byte_to_line(index.0);
         Self {
-            owner,
             line,
         }
     }
 
-    pub fn rope(&self) -> Rope {
+    pub fn rope(&self,rope: &Rope) -> Rope {
         //self.owner.line(self.line)
-        let boundary = self.boundary();
-        let r = self.owner.borrow();
-        r.slice(boundary.start.0..boundary.end.0).into()
+        let boundary = self.boundary(rope);
+        rope.slice(boundary.start.0..boundary.end.0).into()
     }
     pub fn get_string(&self, out: &mut String) {
         out.clear();
@@ -67,51 +64,49 @@ impl Line {
             None
         } else {
             Some(Self {
-                owner: self.owner.clone(),
                 line: self.line - 1,
             })
         }
     }
 
-    pub fn next_line(&self) -> Option<Self> {
-        if self.line == self.owner.borrow().len_lines() - 1 {
+    pub fn next_line(&self,rope: &Rope) -> Option<Self> {
+        if self.line == rope.len_lines() - 1 {
             None
         } else {
             Some(Self {
-                owner: self.owner.clone(),
                 line: self.line + 1,
             })
         }
     }
 
-    pub fn start(&self) -> AbsoluteIndex {
-        AbsoluteIndex(self.owner.borrow().line_to_byte(self.line))
+    pub fn start(&self,rope: &Rope) -> AbsoluteIndex {
+        AbsoluteIndex(rope.line_to_byte(self.line))
     }
 
-    pub fn end(&self) -> AbsoluteIndex {
-        if self.line + 1 >= self.owner.borrow().len_lines() {
-            AbsoluteIndex(self.owner.borrow().len_bytes())
+    pub fn end(&self,rope: &Rope) -> AbsoluteIndex {
+        if self.line + 1 >= rope.len_lines() {
+            AbsoluteIndex(rope.len_bytes())
         } else {
             AbsoluteIndex(prev_grapheme_boundary(
-                &self.owner.borrow().slice(..),
-                self.owner.borrow().line_to_byte(self.line + 1),
+                &rope.slice(..),
+                rope.line_to_byte(self.line + 1),
             ))
         }
     }
 
-    pub fn len(&self) -> RelativeIndex {
-        RelativeIndex(self.rope().len_bytes())
+    pub fn len(&self,rope: &Rope) -> RelativeIndex {
+        RelativeIndex(self.rope(&rope).len_bytes())
     }
 
-    pub fn boundary(&self) -> Range<AbsoluteIndex> {
-        self.start()..self.end()
+    pub fn boundary(&self,rope: &Rope) -> Range<AbsoluteIndex> {
+        self.start(rope)..self.end(rope)
     }
 
-    pub fn relative_index_to_column(&self, index: RelativeIndex, tabsize: usize) -> Column {
+    pub fn relative_index_to_column(&self, index: RelativeIndex,rope: &Rope, tabsize: usize) -> Column {
         let mut col = 0;
         let mut i = 0;
         while i < index.0 {
-            let c = self.rope().char(self.rope().byte_to_char(i));
+            let c = self.rope(rope).char(self.rope(rope).byte_to_char(i));
             match c {
                 ' ' => {
                     col += 1;
@@ -123,7 +118,7 @@ impl Line {
                     i += 1;
                 }
                 _ => {
-                    i = next_grapheme_boundary(&self.rope().slice(..), i);
+                    i = next_grapheme_boundary(&self.rope(rope).slice(..), i);
                     col += 1;
                 }
             }
@@ -131,11 +126,11 @@ impl Line {
         Column(col)
     }
 
-    pub fn column_to_relative_index(&self, column: Column, tabsize: usize) -> RelativeIndex {
+    pub fn column_to_relative_index(&self, column: Column,rope: &Rope, tabsize: usize) -> RelativeIndex {
         let mut col = 0;
         let mut i = 0;
-        while col < column.0 && i<self.len().0 {
-            let c = self.rope().char(self.rope().byte_to_char(i));
+        while col < column.0 && i<self.len(rope).0 {
+            let c = self.rope(rope).char(self.rope(rope).byte_to_char(i));
             match c {
                 ' ' => {
                     col += 1;
@@ -147,7 +142,7 @@ impl Line {
                     i += 1;
                 }
                 _ => {
-                    i = next_grapheme_boundary(&self.rope().slice(..), i);
+                    i = next_grapheme_boundary(&self.rope(rope).slice(..), i);
                     col += 1;
                 }
             }
@@ -155,36 +150,36 @@ impl Line {
         RelativeIndex(i)
     }
 
-    pub fn column_to_absolute_index(&self, column: Column, tabsize: usize) -> AbsoluteIndex {
-        self.relative_to_absolute_index(self.column_to_relative_index(column,tabsize))
+    pub fn column_to_absolute_index(&self, column: Column,rope: &Rope, tabsize: usize) -> AbsoluteIndex {
+        self.relative_to_absolute_index(self.column_to_relative_index(column,rope,tabsize),rope)
     }
 
-    pub fn absolute_index_to_column(&self, index: AbsoluteIndex, tabsize: usize) -> Column {
-        self.relative_index_to_column(self.absolute_to_relative_index(index),tabsize)
+    pub fn absolute_index_to_column(&self, index: AbsoluteIndex,rope: &Rope, tabsize: usize) -> Column {
+        self.relative_index_to_column(self.absolute_to_relative_index(index,rope),rope,tabsize)
     }
 
-    pub fn relative_to_absolute_index(&self, rel_index: RelativeIndex) -> AbsoluteIndex {
-        AbsoluteIndex(self.start().0 + rel_index.0)
+    pub fn relative_to_absolute_index(&self, rel_index: RelativeIndex,rope: &Rope) -> AbsoluteIndex {
+        AbsoluteIndex(self.start(rope).0 + rel_index.0)
     }
 
-    pub fn absolute_to_relative_index(&self, abs_index: AbsoluteIndex) -> RelativeIndex {
-        RelativeIndex(abs_index.0 - self.start().0)
+    pub fn absolute_to_relative_index(&self, abs_index: AbsoluteIndex,rope: &Rope) -> RelativeIndex {
+        RelativeIndex(abs_index.0 - self.start(rope).0)
     }
 
-    pub fn visible_start(&self) -> RelativeIndex {
+    pub fn visible_start(&self,rope: &Rope) -> RelativeIndex {
         // here we're assuming ' ' and '\t' are 1 byte length
-        RelativeIndex(self.rope().chars().take_while(|c| *c != '\t' && *c != ' ').count())
+        RelativeIndex(self.rope(rope).chars().take_while(|c| *c != '\t' && *c != ' ').count())
     }
 
-    pub fn get_displayable_string(&self, tabsize: usize, out: &mut String, index_conversion: &mut Vec<RelativeIndex>) {
+    pub fn get_displayable_string(&self,rope: &Rope, tabsize: usize, out: &mut String, index_conversion: &mut Vec<RelativeIndex>) {
         out.clear();
         index_conversion.clear();
-        if self.line >= self.owner.borrow().len_lines() {
+        if self.line >= rope.len_lines() {
             return;
         }
 
         let mut index = 0;
-        for c in self.owner.borrow().line(self.line).chars() {
+        for c in rope.line(self.line).chars() {
             match c {
                 ' ' => {
                     index_conversion.push(RelativeIndex(index));
@@ -210,12 +205,12 @@ impl Line {
     }
 }
 
-impl Iterator for Line {
-    type Item = Line;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_line()
-    }
-}
+// impl Iterator for Line {
+//     type Item = Line;
+//     fn next(&mut self) -> Option<Self::Item> {
+//         self.next_line()
+//     }
+// }
 
 /// Finds the previous grapheme boundary before the given char position.
 pub fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {

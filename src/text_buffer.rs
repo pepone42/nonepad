@@ -1,9 +1,9 @@
 use crate::carret::Carrets;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::io::Result;
-use std::ops::{AddAssign, Range, RangeFrom, RangeFull, RangeTo, RangeInclusive};
+use std::ops::{AddAssign, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo};
 use std::path::Path;
+use std::rc::Rc;
 
 use ropey::{Rope, RopeSlice};
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
@@ -52,7 +52,7 @@ impl EditStack {
 
     pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = TextFileInfo::load(path)?;
-        let buffer = Buffer::from_rope(file.1.clone(),Rc::new(file.0.indentation.visible_len()));
+        let buffer = Buffer::from_rope(file.1.clone());
         Ok(Self {
             buffer,
             undo_stack: Vec::new(),
@@ -62,11 +62,11 @@ impl EditStack {
     }
 
     pub fn save(&mut self) -> Result<()> {
-        self.file.save(&self.buffer.rope.borrow())?;
+        self.file.save(&self.buffer.rope)?;
         Ok(())
     }
     pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        self.file.save_as(&self.buffer.rope.borrow(), path)?;
+        self.file.save_as(&self.buffer.rope, path)?;
         Ok(())
     }
 
@@ -93,126 +93,30 @@ impl EditStack {
         self.redo_stack.clear();
     }
 
-    pub fn forward(&mut self, expand_selection: bool) {
-        self.buffer = self.buffer.forward(expand_selection);
-    }
-    pub fn backward(&mut self, expand_selection: bool) {
-        self.buffer = self.buffer.backward(expand_selection);
-    }
-    pub fn up(&mut self, expand_selection: bool) {
-        self.buffer = self.buffer.up(expand_selection);
-    }
-    pub fn down(&mut self, expand_selection: bool) {
-        self.buffer = self.buffer.down(expand_selection);
-    }
-    pub fn duplicate_down(&mut self) {
-        self.buffer = self.buffer.duplicate_down();
-    }
-    pub fn duplicate_up(&mut self) {
-        self.buffer = self.buffer.duplicate_up();
-    }
-    pub fn revert_to_single_carrets(&mut self) {
-        if self.buffer.carrets.len() > 1 {
-            self.buffer = self.buffer.revert_to_single_carrets();
-        }
-    }
-    pub fn cancel_selection(&mut self) {
-        self.buffer = self.buffer.cancel_selection();
-    }
-    pub fn have_selection(&self) -> bool {
-        self.buffer.have_selection()
-    }
-    pub fn home(&mut self, expand_selection: bool) {
-        self.buffer = self.buffer.home(expand_selection);
-    }
-    pub fn end(&mut self, expand_selection: bool) {
-        self.buffer = self.buffer.end(expand_selection);
-    }
-    pub fn insert(&mut self, text: &str) {
-        let b = self.buffer.insert(text);
-        self.push_edit(b);
-    }
-    pub fn backspace(&mut self) {
-        if let Some(b) = self.buffer.backspace() {
-            self.push_edit(b)
-        };
-    }
-    pub fn delete(&mut self) {
-        if let Some(b) = self.buffer.delete() {
-            self.push_edit(b)
-        };
-    }
-    pub fn tab(&mut self) {
-        let b = self.buffer.tab(self.file.indentation);
-        self.push_edit(b);
-    }
-}
+    // pub fn edit(&mut self, range: &Range<AbsoluteIndex>, text: &str) {
+    //     let tabsize = self.file.indentation.visible_len();
+    //     let insert_index = self.buffer.rope.byte_to_char(range.start.0);
+    //     let end_index = self.buffer.rope.byte_to_char(range.end.0);
+    //     let cr = insert_index..end_index;
+    //     self.buffer.rope.remove(cr);
+    //     self.buffer.rope.insert(insert_index, text);
 
-#[derive(Debug, Clone)]
-pub enum SelectionLineRange {
-    Range(Range<usize>),
-    RangeTo(RangeTo<usize>),
-    RangeFrom(RangeFrom<usize>),
-    RangeFull,
-}
-
-#[derive(Debug)]
-pub struct Buffer {
-    pub rope: Rc<RefCell<Rope>>,
-    pub carrets: Carrets,
-    tabsize: Rc<usize>,
-}
-
-impl Clone for Buffer {
-    fn clone(&self) -> Self { 
-        let rope = self.rope.borrow().clone();
-        Self {
-            rope: Rc::new(RefCell::new(rope)),
-            carrets: self.carrets.clone(),
-            tabsize: self.tabsize.clone(),
-        }
-    }
-}
-
-impl Default for Buffer {
-    fn default() -> Self {
-        let indentation = Indentation::default();
-        Self::new(Rc::new(indentation.visible_len()))
-    }
-}
-
-impl Buffer {
-    pub fn new(tabsize: Rc<usize>) -> Self {
-        let rope = Rc::new(RefCell::new(Rope::new()));
-        Self {
-            rope: rope.clone(),
-            carrets: Carrets::new(rope.clone(),tabsize.clone()),
-            tabsize: tabsize.clone(),
-        }
-    }
-
-    pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
-        self.carrets
-            .iter()
-            .filter(move |c| c.line == line_idx)
-    }
-
-    // pub fn selection_index_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
-    //     self.carrets.iter().filter(move |c| {
-    //         if let Some(sel) = c.selection {
-    //             self.rope.byte_to_line(sel) == line_idx
-    //         } else {
-    //             false
-    //         }
-    //     })
+    //     for i in 0..self.buffer.carrets.len() {
+    //         self.buffer.carrets[i].update_after_delete(range.start, range.end.0 - range.start.0, &self.buffer.rope,tabsize); // TODO verify this
+    //         self.buffer.carrets[i].update_after_insert(range.start, text.len(),&self.buffer.rope, tabsize);
+    //     }
+    //     self.buffer.carrets.merge();
     // }
 
     pub fn selection_on_line<'a>(&'a self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {
         ranges.clear();
-        for r in self.carrets.iter().filter_map(move |c| {
+        for r in self.buffer.carrets.iter().filter_map(move |c| {
             if !c.selection_is_empty() {
                 let r = c.range();
-                match (self.rope.borrow().byte_to_line(r.start.0), self.rope.borrow().byte_to_line(r.end.0)) {
+                match (
+                    self.buffer.rope.byte_to_line(r.start.0),
+                    self.buffer.rope.byte_to_line(r.end.0),
+                ) {
                     (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(
                         self.byte_to_line_relative_index(r.start.0)..self.byte_to_line_relative_index(r.end.0),
                     )),
@@ -234,230 +138,201 @@ impl Buffer {
     }
 
     pub fn byte_to_line_relative_index(&self, index: usize) -> usize {
-        index - self.rope.borrow().line_to_byte(self.rope.borrow().byte_to_line(index))
+        index - self.buffer.rope.line_to_byte(self.buffer.rope.byte_to_line(index))
     }
 
     pub fn byte_to_line(&self, index: usize) -> usize {
-        self.rope.borrow().byte_to_line(index)
+        self.buffer.rope.byte_to_line(index)
     }
 
     pub fn byte_to_line_range(&self, range: Range<AbsoluteIndex>) -> RangeInclusive<usize> {
-        let line_start = self.rope.borrow().byte_to_line(range.start.0);
-        let line_end = self.rope.borrow().byte_to_line(range.end.0);
-        if self.byte_to_line_relative_index(range.end.0) == 0 && line_start!=line_end {
+        let line_start = self.buffer.rope.byte_to_line(range.start.0);
+        let line_end = self.buffer.rope.byte_to_line(range.end.0);
+        if self.byte_to_line_relative_index(range.end.0) == 0 && line_start != line_end {
             line_start..=line_end - 1
         } else {
             line_start..=line_end
         }
     }
 
-    pub fn from_rope(rope: Rope, tabsize: Rc<usize>) -> Self {
-        let rope = Rc::new(RefCell::new(rope.clone()));
-        Self {
-            rope: rope.clone(),
-            carrets: Carrets::new(rope.clone(),tabsize.clone()),
-            tabsize: tabsize.clone(),
-        }
-    }
 
-    pub fn line(&self, line: usize, out: &mut String) {
-        out.clear();
-        if line < self.rope.borrow().len_lines() {
-            for r in self.rope.borrow().line(line).chunks() {
-                out.push_str(r);
-            }
-        }
+
+    pub fn line(&self, line: usize) -> Line {
+        Line::new(line)
     }
 
     /// Construct a string with tab replaced as space
     /// return the position of invisible char
-    pub fn displayable_line(&self, line: usize, tabsize: usize, out: &mut String, indices: &mut Vec<usize>) {
-        out.clear();
-        indices.clear();
-        if line >= self.rope.borrow().len_lines() {
-            return;
-        }
-
-        let mut index = 0;
-        for c in self.rope.borrow().line(line).chars() {
-            match c {
-                ' ' => {
-                    indices.push(index);
-                    out.push(' ');
-                    index += 1;
-                }
-                '\t' => {
-                    let nb_space = tabsize - index % tabsize;
-                    indices.push(index);
-                    out.push_str(&" ".repeat(nb_space));
-                    index += nb_space;
-                }
-                _ => {
-                    out.push(c);
-                    for i in index..index + c.len_utf8() {
-                        indices.push(index);
-                    }
-                    index += c.len_utf8();
-                }
-            }
-        }
-        indices.push(index);
+    pub fn displayable_line(&self, line: usize, out: &mut String, indices: &mut Vec<RelativeIndex>) {
+        self.line(line).get_displayable_string(&self.buffer.rope,self.file.indentation.visible_len(), out, indices);
     }
 
-    pub fn backward(&self, expand_selection: bool) -> Self {
-        let mut buf = self.clone();
-        for s in &mut buf.carrets.iter_mut() { 
-            s.move_backward(expand_selection);
-        }
-        //collapse_selections(&mut carrets);
-        buf.carrets.merge();
-        buf
+    pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
+        self.buffer.carrets.iter().filter(move |c| c.line == line_idx)
     }
+    
 
-    pub fn forward(&self, expand_selection: bool) -> Self {
-        let mut buf = self.clone();
+    pub fn backward(&mut self, expand_selection: bool) {
+        let mut buf = self.buffer.clone();
         for s in &mut buf.carrets.iter_mut() {
-            s.move_forward(expand_selection);
+            s.move_backward(expand_selection,&self.buffer.rope, self.file.indentation.visible_len());
         }
         //collapse_selections(&mut carrets);
         buf.carrets.merge();
-        buf
+        self.buffer = buf;
     }
 
-    pub fn up(&self, expand_selection: bool) -> Self {
-        let mut buf = self.clone();
+    pub fn forward(&mut self, expand_selection: bool) {
+        let mut buf = self.buffer.clone();
         for s in &mut buf.carrets.iter_mut() {
-            s.move_up(expand_selection);
+            s.move_forward(expand_selection,&buf.rope,self.file.indentation.visible_len());
         }
         //collapse_selections(&mut carrets);
         buf.carrets.merge();
-        buf
+        self.buffer=buf;
     }
-    pub fn down(&self, expand_selection: bool) -> Self {
-        let mut buf = self.clone();
-        for s in &mut buf.carrets.iter_mut() {
-            s.move_down(expand_selection);
-        }
-        //collapse_selections(&mut carrets);
-        buf.carrets.merge();
-        buf
-    }
-    pub fn duplicate_down(&self) -> Self {
-        let mut buf = self.clone();
-        buf.carrets.sort_unstable();//_by(|a, b| a.index.cmp(&b.index));
 
-        if let Some(c) = buf.carrets.last().and_then(|c| c.duplicate_down()) {
+    pub fn up(&mut self, expand_selection: bool) {
+        let mut buf = self.buffer.clone();
+        for s in &mut buf.carrets.iter_mut() {
+            s.move_up(expand_selection,&buf.rope,self.file.indentation.visible_len());
+        }
+        //collapse_selections(&mut carrets);
+        buf.carrets.merge();
+        self.buffer = buf;
+    }
+    pub fn down(&mut self, expand_selection: bool) {
+        let mut buf = self.buffer.clone();
+        for s in &mut buf.carrets.iter_mut() {
+            s.move_down(expand_selection,&buf.rope,self.file.indentation.visible_len());
+        }
+        //collapse_selections(&mut carrets);
+        buf.carrets.merge();
+        self.buffer = buf;
+    }
+    pub fn duplicate_down(&mut self) {
+        let tabsize = self.file.indentation.visible_len();
+        let mut buf = self.buffer.clone();
+        buf.carrets.sort_unstable(); //_by(|a, b| a.index.cmp(&b.index));
+
+        if let Some(c) = buf.carrets.last().and_then(|c| c.duplicate_down(&buf.rope,tabsize)) {
             buf.carrets.push(c);
         }
         buf.carrets.merge();
-        buf
+        self.buffer = buf;
     }
 
-    pub fn duplicate_up(&self) -> Self {
-        let mut buf = self.clone();
-        buf.carrets.sort_unstable();//_by(|a, b| a.index.cmp(&b.index));
+    pub fn duplicate_up(&mut self) {
+        let tabsize = self.file.indentation.visible_len();
+        let mut buf = self.buffer.clone();
+        buf.carrets.sort_unstable(); //_by(|a, b| a.index.cmp(&b.index));
 
-        if let Some(c) = buf.carrets.first().and_then(|c| c.duplicate_up()) {
+        if let Some(c) = buf.carrets.first().and_then(|c| c.duplicate_up(&buf.rope,tabsize)) {
             buf.carrets.push(c);
         }
         buf.carrets.merge();
-        buf
+        self.buffer = buf;
     }
 
-    pub fn cancel_selection(&self) -> Self {
-        let mut buf = self.clone();
+    pub fn cancel_selection(&mut self) {
+        let mut buf = self.buffer.clone();
         for c in &mut buf.carrets.iter_mut() {
             //c.selection = None;
             c.cancel_selection();
         }
-        buf
+        self.buffer = buf
     }
 
     pub fn have_selection(&self) -> bool {
-        self.carrets.iter().any(|c| !c.selection_is_empty())
+        self.buffer.carrets.iter().any(|c| !c.selection_is_empty())
     }
 
-    pub fn revert_to_single_carrets(&self) -> Self {
-        let mut buf = self.clone();
+    pub fn revert_to_single_carrets(&mut self) {
+        let mut buf = self.buffer.clone();
         buf.carrets.retain(|c| !c.is_clone);
         buf.carrets.merge();
-        buf
+        self.buffer = buf;
     }
 
-    pub fn end(&self, expand_selection: bool) -> Self {
-        let mut buf = self.clone();
+    pub fn end(&mut self, expand_selection: bool) {
+        let tabsize = self.file.indentation.visible_len();
+        let mut buf = self.buffer.clone();
         for s in &mut buf.carrets.iter_mut() {
-
-            s.move_end(expand_selection);
+            s.move_end(expand_selection,&buf.rope,tabsize);
         }
         //collapse_selections(&mut carrets);
         buf.carrets.merge();
-        buf
+        self.buffer = buf;
     }
 
-    pub fn home(&self, expand_selection: bool) -> Self {
-        let mut buf = self.clone();
+    pub fn home(&mut self, expand_selection: bool) {
+        let mut buf = self.buffer.clone();
+        let tabsize = self.file.indentation.visible_len();
         for s in &mut buf.carrets.iter_mut() {
-            s.move_home(expand_selection);
+            s.move_home(expand_selection,&buf.rope,tabsize);
         }
         //collapse_selections(&mut carrets);
         buf.carrets.merge();
-        buf
+        self.buffer = buf
     }
 
-    pub fn insert(&self, text: &str) -> Self {
-
-        let mut buf = self.clone();
+    pub fn insert(&mut self, text: &str) {
+        let mut buf = self.buffer.clone();
+        let tabsize = self.file.indentation.visible_len();
         //carrets.sort_unstable_by(|a, b| a.index.cmp(&b.index));
         for i in 0..buf.carrets.len() {
-            let r = buf.carrets[i].range();
-            //buf.carrets[i].index = r.start;
-            let insert_index = buf.rope.borrow().byte_to_char(r.start.0);
-            let end_index = buf.rope.borrow().byte_to_char(r.end.0);
-            let cr = insert_index..end_index;
-            buf.rope.borrow_mut().remove(cr);
-            buf.rope.borrow_mut().insert(insert_index, text);
+            let r= buf.carrets[i].range();
+            buf.edit(&r,text,tabsize);
+            buf.carrets[i].set_index(r.start + text.len(), true,&buf.rope,tabsize);
+            // let r = buf.carrets[i].range();
+            // //buf.carrets[i].index = r.start;
+            // let insert_index = buf.rope.borrow().byte_to_char(r.start.0);
+            // let end_index = buf.rope.borrow().byte_to_char(r.end.0);
+            // let cr = insert_index..end_index;
+            // buf.rope.borrow_mut().remove(cr);
+            // buf.rope.borrow_mut().insert(insert_index, text);
 
-            //
-            buf.carrets[i].set_index(r.start + text.len(),true); // assume text have the correct grapheme boundary
+            // //
+            // buf.carrets[i].set_index(r.start + text.len(), true); // assume text have the correct grapheme boundary
 
-            for j in i + 1..buf.carrets.len() {
-                buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0); // TODO verify this
-                buf.carrets[j].update_after_insert(r.start, text.len());
-                // if let Some(ref mut sel) = buf.carrets[j].selection {
-                //     *sel -= r.end - r.start;
-                //     *sel += text.len();
-                // }
-            }
+            // for j in i + 1..buf.carrets.len() {
+            //     buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0); // TODO verify this
+            //     buf.carrets[j].update_after_insert(r.start, text.len());
+            //     // if let Some(ref mut sel) = buf.carrets[j].selection {
+            //     //     *sel -= r.end - r.start;
+            //     //     *sel += text.len();
+            //     // }
+            // }
 
-            // let (vcol, line) = index_to_point(&rope.slice(..), buf.carrets[i].index);
-            // buf.carrets[i].vcol = vcol;
-            // buf.carrets[i].col_index = buf.carrets[i].index - rope.line_to_byte(line);
+            // // let (vcol, line) = index_to_point(&rope.slice(..), buf.carrets[i].index);
+            // // buf.carrets[i].vcol = vcol;
+            // // buf.carrets[i].col_index = buf.carrets[i].index - rope.line_to_byte(line);
+
         }
         buf.carrets.merge();
-        buf
+        self.push_edit(buf);
         //Self { rope, carrets, tabsize: self.tabsize.clone() }
     }
 
-    pub fn backspace(&self) -> Option<Self> {
-        let mut buf = self.clone();
+    pub fn backspace(&mut self) {
+        let mut buf = self.buffer.clone();
+        let tabsize = self.file.indentation.visible_len();
 
         let mut did_nothing = true;
         for i in 0..buf.carrets.len() {
-            
             if !buf.carrets[i].selection_is_empty() {
                 // delete selection
                 dbg!(&buf.carrets[i]);
                 let r = buf.carrets[i].range();
                 //buf.carrets[i].selection = Default::default();
                 // buf.carrets[i].index = r.start;
-                buf.carrets[i].set_index(r.start,true);
-                let rc = buf.rope.borrow().byte_to_char(r.start.0)..buf.rope.borrow().byte_to_char(r.end.0);
-                buf.rope.borrow_mut().remove(rc);
+                buf.carrets[i].set_index(r.start, true,&buf.rope,tabsize);
+                let rc = buf.rope.byte_to_char(r.start.0)..buf.rope.byte_to_char(r.end.0);
+                buf.rope.remove(rc);
 
                 // update all others cursors
                 for j in i + 1..buf.carrets.len() {
-                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0,);
+                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0,&buf.rope,tabsize);
                     // TODO verify this
                     // if let Some(ref mut sel) = buf.carrets[j].selection {
                     //     *sel -= r.end - r.start;
@@ -466,16 +341,16 @@ impl Buffer {
 
                 did_nothing = false;
             } else if buf.carrets[i].index.0 > 0 {
-                
                 // delete the preceding grapheme
-                let r = prev_grapheme_boundary(&buf.rope.borrow().slice(..), buf.carrets[i].index.0)..buf.carrets[i].index.0;
-                buf.carrets[i].set_index(AbsoluteIndex(r.start),true);
-                let cr = buf.rope.borrow().byte_to_char(r.start)..buf.rope.borrow().byte_to_char(r.end);
-                buf.rope.borrow_mut().remove(cr);
+                let r = prev_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index.0)
+                    ..buf.carrets[i].index.0;
+                buf.carrets[i].set_index(AbsoluteIndex(r.start), true,&buf.rope,tabsize);
+                let cr = buf.rope.byte_to_char(r.start)..buf.rope.byte_to_char(r.end);
+                buf.rope.remove(cr);
 
                 // update all others cursors
                 for j in i + 1..buf.carrets.len() {
-                    buf.carrets[j].update_after_delete(AbsoluteIndex(r.start), r.end - r.start);
+                    buf.carrets[j].update_after_delete(AbsoluteIndex(r.start), r.end - r.start,&buf.rope,tabsize);
                 }
                 did_nothing = false;
             } else {
@@ -485,28 +360,27 @@ impl Buffer {
             // buf.carrets[i].vcol = vcol;
             // buf.carrets[i].col_index = buf.carrets[i].index - rope.line_to_byte(line);
         }
-        if did_nothing {
-            None
-        } else {
+        if !did_nothing {
             buf.carrets.merge();
-            Some(buf)
+            self.push_edit(buf);
         }
     }
 
-    pub fn delete(&self) -> Option<Self> {
-        let mut buf = self.clone();
+    pub fn delete(&mut self) {
+        let mut buf = self.buffer.clone();
+        let tabsize = self.file.indentation.visible_len();
         let mut did_nothing = true;
         for i in 0..buf.carrets.len() {
             if !buf.carrets[i].selection_is_empty() {
                 let r = buf.carrets[i].range();
                 //buf.carrets[i].selection = Default::default();
-                buf.carrets[i].set_index(r.start,true);
-                let cr = buf.rope.borrow().byte_to_char(r.start.0)..buf.rope.borrow().byte_to_char(r.end.0);
-                buf.rope.borrow_mut().remove(cr);
+                buf.carrets[i].set_index(r.start, true,&buf.rope,tabsize);
+                let cr = buf.rope.byte_to_char(r.start.0)..buf.rope.byte_to_char(r.end.0);
+                buf.rope.remove(cr);
 
                 // update all others cursors
                 for j in i + 1..buf.carrets.len() {
-                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0);
+                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0,&buf.rope,tabsize);
                     // TODO verify this
                     // if let Some(ref mut sel) = carrets[j].selection {
                     //     *sel -= r.end - r.start;
@@ -514,14 +388,15 @@ impl Buffer {
                 }
 
                 did_nothing = false;
-            } else if buf.carrets[i].index.0 < buf.rope.borrow().len_bytes() {
-                let r = buf.carrets[i].index.0..next_grapheme_boundary(&buf.rope.borrow().slice(..), buf.carrets[i].index.0);
-                buf.carrets[i].set_index(AbsoluteIndex(r.start),true);
-                let cr = buf.rope.borrow().byte_to_char(r.start)..buf.rope.borrow().byte_to_char(r.end);
-                buf.rope.borrow_mut().remove(cr);
+            } else if buf.carrets[i].index.0 < buf.rope.len_bytes() {
+                let r = buf.carrets[i].index.0
+                    ..next_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index.0);
+                buf.carrets[i].set_index(AbsoluteIndex(r.start), true,&buf.rope,tabsize);
+                let cr = buf.rope.byte_to_char(r.start)..buf.rope.byte_to_char(r.end);
+                buf.rope.remove(cr);
                 // update all others cursors
                 for j in i + 1..buf.carrets.len() {
-                    buf.carrets[j].update_after_delete(AbsoluteIndex(r.start), r.end - r.start);
+                    buf.carrets[j].update_after_delete(AbsoluteIndex(r.start), r.end - r.start,&buf.rope,tabsize);
                 }
                 did_nothing = false;
             } else {
@@ -531,46 +406,45 @@ impl Buffer {
             // buf.carrets[i].vcol = vcol;
             // buf.carrets[i].col_index = buf.carrets[i].index - rope.line_to_byte(line);
         }
-        if did_nothing {
-            None
-        } else {
+        if !did_nothing {
             buf.carrets.merge();
-            Some(buf)
+            self.push_edit(buf);
         }
     }
 
-    pub fn tab(&self, indentation: crate::file::Indentation) -> Self {
-        let mut buf = self.clone();
+    pub fn tab(&mut self) {
+        let mut buf = self.buffer.clone();
+        let tabsize = self.file.indentation.visible_len();
 
         for i in 0..buf.carrets.len() {
-            if let Some(line_range) = buf.carrets[i].selected_lines_range() {
+            if let Some(line_range) = buf.carrets[i].selected_lines_range(&buf.rope) {
                 for line in line_range {
                     let inserted_byte: usize;
-                    let line_char = buf.rope.borrow().line_to_char(line);
-                    let line_byte = buf.rope.borrow().line_to_byte(line);
-                    match indentation {
+                    let line_char = buf.rope.line_to_char(line);
+                    let line_byte = buf.rope.line_to_byte(line);
+                    match self.file.indentation {
                         Indentation::Space(n) => {
-                            let start = line_indent_len(&buf.rope.borrow().slice(..), line, n);
+                            let start = line_indent_len(&buf.rope.slice(..), line, n);
                             let nb_space = n - start % n;
-                            buf.rope.borrow_mut().insert(line_char, &" ".repeat(nb_space));
+                            buf.rope.insert(line_char, &" ".repeat(nb_space));
                             inserted_byte = nb_space;
                         }
                         Indentation::Tab(_) => {
-                            buf.rope.borrow_mut().insert_char(line_char, '\t');
+                            buf.rope.insert_char(line_char, '\t');
                             inserted_byte = 1;
                         }
                     }
                     for j in i..buf.carrets.len() {
-                        buf.carrets[j].update_after_insert(AbsoluteIndex(line_byte), inserted_byte);
+                        buf.carrets[j].update_after_insert(AbsoluteIndex(line_byte), inserted_byte,&buf.rope,tabsize);
                     }
                 }
             } else {
                 let r = buf.carrets[i].range();
-                let text = match indentation {
+                let text = match self.file.indentation {
                     Indentation::Space(n) => {
                         // let i = r.start - rope.line_to_byte(*line_range.start());
                         // let start = line_index_to_column(&rope.line(*line_range.start()),i,n);
-                        let start = buf.carrets[i].column_index();
+                        let start = buf.carrets[i].column_index(&buf.rope,tabsize);
                         let nb_space = n - start.0 % n;
                         " ".repeat(nb_space).to_owned()
                     }
@@ -578,16 +452,16 @@ impl Buffer {
                 };
 
                 //carrets[i].index = r.start;
-                let cr_start = buf.rope.borrow().byte_to_char(r.start.0);
-                let cr_end = buf.rope.borrow().byte_to_char(r.end.0);
-                buf.rope.borrow_mut().remove(cr_start..cr_end);
-                buf.rope.borrow_mut().insert(cr_start, &text);
+                let cr_start = buf.rope.byte_to_char(r.start.0);
+                let cr_end = buf.rope.byte_to_char(r.end.0);
+                buf.rope.remove(cr_start..cr_end);
+                buf.rope.insert(cr_start, &text);
 
                 //carrets[i].selection = Default::default();
-                buf.carrets[i].set_index(r.start + text.len(),true); // assume text have the correct grapheme boundary
+                buf.carrets[i].set_index(r.start + text.len(), true,&buf.rope,tabsize); // assume text have the correct grapheme boundary
                 for j in i + 1..buf.carrets.len() {
-                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0); // TODO verify this
-                    buf.carrets[j].update_after_insert(r.start, text.len());
+                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0,&buf.rope,tabsize); // TODO verify this
+                    buf.carrets[j].update_after_insert(r.start, text.len(),&buf.rope,tabsize);
                     // if let Some(ref mut sel) = buf.carrets[j].selection {
                     //     *sel -= r.end - r.start;
                     //     *sel += text.len();
@@ -596,23 +470,65 @@ impl Buffer {
             }
         }
         buf.carrets.merge();
-        buf
+        self.push_edit(buf);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum SelectionLineRange {
+    Range(Range<usize>),
+    RangeTo(RangeTo<usize>),
+    RangeFrom(RangeFrom<usize>),
+    RangeFull,
+}
+
+#[derive(Debug, Clone)]
+pub struct Buffer {
+    pub rope: Rope,
+    pub carrets: Carrets,
+}
+
+impl Default for Buffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Buffer {
+    pub fn new() -> Self {
+        Self {
+            rope: Rope::new(),
+            carrets: Carrets::new(),
+        }
     }
 
-    //pub fn tab(&self,tab_size: usize) -> Self {
 
-    //     if self.carrets.len()>1 {
-    //         let nb_space
-    //         self.insert()
-    //     } else {
+    pub fn from_rope(rope: Rope) -> Self {
+        Self {
+            rope: rope.clone(),
+            carrets: Carrets::new(),
+        }
+    }
 
-    //     }
-    // }
+    pub fn edit(&mut self, range: &Range<AbsoluteIndex>, text: &str, tabsize: usize) {
+        let insert_index = self.rope.byte_to_char(range.start.0);
+        let end_index = self.rope.byte_to_char(range.end.0);
+        let cr = insert_index..end_index;
+        self.rope.remove(cr);
+        self.rope.insert(insert_index, text);
+
+        for i in 0..self.carrets.len() {
+            self.carrets[i].update_after_delete(range.start, range.end.0 - range.start.0, &self.rope,tabsize); // TODO verify this
+            self.carrets[i].update_after_insert(range.start, text.len(),&self.rope, tabsize);
+        }
+        self.carrets.merge();
+    }
+
 }
 
 impl ToString for Buffer {
     fn to_string(&self) -> String {
-        self.rope.borrow().to_string()
+        self.rope.to_string()
     }
 }
 
