@@ -279,10 +279,6 @@ impl Carret {
             .relative_index_to_column(self.relative_index(rope), rope, tabsize)
     }
 
-    // fn recalculate_col_index(&mut self, rope: &Rope) {
-    //     self.col_index = self.index - rope.line_to_byte(self.index_line(rope));
-    // }
-
     fn recalculate_vcol(&mut self,rope: &Rope,tabsize: usize) {
         self.vcol = self.column_index(rope,tabsize);
     }
