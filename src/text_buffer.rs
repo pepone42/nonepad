@@ -311,54 +311,27 @@ impl EditStack {
         for i in 0..buf.carrets.len() {
             if let Some(line_range) = buf.carrets[i].selected_lines_range(&buf.rope) {
                 for line in line_range {
-                    let inserted_byte: usize;
-                    let line_char = buf.rope.line_to_char(line);
-                    let line_byte = buf.rope.line_to_byte(line);
-                    match self.file.indentation {
+                    let r = self.line(line).start(&buf.rope)..self.line(line).start(&buf.rope);
+                    let text = match self.file.indentation {
                         Indentation::Space(n) => {
-                            let start = line_indent_len(&buf.rope.slice(..), line, n);
-                            let nb_space = n - start % n;
-                            buf.rope.insert(line_char, &" ".repeat(nb_space));
-                            inserted_byte = nb_space;
+                            " ".repeat(n).to_owned()
                         }
-                        Indentation::Tab(_) => {
-                            buf.rope.insert_char(line_char, '\t');
-                            inserted_byte = 1;
-                        }
-                    }
-                    for j in i..buf.carrets.len() {
-                        buf.carrets[j].update_after_insert(AbsoluteIndex(line_byte), inserted_byte,&buf.rope,tabsize);
-                    }
+                        Indentation::Tab(_) => "\t".to_owned(),
+                    };
+                    buf.edit(&r,&text,tabsize);
                 }
             } else {
                 let r = buf.carrets[i].range();
                 let text = match self.file.indentation {
                     Indentation::Space(n) => {
-                        // let i = r.start - rope.line_to_byte(*line_range.start());
-                        // let start = line_index_to_column(&rope.line(*line_range.start()),i,n);
                         let start = buf.carrets[i].column_index(&buf.rope,tabsize);
                         let nb_space = n - start.0 % n;
                         " ".repeat(nb_space).to_owned()
                     }
                     Indentation::Tab(_) => "\t".to_owned(),
                 };
-
-                //carrets[i].index = r.start;
-                let cr_start = buf.rope.byte_to_char(r.start.0);
-                let cr_end = buf.rope.byte_to_char(r.end.0);
-                buf.rope.remove(cr_start..cr_end);
-                buf.rope.insert(cr_start, &text);
-
-                //carrets[i].selection = Default::default();
-                buf.carrets[i].set_index(r.start + text.len(), true,&buf.rope,tabsize); // assume text have the correct grapheme boundary
-                for j in i + 1..buf.carrets.len() {
-                    buf.carrets[j].update_after_delete(r.start, r.end.0 - r.start.0,&buf.rope,tabsize); // TODO verify this
-                    buf.carrets[j].update_after_insert(r.start, text.len(),&buf.rope,tabsize);
-                    // if let Some(ref mut sel) = buf.carrets[j].selection {
-                    //     *sel -= r.end - r.start;
-                    //     *sel += text.len();
-                    // }
-                }
+                buf.edit(&r,&text,tabsize);
+                buf.carrets[i].set_index(r.start+ text.len(), true,&buf.rope,tabsize);
             }
         }
         buf.carrets.merge();
