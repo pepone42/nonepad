@@ -246,7 +246,8 @@ pub fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 }
 
 /// Finds the next grapheme boundary after the given char position.
-pub fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
+pub fn next_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let byte_idx = byte_idx.into();
     // Bounds check
     debug_assert!(byte_idx <= slice.len_bytes());
 

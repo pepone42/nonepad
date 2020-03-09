@@ -101,19 +101,19 @@ impl EditStack {
         index - self.buffer.rope.line_to_byte(self.buffer.rope.byte_to_line(index))
     }
 
-    pub fn byte_to_line(&self, index: usize) -> usize {
-        self.buffer.rope.byte_to_line(index)
-    }
+    // pub fn byte_to_line(&self, index: usize) -> usize {
+    //     self.buffer.rope.byte_to_line(index)
+    // }
 
-    pub fn byte_to_line_range(&self, range: Range<AbsoluteIndex>) -> RangeInclusive<usize> {
-        let line_start = self.buffer.rope.byte_to_line(range.start.0);
-        let line_end = self.buffer.rope.byte_to_line(range.end.0);
-        if self.byte_to_line_relative_index(range.end.0) == 0 && line_start != line_end {
-            line_start..=line_end - 1
-        } else {
-            line_start..=line_end
-        }
-    }
+    // pub fn byte_to_line_range(&self, range: Range<AbsoluteIndex>) -> RangeInclusive<usize> {
+    //     let line_start = self.buffer.rope.byte_to_line(range.start.0);
+    //     let line_end = self.buffer.rope.byte_to_line(range.end.0);
+    //     if self.byte_to_line_relative_index(range.end.0) == 0 && line_start != line_end {
+    //         line_start..=line_end - 1
+    //     } else {
+    //         line_start..=line_end
+    //     }
+    // }
 
     pub fn line(&self, line: usize) -> Line {
         Line::new(line)
