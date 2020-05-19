@@ -9,7 +9,8 @@ use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, Sy
 use crate::app_context::AppContext;
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use crate::{BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
+use crate::{BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT, position};
+use position::Relative;
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -73,13 +74,13 @@ impl EditorView {
     fn add_bounded_range_selection(
         &mut self,
         y: f64,
-        range: Range<usize>,
+        range: Range<position::Relative>,
         layout: &dyn TextLayout,
         path: &mut SelectionPath,
     ) {
         match (
-            layout.hit_test_text_position(range.start),
-            layout.hit_test_text_position(range.end),
+            layout.hit_test_text_position(range.start.into()),
+            layout.hit_test_text_position(range.end.into()),
         ) {
             (Some(s), Some(e)) => {
                 path.clear();
@@ -96,13 +97,13 @@ impl EditorView {
     fn add_range_from_selection(
         &mut self,
         y: f64,
-        range: Range<usize>,
+        range: Range<position::Relative>,
         layout: &dyn TextLayout,
         path: &mut Vec<PathEl>,
     ) -> f64 {
         match (
-            layout.hit_test_text_position(range.start),
-            layout.hit_test_text_position(range.end),
+            layout.hit_test_text_position(range.start.into()),
+            layout.hit_test_text_position(range.end.into()),
         ) {
             (Some(s), Some(e)) => {
                 path.clear();
@@ -122,16 +123,16 @@ impl EditorView {
     fn add_range_to_selection(
         &mut self,
         y: f64,
-        range: Range<usize>,
+        range: Range<position::Relative>,
         layout: &dyn TextLayout,
         path: &mut SelectionPath,
     ) {
-        if let Some(e) = layout.hit_test_text_position(range.end) {
+        if let Some(e) = layout.hit_test_text_position(range.end.into()) {
             match &path.last_range {
-                Some(SelectionLineRange::RangeFrom(_)) if range.end == 0 => {
+                Some(SelectionLineRange::RangeFrom(_)) if range.end == position::Relative::from(0) => {
                     path.push(PathEl::ClosePath);
                 }
-                Some(SelectionLineRange::RangeFull) if range.end == 0 => {
+                Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
                     path.push(PathEl::LineTo(Point::new(0., y)));
                     path.push(PathEl::ClosePath);
                 }
@@ -168,11 +169,11 @@ impl EditorView {
     fn add_range_full_selection(
         &mut self,
         y: f64,
-        range: Range<usize>,
+        range: Range<position::Relative>,
         layout: &dyn TextLayout,
         path: &mut SelectionPath,
     ) {
-        if let Some(e) = layout.hit_test_text_position(range.end) {
+        if let Some(e) = layout.hit_test_text_position(range.end.into()) {
             match &path.last_range {
                 Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                     path.push(PathEl::ClosePath);
@@ -236,7 +237,7 @@ impl EditorView {
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.displayable_line(line_idx, &mut line, &mut indices);
+            self.editor.displayable_line( position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             self.editor.selection_on_line(line_idx, &mut ranges);
@@ -245,17 +246,17 @@ impl EditorView {
                 match range {
                     SelectionLineRange::Range(r) => {
                         // Simple case, the selection is contain on one line
-                        self.add_bounded_range_selection(dy, indices[r.start].0..indices[r.end].0, &layout, &mut current_path)
+                        self.add_bounded_range_selection(dy, indices[r.start]..indices[r.end], &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFrom(r) => {
                         current_path.last_x =
-                            self.add_range_from_selection(dy, indices[r.start].0..line.len() - 1, &layout, &mut current_path)
+                            self.add_range_from_selection(dy, indices[r.start]..Relative::from(line.len() - 1), &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeTo(r) => {
-                        self.add_range_to_selection(dy, 0..indices[r.end].0, &layout, &mut current_path)
+                        self.add_range_to_selection(dy, Relative::from(0)..indices[r.end], &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFull => {
-                        self.add_range_full_selection(dy, 0..line.len() - 1, &layout, &mut current_path)
+                        self.add_range_full_selection(dy, Relative::from(0)..Relative::from(line.len() - 1), &layout, &mut current_path)
                     }
                 }
                 current_path.last_range = Some(range.clone());
@@ -290,13 +291,13 @@ impl EditorView {
         for line_idx in visible_range {
             
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.displayable_line(line_idx, &mut line, &mut indices);
+            self.editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
-            self.editor.carrets_on_line(line_idx).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(indices[c.rel_index.0].0) {
+            self.editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
+                if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
                     piet.stroke(
                         Line::new(
                             (metrics.point.x + 1.0, self.font_height + dy),
@@ -319,7 +320,7 @@ impl EditorView {
             return;
         }
         if let Some(carret) = self.editor.buffer.carrets.first() {
-            let y = carret.line as f64 * self.font_height;
+            let y = carret.line().index as f64 * self.font_height;
 
             if y > -self.delta_y + self.size.height - self.font_height {
                 self.delta_y = -y + self.size.height - self.font_height;

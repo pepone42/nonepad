@@ -1,3 +1,4 @@
+use crate::position::{Line,Relative,Absolute,Point,Position, Column, self};
 use crate::carret::Carrets;
 use std::cell::RefCell;
 use std::io::Result;
@@ -10,7 +11,7 @@ use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
 use crate::carret::Carret;
 use crate::file::{Indentation, TextFileInfo};
-use crate::rope_utils::*;
+use crate::rope_utils;
 
 #[derive(Debug, Default)]
 pub struct EditStack {
@@ -74,17 +75,17 @@ impl EditStack {
             if !c.selection_is_empty() {
                 let r = c.range();
                 match (
-                    self.buffer.rope.byte_to_line(r.start.0),
-                    self.buffer.rope.byte_to_line(r.end.0),
+                    self.buffer.rope.byte_to_line(r.start.into()),
+                    self.buffer.rope.byte_to_line(r.end.into()),
                 ) {
                     (s, e) if s == e && s == line_idx => Some(SelectionLineRange::Range(
-                        self.byte_to_line_relative_index(r.start.0)..self.byte_to_line_relative_index(r.end.0),
+                        self.byte_to_line_relative_index(r.start.into())..self.byte_to_line_relative_index(r.end.into()),
                     )),
                     (s, _) if s == line_idx => Some(SelectionLineRange::RangeFrom(
-                        self.byte_to_line_relative_index(r.start.0)..,
+                        self.byte_to_line_relative_index(r.start.into())..,
                     )),
                     (_, e) if e == line_idx => {
-                        Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end.0)))
+                        Some(SelectionLineRange::RangeTo(..self.byte_to_line_relative_index(r.end.into())))
                     }
                     (s, e) if line_idx < e && line_idx > s => Some(SelectionLineRange::RangeFull),
                     _ => None,
@@ -115,17 +116,17 @@ impl EditStack {
     //     }
     // }
 
-    pub fn line(&self, line: usize) -> Line {
-        Line::new(line)
-    }
+    // pub fn line(&self, line: usize) -> Line {
+    //     Line::new(line)
+    // }
 
     /// Construct a string with tab replaced as space
-    pub fn displayable_line(&self, line: usize, out: &mut String, indices: &mut Vec<RelativeIndex>) {
-        self.line(line).get_displayable_string(&self.buffer.rope,self.file.indentation.visible_len(), out, indices);
+    pub fn displayable_line(&self, line: Line, out: &mut String, indices: &mut Vec<Relative>) {
+        line.displayable_string(&self.buffer.rope,self.file.indentation.visible_len(), out, indices);
     }
 
-    pub fn carrets_on_line<'a>(&'a self, line_idx: usize) -> impl Iterator<Item = &'a Carret> {
-        self.buffer.carrets.iter().filter(move |c| c.line == line_idx)
+    pub fn carrets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Carret> {
+        self.buffer.carrets.iter().filter(move |c| c.line() == line)
     }
     
     pub fn backward(&mut self, expand_selection: bool) {
@@ -238,7 +239,7 @@ impl EditStack {
         for i in 0..buf.carrets.len() {
             let r= buf.carrets[i].range();
             buf.edit(&r,text,tabsize);
-            buf.carrets[i].set_index(r.start + text.len(), true,&buf.rope,tabsize);
+            buf.carrets[i].set_index(r.start + text.len(), true,true,&buf.rope,tabsize);
         }
         buf.carrets.merge();
 
@@ -255,15 +256,15 @@ impl EditStack {
                 // delete all the selection
                 let r= buf.carrets[i].range();
                 buf.edit(&r,"",tabsize);
-                buf.carrets[i].set_index(r.start, true,&buf.rope,tabsize);
+                buf.carrets[i].set_index(r.start, true,true,&buf.rope,tabsize);
 
                 did_nothing = false;
-            } else if buf.carrets[i].index.0 > 0 {
+            } else if buf.carrets[i].index > 0.into() {
                 // delete the preceding grapheme
-                let r = AbsoluteIndex(prev_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index.0))
+                let r = rope_utils::prev_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index.into()).into()
                     ..buf.carrets[i].index;
                 buf.edit(&r,"",tabsize);
-                buf.carrets[i].set_index(r.start, true,&buf.rope,tabsize);
+                buf.carrets[i].set_index(r.start, true,true,&buf.rope,tabsize);
 
                 did_nothing = false;
             } else {
@@ -284,14 +285,14 @@ impl EditStack {
             if !buf.carrets[i].selection_is_empty() {
                 let r = buf.carrets[i].range();
                 buf.edit(&r,"",tabsize);
-                buf.carrets[i].set_index(r.start, true,&buf.rope,tabsize);
+                buf.carrets[i].set_index(r.start, true,true,&buf.rope,tabsize);
 
                 did_nothing = false;
-            } else if buf.carrets[i].index.0 < buf.rope.len_bytes() {
+            } else if buf.carrets[i].index < buf.rope.len_bytes().into() {
                 let r = buf.carrets[i].index
-                    ..AbsoluteIndex(next_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index.0));
+                    ..rope_utils::next_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index).into();
                 buf.edit(&r,"",tabsize);
-                buf.carrets[i].set_index(r.start, true,&buf.rope,tabsize);
+                buf.carrets[i].set_index(r.start, true,true,&buf.rope,tabsize);
 
                 did_nothing = false;
             } else {
@@ -310,8 +311,10 @@ impl EditStack {
 
         for i in 0..buf.carrets.len() {
             if let Some(line_range) = buf.carrets[i].selected_lines_range(&buf.rope) {
-                for line in line_range {
-                    let r = self.line(line).start(&buf.rope)..self.line(line).start(&buf.rope);
+                // TODO: Find a better way to iterate over line of a selection
+                for line_idx in line_range.start().index .. line_range.end().index+1 { //  line_range.start().iter(&buf.rope).take_while(|line| *line < line_range.end() - line_range.start()) {
+                    let line_start:position::Absolute = buf.rope.line_to_byte(line_idx).into();
+                    let r = line_start..line_start;
                     let text = match self.file.indentation {
                         Indentation::Space(n) => {
                             " ".repeat(n).to_owned()
@@ -324,14 +327,14 @@ impl EditStack {
                 let r = buf.carrets[i].range();
                 let text = match self.file.indentation {
                     Indentation::Space(n) => {
-                        let start = buf.carrets[i].column_index(&buf.rope,tabsize);
-                        let nb_space = n - start.0 % n;
+                        let start:usize = buf.carrets[i].col().into();//(&buf.rope,tabsize);
+                        let nb_space = n - start % n;
                         " ".repeat(nb_space).to_owned()
                     }
                     Indentation::Tab(_) => "\t".to_owned(),
                 };
                 buf.edit(&r,&text,tabsize);
-                buf.carrets[i].set_index(r.start+ text.len(), true,&buf.rope,tabsize);
+                buf.carrets[i].set_index(r.start+ Relative::from(text.len()), true,true,&buf.rope,tabsize);
             }
         }
         buf.carrets.merge();
@@ -375,16 +378,16 @@ impl Buffer {
         }
     }
 
-    pub fn edit(&mut self, range: &Range<AbsoluteIndex>, text: &str, tabsize: usize) {
-        let insert_index = self.rope.byte_to_char(range.start.0);
-        let end_index = self.rope.byte_to_char(range.end.0);
+    pub fn edit(&mut self, range: &Range<Absolute>, text: &str, tabsize: usize) {
+        let insert_index = self.rope.byte_to_char(range.start.into());
+        let end_index = self.rope.byte_to_char(range.end.into());
         let cr = insert_index..end_index;
         self.rope.remove(cr);
         self.rope.insert(insert_index, text);
 
         for i in 0..self.carrets.len() {
-            self.carrets[i].update_after_delete(range.start, range.end.0 - range.start.0, &self.rope,tabsize); // TODO verify this
-            self.carrets[i].update_after_insert(range.start, text.len(),&self.rope, tabsize);
+            self.carrets[i].update_after_delete(range.start, (range.end - range.start).into(), &self.rope,tabsize); // TODO verify this
+            self.carrets[i].update_after_insert(range.start, text.len().into(),&self.rope, tabsize);
         }
         self.carrets.merge();
     }
