@@ -1,13 +1,10 @@
+use crate::position::{Absolute, Column, Line, Point, Position, Relative};
 use crate::rope_utils::*;
-use crate::{
-    position::{Absolute, Column, Line, Point, Position, Relative},
-    rope_utils::{AbsoluteIndex, RelativeIndex},
-};
-use ropey::{Rope, RopeSlice};
+use ropey::Rope;
 
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::ops::{AddAssign, Range, RangeInclusive, SubAssign};
+use std::ops::{Range, RangeInclusive};
 
 #[derive(Debug)]
 pub struct Carrets {
@@ -113,8 +110,8 @@ impl Carret {
             is_clone: false,
         }
     }
-    fn from_point(p: Point,rope :&Rope, tabsize: usize) -> Self { 
-        Self { 
+    fn from_point(p: Point, rope: &Rope, tabsize: usize) -> Self {
+        Self {
             index: p.absolute(rope, tabsize),
             selection: p.absolute(rope, tabsize),
             point: p,
@@ -201,54 +198,47 @@ impl Carret {
         self.point.col
     }
 
-    // pub fn relative_index(&self, rope: &Rope) -> RelativeIndex {
-    //     self.line(rope).absolute_to_relative_index(self.index, rope)
-    // }
-
-    // pub fn column_index(&self, rope: &Rope, tabsize: usize) -> Column {
-    //     self.line(rope)
-    //         .relative_index_to_column(self.relative_index(rope), rope, tabsize)
-    // }
-
-    fn recalculate_vcol(&mut self, rope: &Rope, tabsize: usize) {
-        //self.vcol = self.column_index(rope, tabsize);
-        self.sticky_col = self.point.col;
-    }
-
-    pub fn set_index(&mut self, index: Absolute, reset_selection: bool, reset_sticky_col: bool, rope: &Rope, tabsize: usize) {
+    pub fn set_index(
+        &mut self,
+        index: Absolute,
+        reset_selection: bool,
+        reset_sticky_col: bool,
+        rope: &Rope,
+        tabsize: usize,
+    ) {
         self.index = index;
         if reset_selection {
             self.selection = index;
         }
-        self.point = self.index.point(rope,tabsize);
+        self.point = self.index.point(rope, tabsize);
         if reset_sticky_col {
             self.sticky_col = self.point.col;
         }
     }
 
     pub fn move_up(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let pos = Point::new(self.sticky_col,self.line(),rope,tabsize).up(rope, tabsize);
-        self.set_index(pos.absolute(rope, tabsize),!expand_selection, false, rope, tabsize);
+        let pos = Point::new(self.sticky_col, self.line(), rope, tabsize).up(rope, tabsize);
+        self.set_index(pos.absolute(rope, tabsize), !expand_selection, false, rope, tabsize);
     }
 
     pub fn move_down(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let pos = Point::new(self.sticky_col,self.line(),rope,tabsize).down(rope, tabsize);
-        self.set_index(pos.absolute(rope, tabsize),!expand_selection, false, rope, tabsize);
+        let pos = Point::new(self.sticky_col, self.line(), rope, tabsize).down(rope, tabsize);
+        self.set_index(pos.absolute(rope, tabsize), !expand_selection, false, rope, tabsize);
     }
 
     pub fn move_backward(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let index = prev_grapheme_boundary(&rope.slice(..), self.index.into());
+        let index = prev_grapheme_boundary(&rope.slice(..), self.index);
         self.set_index(Absolute::from(index), !expand_selection, true, rope, tabsize);
     }
 
     pub fn move_forward(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
         let index = next_grapheme_boundary(&rope.slice(..), self.index);
-        self.set_index(Absolute::from(index), !expand_selection,true, rope, tabsize);
+        self.set_index(Absolute::from(index), !expand_selection, true, rope, tabsize);
     }
 
     pub fn duplicate_down(&self, rope: &Rope, tabsize: usize) -> Option<Self> {
-        if let Some(next_line) = self.line().next(rope) {
-            let mut c = Carret::from_point(self.point.down(rope, tabsize),rope, tabsize);
+        if self.line().next(rope).is_some() {
+            let mut c = Carret::from_point(self.point.down(rope, tabsize), rope, tabsize);
             c.is_clone = true;
             Some(c)
         } else {
@@ -257,8 +247,8 @@ impl Carret {
     }
 
     pub fn duplicate_up(&self, rope: &Rope, tabsize: usize) -> Option<Self> {
-        if let Some(prev_line) = self.line().prev() {
-            let mut c = Carret::from_point(self.point.up(rope, tabsize),rope, tabsize);
+        if self.line().prev().is_some() {
+            let mut c = Carret::from_point(self.point.up(rope, tabsize), rope, tabsize);
             c.is_clone = true;
             Some(c)
         } else {
@@ -268,14 +258,12 @@ impl Carret {
 
     pub fn move_end(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
         let index = self.line().end(rope);
-        self.set_index(index, !expand_selection,true, rope, tabsize);
-        self.recalculate_vcol(rope, tabsize);
+        self.set_index(index, !expand_selection, true, rope, tabsize);
     }
 
     pub fn move_home(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
         let index = self.line().start(rope);
-        self.set_index(index, !expand_selection,true, rope, tabsize);
-        self.recalculate_vcol(rope, tabsize);
+        self.set_index(index, !expand_selection, true, rope, tabsize);
     }
 
     pub fn update_after_insert(&mut self, index: Absolute, delta: Relative, rope: &Rope, tabsize: usize) {
@@ -294,7 +282,7 @@ impl Carret {
     pub fn update_after_delete(&mut self, index: Absolute, delta: Relative, rope: &Rope, tabsize: usize) {
         if self.index > index {
             let col = self.col();
-            self.set_index(self.index - delta, false,false, rope, tabsize);
+            self.set_index(self.index - delta, false, false, rope, tabsize);
             // Update virtal column position only if the real column position changed
             if col != self.col() {
                 self.sticky_col = col;

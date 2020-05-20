@@ -55,6 +55,7 @@ impl Point {
         let a = Absolute::from(rope.line_to_byte(line.index));
         while c < col.index && i < line.byte_len(rope) {
             let ch = rope.char(rope.byte_to_char((a+i).index));
+            dbg!(&ch);
             match ch {
                 ' ' => {
                     c += 1;
@@ -80,6 +81,7 @@ impl Point {
         let a = Absolute::from(rope.line_to_byte(line.index));
         while i < relative {
             let ch = rope.char(rope.byte_to_char((a+i).index));
+            dbg!(&ch);
             match ch {
                 ' ' => {
                     c += 1;
@@ -276,7 +278,7 @@ impl Line {
         } else {
             Absolute::from(prev_grapheme_boundary(
                 &rope.slice(..),
-                rope.line_to_byte((self.index + 1).into()).into(),
+                rope.line_to_byte((self.index + 1).into()),
             ))
         }
     }
@@ -286,8 +288,9 @@ impl Line {
     pub fn grapheme_len(&self, rope: &Rope, tabsize: usize) -> Column {
         let mut col = Column::from(0);
         let mut i = Relative::from(0);
+        let a = Absolute::from(rope.line_to_byte(self.index));
         while i < self.byte_len(rope) {
-            let c = rope.char(rope.byte_to_char(i.into()));
+            let c = rope.char(rope.byte_to_char((a+i).index));
             match c {
                 ' ' => {
                     col += 1;
@@ -299,7 +302,7 @@ impl Line {
                     i += 1;
                 }
                 _ => {
-                    i = crate::rope_utils::next_grapheme_boundary(&rope.slice(..), i.index).into();
+                    i = next_grapheme_boundary(&rope.line(self.index), i).into();
                     col += 1;
                 }
             }
