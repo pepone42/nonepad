@@ -55,7 +55,6 @@ impl Point {
         let a = Absolute::from(rope.line_to_byte(line.index));
         while c < col.index && i < line.byte_len(rope) {
             let ch = rope.char(rope.byte_to_char((a+i).index));
-            dbg!(&ch);
             match ch {
                 ' ' => {
                     c += 1;
@@ -81,7 +80,6 @@ impl Point {
         let a = Absolute::from(rope.line_to_byte(line.index));
         while i < relative {
             let ch = rope.char(rope.byte_to_char((a+i).index));
-            dbg!(&ch);
             match ch {
                 ' ' => {
                     c += 1;
