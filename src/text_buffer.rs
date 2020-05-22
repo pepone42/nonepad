@@ -1,6 +1,6 @@
 use std::io::Result;
 use std::ops::{Range, RangeFrom, RangeTo};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use ropey::Rope;
 
@@ -16,6 +16,7 @@ pub struct EditStack {
     undo_stack: Vec<Buffer>,
     redo_stack: Vec<Buffer>,
     pub file: TextFileInfo,
+    pub filename: Option<PathBuf>,
 }
 
 impl EditStack {
@@ -24,22 +25,20 @@ impl EditStack {
     }
 
     pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = TextFileInfo::load(path)?;
+        let file = TextFileInfo::load(&path)?;
         let buffer = Buffer::from_rope(file.1);
         Ok(Self {
             buffer,
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             file: file.0,
+            filename: Some(path.as_ref().to_path_buf()),
         })
     }
 
-    pub fn save(&mut self) -> Result<()> {
-        self.file.save(&self.buffer.rope)?;
-        Ok(())
-    }
-    pub fn save_as<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        self.file.save_as(&self.buffer.rope, path)?;
+    pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        self.file.save_as(&self.buffer.rope, &path)?;
+        self.filename = Some(path.as_ref().to_path_buf());
         Ok(())
     }
 

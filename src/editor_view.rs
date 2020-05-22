@@ -9,7 +9,7 @@ use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, Sy
 use crate::app_context::AppContext;
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use crate::{BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT, position};
+use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
 use position::Relative;
 
 #[derive(Debug, Default)]
@@ -41,9 +41,6 @@ impl SelectionPath {
         }
     }
 }
-
-
-
 
 #[derive(Debug, Default)]
 pub struct EditorView {
@@ -215,8 +212,6 @@ impl EditorView {
         }
     }
 
-    
-
     pub fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
@@ -237,7 +232,8 @@ impl EditorView {
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.displayable_line( position::Line::from(line_idx), &mut line, &mut indices);
+            self.editor
+                .displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             self.editor.selection_on_line(line_idx, &mut ranges);
@@ -246,18 +242,30 @@ impl EditorView {
                 match range {
                     SelectionLineRange::Range(r) => {
                         // Simple case, the selection is contain on one line
-                        self.add_bounded_range_selection(dy, indices[r.start]..indices[r.end], &layout, &mut current_path)
+                        self.add_bounded_range_selection(
+                            dy,
+                            indices[r.start]..indices[r.end],
+                            &layout,
+                            &mut current_path,
+                        )
                     }
                     SelectionLineRange::RangeFrom(r) => {
-                        current_path.last_x =
-                            self.add_range_from_selection(dy, indices[r.start]..Relative::from(line.len() - 1), &layout, &mut current_path)
+                        current_path.last_x = self.add_range_from_selection(
+                            dy,
+                            indices[r.start]..Relative::from(line.len() - 1),
+                            &layout,
+                            &mut current_path,
+                        )
                     }
                     SelectionLineRange::RangeTo(r) => {
                         self.add_range_to_selection(dy, Relative::from(0)..indices[r.end], &layout, &mut current_path)
                     }
-                    SelectionLineRange::RangeFull => {
-                        self.add_range_full_selection(dy, Relative::from(0)..Relative::from(line.len() - 1), &layout, &mut current_path)
-                    }
+                    SelectionLineRange::RangeFull => self.add_range_full_selection(
+                        dy,
+                        Relative::from(0)..Relative::from(line.len() - 1),
+                        &layout,
+                        &mut current_path,
+                    ),
                 }
                 current_path.last_range = Some(range.clone());
                 if let Some(PathEl::ClosePath) = current_path.last() {
@@ -289,25 +297,27 @@ impl EditorView {
 
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
-            
             //self.editor.buffer.line(line_idx, &mut line);
-            self.editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
+            self.editor
+                .displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
-            self.editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
-                    piet.stroke(
-                        Line::new(
-                            (metrics.point.x + 1.0, self.font_height + dy),
-                            (metrics.point.x + 1.0, dy),
-                        ),
-                        &FG_COLOR,
-                        2.0,
-                    );
-                }
-            });
+            self.editor
+                .carrets_on_line(position::Line::from(line_idx))
+                .for_each(|c| {
+                    if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
+                        piet.stroke(
+                            Line::new(
+                                (metrics.point.x + 1.0, self.font_height + dy),
+                                (metrics.point.x + 1.0, dy),
+                            ),
+                            &FG_COLOR,
+                            2.0,
+                        );
+                    }
+                });
 
             dy += self.font_height;
         }
@@ -329,6 +339,38 @@ impl EditorView {
                 self.delta_y = -y;
             }
         }
+    }
+
+    fn save_as(&mut self, ctx: &mut dyn WinCtx) -> Result<()> {
+        let options = FileDialogOptions::new().show_hidden();
+        let filename = ctx.save_as_sync(options);
+        if let Some(filename) = filename {
+            // TODO: test if file don't already exist!
+            if filename.path().exists() {
+                if let Some(result) = dialog::messagebox(
+                    "The given file allready exists, are you sure you want to overwrite it?",
+                    "Are you sure?",
+                    dialog::Icon::Question,
+                    dialog::Buttons::OkCancel,
+                ) {
+                    if result != dialog::Button::Ok {
+                        return Ok(());
+                    }
+                }
+            }
+            self.editor.save(filename.path())?;
+        }
+        Ok(())
+    }
+
+    fn save(&mut self, ctx: &mut dyn WinCtx) -> Result<()> {
+        if let Some(filename) = self.editor.filename.clone() {
+            self.editor.save(filename)?;
+            
+        } else {
+            self.save_as(ctx)?;
+        }
+        Ok(())
     }
 
     pub fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx, app_ctx: &mut AppContext) -> bool {
@@ -438,8 +480,7 @@ impl EditorView {
                 return true;
             }
             KeyEvent {
-                key_code: KeyCode::Tab,
-                ..
+                key_code: KeyCode::Tab, ..
             } => {
                 self.editor.tab();
                 ctx.invalidate();
@@ -482,29 +523,12 @@ impl EditorView {
             return true;
         }
         if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
-            self.editor.save().unwrap();
+            self.save(ctx).unwrap();
             ctx.invalidate();
             return true;
         }
         if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
-            let options = FileDialogOptions::new().show_hidden();
-            let filename = ctx.save_as_sync(options);
-            if let Some(filename) = filename {
-                // TODO: test if file don't already exist!
-                if filename.path().exists() {
-                    if let Some(result) = dialog::messagebox(
-                        "The given file allready exists, are you sure you want to overwrite it?",
-                        "Are you sure?",
-                        dialog::Icon::Question,
-                        dialog::Buttons::OkCancel,
-                    ) {
-                        if result != dialog::Button::Ok {
-                            return true;
-                        }
-                    }
-                }
-                self.editor.save_as(filename.path()).unwrap();
-            }
+            self.save_as(ctx).unwrap();
             ctx.invalidate();
             return true;
         }
