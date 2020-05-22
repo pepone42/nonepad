@@ -1,10 +1,9 @@
-use std::ops::Range;
-
 use ropey::RopeSlice;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
 /// Finds the previous grapheme boundary before the given char position.
-pub fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
+pub fn prev_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let byte_idx = byte_idx.into();
     // Bounds check
     debug_assert!(byte_idx <= slice.len_bytes());
 
@@ -37,7 +36,8 @@ pub fn prev_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
 }
 
 /// Finds the next grapheme boundary after the given char position.
-pub fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
+pub fn next_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let byte_idx = byte_idx.into();
     // Bounds check
     debug_assert!(byte_idx <= slice.len_bytes());
 
@@ -68,108 +68,4 @@ pub fn next_grapheme_boundary(slice: &RopeSlice, byte_idx: usize) -> usize {
             _ => unreachable!(),
         }
     }
-}
-
-pub fn byte_to_line_boundary(slice: &RopeSlice, index: usize) -> Range<usize> {
-    let line = slice.byte_to_line(index);
-    line_boundary(slice, line)
-}
-
-pub fn line_boundary(slice: &RopeSlice, line: usize) -> Range<usize> {
-    let line_start = slice.line_to_byte(line);
-    let line_end = if line + 1 >= slice.len_lines() {
-        slice.len_bytes()
-    } else {
-        prev_grapheme_boundary(slice, slice.line_to_byte(line + 1))
-    };
-    line_start..line_end
-}
-
-pub fn line_index_to_column(line_slice: &RopeSlice, index: usize, tabsize: usize) -> usize {
-    let mut col = 0;
-    let mut i = 0;
-    while i<index {
-        let c = line_slice.char(line_slice.byte_to_char(index));
-        match c {
-            ' ' => {
-                col += 1;
-                i +=1;
-            }
-            '\t' => {
-                let nb_space = tabsize - col % tabsize;
-                col += nb_space;
-                i += 1;
-            }
-            _ => {
-                i = next_grapheme_boundary(line_slice,i);
-                col += 1;
-            }
-        }
-    }
-    col
-}
-
-pub fn line_indent_len(slice: &RopeSlice, line: usize, tabsize: usize) -> usize {
-    let mut col = 0;
-    for c in slice.line(line).chars() {
-        match c {
-            ' ' => {
-                col += 1;
-            }
-            '\t' => {
-                let nb_space = tabsize - col % tabsize;
-                col += nb_space;
-            }
-            _ => {
-                break;
-            }
-        }
-    }
-    col
-}
-
-pub fn byte_to_line_first_column(slice: &RopeSlice, index: usize) -> usize {
-    let range = byte_to_line_boundary(slice, index);
-    let mut start = range.start;
-    let char_range = slice.byte_to_char(range.start)..slice.byte_to_char(range.end);
-    for c in slice.slice(char_range).chars() {
-        if c != '\t' && c != ' ' {
-            break;
-        }
-        start += c.len_utf8();
-    }
-    if index == range.start {
-        start
-    } else if start >= index {
-        range.start
-    } else {
-        start
-    }
-}
-
-pub fn index_to_point(slice: &RopeSlice, index: usize) -> (usize, usize) {
-    let line = slice.byte_to_line(index);
-    let line_index = slice.line_to_byte(line);
-    let mut i = line_index;
-    let mut col = 0;
-    while i < index {
-        i = next_grapheme_boundary(slice, i);
-        col += 1;
-    }
-    (col, line)
-}
-
-pub fn point_to_index(slice: &RopeSlice, vcol: usize, line: usize) -> (usize, usize, usize) {
-    let line_boundary = line_boundary(slice, line);
-    let mut index = line_boundary.start;
-
-    let mut col = 0;
-    for _ in 0..vcol {
-        if index >= line_boundary.end {
-            break;
-        }
-        col += 1;
-        index = next_grapheme_boundary(slice, index);
-    }
-    (index, index - line_boundary.start, col)
 }

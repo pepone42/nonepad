@@ -4,7 +4,7 @@ use ropey::{Rope, RopeSlice};
 use std::borrow::Cow;
 use std::fs;
 use std::io::{Read, Result, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug)]
 pub struct TextFileInfo {
@@ -12,7 +12,6 @@ pub struct TextFileInfo {
     pub bom: Option<Vec<u8>>,
     pub linefeed: LineFeed,
     pub indentation: Indentation,
-    pub path: Option<PathBuf>,
 }
 
 impl Default for TextFileInfo {
@@ -22,7 +21,6 @@ impl Default for TextFileInfo {
             bom: None,
             linefeed: Default::default(),
             indentation: Default::default(),
-            path: None,
         }
     }
 }
@@ -66,7 +64,6 @@ impl Indentation {
 
 impl Default for Indentation {
     fn default() -> Self {
-        // Todo, get from settings
         Indentation::Space(4)
     }
 }
@@ -103,7 +100,6 @@ impl TextFileInfo {
                         bom: None,
                         linefeed,
                         indentation,
-                        path: Some(path.as_ref().to_path_buf()),
                     },
                     buffer,
                 ))
@@ -123,7 +119,6 @@ impl TextFileInfo {
                         bom: Some(bom),
                         linefeed,
                         indentation,
-                        path: Some(path.as_ref().to_path_buf()),
                     },
                     buffer,
                 ))
@@ -132,15 +127,7 @@ impl TextFileInfo {
     }
 
     pub fn save_as<P: AsRef<Path>>(&mut self, buffer: &Rope, path: P) -> Result<()> {
-        self.path = Some(path.as_ref().to_path_buf());
-        self.save(buffer)?;
-        Ok(())
-    }
-
-    pub fn save(&self, buffer: &Rope) -> Result<()> {
-        println!("save to {:?}", &self.path);
-        assert_ne!(self.path, None);
-        let mut file = fs::File::create(self.path.as_ref().unwrap())?;
+        let mut file = fs::File::create(path.as_ref())?;
         let input = buffer.to_string();
         let encoded_output = match self.encoding.name() {
             "UTF-16LE" => {
