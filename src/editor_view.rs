@@ -4,7 +4,7 @@ use std::path::Path;
 
 use druid_shell::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
-use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WinCtx};
+use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WindowHandle};
 
 use crate::app_context::AppContext;
 use crate::dialog;
@@ -42,7 +42,7 @@ impl SelectionPath {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct EditorView {
     editor: EditStack,
     delta_y: f64,
@@ -52,6 +52,7 @@ pub struct EditorView {
     font_descent: f64,
     font_height: f64,
     size: Size,
+    handle: WindowHandle,
 }
 
 impl EditorView {
@@ -212,7 +213,11 @@ impl EditorView {
         }
     }
 
-    pub fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
+    pub fn connect(&mut self, handle: &WindowHandle) {
+        self.handle = handle.clone();
+    }
+
+    pub fn paint(&mut self, piet: &mut Piet) -> bool {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
@@ -341,9 +346,9 @@ impl EditorView {
         }
     }
 
-    fn save_as(&mut self, ctx: &mut dyn WinCtx) -> Result<()> {
+    fn save_as(&mut self) -> Result<()> {
         let options = FileDialogOptions::new().show_hidden();
-        let filename = ctx.save_as_sync(options);
+        let filename = self.handle.save_as_sync(options);
         if let Some(filename) = filename {
             // TODO: test if file don't already exist!
             if filename.path().exists() {
@@ -363,39 +368,39 @@ impl EditorView {
         Ok(())
     }
 
-    fn save(&mut self, ctx: &mut dyn WinCtx) -> Result<()> {
+    fn save(&mut self) -> Result<()> {
         if let Some(filename) = self.editor.filename.clone() {
             self.editor.save(filename)?;
             
         } else {
-            self.save_as(ctx)?;
+            self.save_as()?;
         }
         Ok(())
     }
 
-    pub fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx, app_ctx: &mut AppContext) -> bool {
+    pub fn key_down(&mut self, event: KeyEvent) -> bool {
         if let Some(text) = event.text() {
             if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
                 self.editor.insert(text);
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
         }
 
-        if HotKey::new(SysMods::CmdShift, KeyCode::KeyP).matches(event) {
-            app_ctx.open_palette(vec![], |u| println!("Palette result {}", u));
-            ctx.invalidate();
-            return true;
-        }
+        // if HotKey::new(SysMods::CmdShift, KeyCode::KeyP).matches(event) {
+        //     self.handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
+        //     self.handle.invalidate();
+        //     return true;
+        // }
 
         if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
             self.editor.duplicate_down();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
         if HotKey::new(SysMods::AltCmd, KeyCode::ArrowUp).matches(event) {
             self.editor.duplicate_up();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
         match event {
@@ -405,7 +410,7 @@ impl EditorView {
                 ..
             } => {
                 self.editor.forward(mods.shift);
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -414,7 +419,7 @@ impl EditorView {
                 ..
             } => {
                 self.editor.backward(mods.shift);
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -424,7 +429,7 @@ impl EditorView {
             } => {
                 self.editor.up(mods.shift);
                 self.put_carret_in_visible_range();
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -434,7 +439,7 @@ impl EditorView {
             } => {
                 self.editor.down(mods.shift);
                 self.put_carret_in_visible_range();
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -446,7 +451,7 @@ impl EditorView {
                     self.editor.up(mods.shift);
                 }
                 self.put_carret_in_visible_range();
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -458,7 +463,7 @@ impl EditorView {
                     self.editor.down(mods.shift)
                 }
                 self.put_carret_in_visible_range();
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -467,7 +472,7 @@ impl EditorView {
                 ..
             } => {
                 self.editor.end(mods.shift);
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
@@ -476,14 +481,14 @@ impl EditorView {
                 ..
             } => {
                 self.editor.home(mods.shift);
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             KeyEvent {
                 key_code: KeyCode::Tab, ..
             } => {
                 self.editor.tab();
-                ctx.invalidate();
+                self.handle.invalidate();
                 return true;
             }
             _ => (),
@@ -492,51 +497,51 @@ impl EditorView {
         if HotKey::new(None, KeyCode::Escape).matches(event) {
             self.editor.revert_to_single_carrets();
             self.editor.cancel_selection();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
 
         if HotKey::new(None, KeyCode::Backspace).matches(event) {
             self.editor.backspace();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
         if HotKey::new(None, KeyCode::Delete).matches(event) {
             self.editor.delete();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
 
         if HotKey::new(None, KeyCode::NumpadEnter).matches(event) || HotKey::new(None, KeyCode::Return).matches(event) {
             self.editor.insert(self.editor.file.linefeed.to_str());
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
         if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
             self.editor.undo();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
         if HotKey::new(SysMods::Cmd, KeyCode::KeyY).matches(event) {
             self.editor.redo();
-            ctx.invalidate();
+            self.handle.invalidate();
             return true;
         }
         if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
-            self.save(ctx).unwrap();
-            ctx.invalidate();
+            self.save().unwrap();
+            self.handle.invalidate();
             return true;
         }
         if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
-            self.save_as(ctx).unwrap();
-            ctx.invalidate();
+            self.save_as().unwrap();
+            self.handle.invalidate();
             return true;
         }
 
         return false;
     }
 
-    pub fn wheel(&mut self, delta: Vec2, _mods: KeyModifiers, ctx: &mut dyn WinCtx) {
+    pub fn wheel(&mut self, delta: Vec2, _mods: KeyModifiers) {
         self.delta_y -= delta.y;
         if self.delta_y > 0. {
             self.delta_y = 0.
@@ -544,21 +549,21 @@ impl EditorView {
         if -self.delta_y > self.editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
             self.delta_y = -((self.editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
         }
-        ctx.invalidate();
+        self.handle.invalidate();
     }
 
-    pub fn size(&mut self, width: u32, height: u32, dpi: f32, ctx: &mut dyn WinCtx) {
+    pub fn size(&mut self, width: u32, height: u32, dpi: f32) {
         let dpi_scale = dpi as f64 / 96.0;
         let width_f = (width as f64) / dpi_scale;
         let height_f = (height as f64) / dpi_scale;
         self.size = Size::new(width_f, height_f);
 
-        let font = ctx
-            .text_factory()
+        let font = self.handle
+            .text()
             .new_font_by_name("Consolas", FONT_HEIGHT)
             .build()
             .unwrap();
-        self.font_advance = ctx.text_factory().new_text_layout(&font, " ").build().unwrap().width();
+        self.font_advance = self.handle.text().new_text_layout(&font, " ").build().unwrap().width();
         // Calculated with font_kit
         self.font_descent = -3.2626953;
         self.font_ascent = 11.958984;
