@@ -18,7 +18,7 @@ use druid_shell::piet::{Piet, Color};
 
 use druid_shell::{
     Application, Cursor, HotKey, KeyCode, KeyEvent, KeyModifiers,
-    Menu, MouseEvent, RunLoop, SysMods, TimerToken, WinCtx, WinHandler, WindowBuilder,
+    Menu, MouseEvent, SysMods, TimerToken, WinHandler, WindowBuilder,
     WindowHandle,
 };
 
@@ -59,19 +59,21 @@ impl MainWindowState {
 impl WinHandler for MainWindowState {
     fn connect(&mut self, handle: &WindowHandle) {
         self.handle = handle.clone();
+        self.editor.connect(handle);
+        self.app_context.connect(handle);
     }
 
-    fn paint(&mut self, piet: &mut Piet, _ctx: &mut dyn WinCtx) -> bool {
-        let mut repaint = self.editor.paint(piet, _ctx);
+    fn paint(&mut self, piet: &mut Piet) -> bool {
+        let mut repaint = self.editor.paint(piet);
         if self.app_context.is_palette_active() {
-            repaint = self.app_context.paint_palette(piet,_ctx);
+            repaint = self.app_context.paint_palette(piet);
             //unimplemented!();
         }
 
         repaint
     }
 
-    fn command(&mut self, id: u32, _ctx: &mut dyn WinCtx) {
+    fn command(&mut self, id: u32) {
         match id {
             0x100 => {
                 self.handle.close();
@@ -81,49 +83,49 @@ impl WinHandler for MainWindowState {
         }
     }
 
-    fn key_down(&mut self, event: KeyEvent, ctx: &mut dyn WinCtx) -> bool {
+    fn key_down(&mut self, event: KeyEvent) -> bool {
         if self.app_context.is_palette_active() {
             //unimplemented!()
             self.app_context.close_palette(0);
             true
         } else {
-            self.editor.key_down(event, ctx, &mut self.app_context)
+            self.editor.key_down(event)
         }
     }
 
-    fn wheel(&mut self, delta: Vec2, mods: KeyModifiers, ctx: &mut dyn WinCtx) {
+    fn wheel(&mut self, delta: Vec2, mods: KeyModifiers) {
         return if self.app_context.is_palette_active() {
             unimplemented!()
         } else {
-            self.editor.wheel(delta, mods, ctx);
+            self.editor.wheel(delta, mods);
         };
     }
 
-    fn mouse_move(&mut self, event: &MouseEvent, ctx: &mut dyn WinCtx) {
-        ctx.set_cursor(&Cursor::Arrow);
+    fn mouse_move(&mut self, event: &MouseEvent) {
+        self.handle.set_cursor(&Cursor::Arrow);
         //println!("mouse_move {:?}", event);
     }
 
-    fn mouse_down(&mut self, event: &MouseEvent, _ctx: &mut dyn WinCtx) {
+    fn mouse_down(&mut self, event: &MouseEvent) {
         println!("mouse_down {:?}", event);
     }
 
-    fn mouse_up(&mut self, event: &MouseEvent, _ctx: &mut dyn WinCtx) {
+    fn mouse_up(&mut self, event: &MouseEvent) {
         println!("mouse_up {:?}", event);
     }
 
-    fn timer(&mut self, id: TimerToken, _ctx: &mut dyn WinCtx) {
+    fn timer(&mut self, id: TimerToken) {
         println!("timer fired: {:?}", id);
     }
 
-    fn size(&mut self, width: u32, height: u32, _ctx: &mut dyn WinCtx) {
-        self.editor.size(width, height, self.handle.get_dpi(), _ctx,);
+    fn size(&mut self, width: u32, height: u32) {
+        self.editor.size(width, height, self.handle.get_dpi());
         if self.app_context.is_palette_active() {
-            self.app_context.size(width, height, self.handle.get_dpi(), _ctx,);
+            self.app_context.size(width, height, self.handle.get_dpi());
         }
     }
 
-    fn destroy(&mut self, _ctx: &mut dyn WinCtx) {
+    fn destroy(&mut self) {
         Application::quit()
     }
 
@@ -133,7 +135,6 @@ impl WinHandler for MainWindowState {
 }
 
 fn main() {
-    Application::init();
 
     let mut file_menu = Menu::new();
     file_menu.add_item(
@@ -155,9 +156,11 @@ fn main() {
     //menubar.add_dropdown(Menu::new(), "Application", true);
 
     menubar.add_dropdown(file_menu, "&File", true);
+    
 
-    let mut run_loop = RunLoop::new();
+    let mut run_loop = Application::new(None);
     let mut builder = WindowBuilder::new();
+    
     let state = if let Some(filename) = std::env::args().nth(1) {
         MainWindowState::from_file(filename).unwrap()
     } else {
