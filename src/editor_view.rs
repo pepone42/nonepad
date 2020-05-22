@@ -6,7 +6,6 @@ use druid_shell::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WindowHandle};
 
-use crate::app_context::AppContext;
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
@@ -563,7 +562,10 @@ impl EditorView {
             .new_font_by_name("Consolas", FONT_HEIGHT)
             .build()
             .unwrap();
-        self.font_advance = self.handle.text().new_text_layout(&font, " ").build().unwrap().width();
+
+        let layout = self.handle.text().new_text_layout(&font, " ").build().unwrap();
+        self.font_advance = layout.width();
+        //self.font_descent = layout.line_metric().unwrap().baseline;
         // Calculated with font_kit
         self.font_descent = -3.2626953;
         self.font_ascent = 11.958984;
