@@ -6,7 +6,7 @@ use std::fs;
 use std::io::{Read, Result, Write};
 use std::path::Path;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextFileInfo {
     pub encoding: &'static Encoding,
     pub bom: Option<Vec<u8>>,

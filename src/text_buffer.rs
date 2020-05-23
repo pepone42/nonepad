@@ -3,6 +3,7 @@ use std::ops::{Range, RangeFrom, RangeTo};
 use std::path::{Path, PathBuf};
 
 use ropey::Rope;
+use druid::Data;
 
 use crate::carret::Carrets;
 use crate::position::{self, Absolute, Line, Relative};
@@ -10,13 +11,20 @@ use crate::carret::Carret;
 use crate::file::{Indentation, TextFileInfo};
 use crate::rope_utils;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct EditStack {
     pub buffer: Buffer,
     undo_stack: Vec<Buffer>,
     redo_stack: Vec<Buffer>,
     pub file: TextFileInfo,
     pub filename: Option<PathBuf>,
+}
+
+impl Data for EditStack {
+    fn same(&self, other: &Self) -> bool {
+        // we cheat because we have only one view
+        true
+    }
 }
 
 impl EditStack {

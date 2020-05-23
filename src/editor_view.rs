@@ -2,9 +2,12 @@ use std::io::Result;
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use druid_shell::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
-use druid_shell::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
-use druid_shell::{FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, SysMods, WindowHandle};
+use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
+use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::{
+    Env, Event, EventCtx, FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, LayoutCtx, LifeCycle,
+    LifeCycleCtx, SysMods, Widget, WindowHandle, UpdateCtx, BoxConstraints, PaintCtx,
+};
 
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
@@ -41,9 +44,253 @@ impl SelectionPath {
     }
 }
 
+impl Widget<EditStack> for EditorView {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
+        match dbg!(event) {
+            Event::WindowConnected => {
+                ctx.request_focus();
+            }
+            Event::MouseDown(mouse) => {
+                ctx.request_focus();
+            }
+            Event::KeyDown(event) => {
+                if let Some(text) = event.text() {
+                    if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
+                        editor.insert(text);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                }
+        
+                // if HotKey::new(SysMods::CmdShift, KeyCode::KeyP).matches(event) {
+                //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
+                //     _ctx.request_paint();
+                //     return true;
+                // }
+        
+                if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
+                    editor.duplicate_down();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::AltCmd, KeyCode::ArrowUp).matches(event) {
+                    editor.duplicate_up();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                match event {
+                    KeyEvent {
+                        key_code: KeyCode::ArrowRight,
+                        mods,
+                        ..
+                    } => {
+                        editor.forward(mods.shift);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::ArrowLeft,
+                        mods,
+                        ..
+                    } => {
+                        editor.backward(mods.shift);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::ArrowUp,
+                        mods,
+                        ..
+                    } => {
+                        editor.up(mods.shift);
+                        self.put_carret_in_visible_range(editor);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::ArrowDown,
+                        mods,
+                        ..
+                    } => {
+                        editor.down(mods.shift);
+                        self.put_carret_in_visible_range(editor);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::PageUp,
+                        mods,
+                        ..
+                    } => {
+                        for _ in 0..self.page_len {
+                            editor.up(mods.shift);
+                        }
+                        self.put_carret_in_visible_range(editor);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::PageDown,
+                        mods,
+                        ..
+                    } => {
+                        for _ in 0..self.page_len {
+                            editor.down(mods.shift)
+                        }
+                        self.put_carret_in_visible_range(editor);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::End,
+                        mods,
+                        ..
+                    } => {
+                        editor.end(mods.shift);
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::Home,
+                        mods,
+                        ..
+                    } => {
+                        editor.home(mods.shift);
+                        ctx.request_paint();
+                                                ctx.set_handled();
+                        return;
+                    }
+                    KeyEvent {
+                        key_code: KeyCode::Tab, ..
+                    } => {
+                        editor.tab();
+                        ctx.request_paint();
+                        ctx.set_handled();
+                        return;
+                    }
+                    _ => (),
+                }
+        
+                if HotKey::new(None, KeyCode::Escape).matches(event) {
+                    editor.revert_to_single_carrets();
+                    editor.cancel_selection();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+        
+                if HotKey::new(None, KeyCode::Backspace).matches(event) {
+                    editor.backspace();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(None, KeyCode::Delete).matches(event) {
+                    editor.delete();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+        
+                if HotKey::new(None, KeyCode::NumpadEnter).matches(event) || HotKey::new(None, KeyCode::Return).matches(event) {
+                    editor.insert(editor.file.linefeed.to_str());
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
+                    editor.undo();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyY).matches(event) {
+                    editor.redo();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
+                    self.save(editor).unwrap();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
+                    self.save_as(editor).unwrap();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                
+            }
+            Event::Wheel(event) => {
+                self.delta_y -= event.delta.y;
+                if self.delta_y > 0. {
+                    self.delta_y = 0.
+                }
+                if -self.delta_y > editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
+                    self.delta_y = -((editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
+                }
+                ctx.request_paint();        
+                ctx.set_handled();
+                return;
+            }
+            _ => (),
+        }
+    }
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
+        match event {
+            LifeCycle::WidgetAdded => ctx.register_for_focus(),
+            _ => (),
+        }
+    }
+
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
+        println!("update");
+    }
+
+    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
+        self.size = bc.max();
+
+        let font = layout_ctx
+            .text()
+            .new_font_by_name("Consolas", FONT_HEIGHT)
+            .build()
+            .unwrap();
+
+        let layout = layout_ctx.text().new_text_layout(&font, " ").build().unwrap();
+        self.font_advance = layout.width();
+        //self.font_descent = layout.line_metric().unwrap().baseline;
+        // Calculated with font_kit
+        self.font_descent = -3.2626953;
+        self.font_ascent = 11.958984;
+        self.font_height = 15.22168;
+
+        self.page_len = (self.size.height / self.font_height).round() as usize;
+
+        bc.max()
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, _env: &Env) {
+        self.paint_editor(data,ctx.render_ctx);
+    }
+}
+
 #[derive(Default)]
 pub struct EditorView {
-    editor: EditStack,
+    //editor: EditStack,
     delta_y: f64,
     page_len: usize,
     font_advance: f64,
@@ -51,14 +298,13 @@ pub struct EditorView {
     font_descent: f64,
     font_height: f64,
     size: Size,
-    handle: WindowHandle,
+    //handle: WindowHandle,
 }
 
 impl EditorView {
     pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
         let editor = EditStack::from_file(path)?;
         Ok(Self {
-            editor,
             ..Default::default()
         })
     }
@@ -212,11 +458,7 @@ impl EditorView {
         }
     }
 
-    pub fn connect(&mut self, handle: &WindowHandle) {
-        self.handle = handle.clone();
-    }
-
-    pub fn paint(&mut self, piet: &mut Piet) -> bool {
+    fn paint_editor(&mut self,editor: &EditStack, piet: &mut Piet) -> bool {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
@@ -235,12 +477,12 @@ impl EditorView {
         // Draw selection first
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
-            //self.editor.buffer.line(line_idx, &mut line);
-            self.editor
+            //editor.buffer.line(line_idx, &mut line);
+            editor
                 .displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
-            self.editor.selection_on_line(line_idx, &mut ranges);
+            editor.selection_on_line(line_idx, &mut ranges);
 
             for range in &ranges {
                 match range {
@@ -301,14 +543,14 @@ impl EditorView {
 
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
-            //self.editor.buffer.line(line_idx, &mut line);
-            self.editor
+            //editor.buffer.line(line_idx, &mut line);
+            editor
                 .displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
-            self.editor
+            editor
                 .carrets_on_line(position::Line::from(line_idx))
                 .for_each(|c| {
                     if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
@@ -329,11 +571,11 @@ impl EditorView {
         false
     }
 
-    fn put_carret_in_visible_range(&mut self) {
-        if self.editor.buffer.carrets.len() > 1 {
+    fn put_carret_in_visible_range(&mut self,editor: &EditStack) {
+        if editor.buffer.carrets.len() > 1 {
             return;
         }
-        if let Some(carret) = self.editor.buffer.carrets.first() {
+        if let Some(carret) = editor.buffer.carrets.first() {
             let y = carret.line().index as f64 * self.font_height;
 
             if y > -self.delta_y + self.size.height - self.font_height {
@@ -345,232 +587,34 @@ impl EditorView {
         }
     }
 
-    fn save_as(&mut self) -> Result<()> {
-        let options = FileDialogOptions::new().show_hidden();
-        let filename = self.handle.save_as_sync(options);
-        if let Some(filename) = filename {
-            // TODO: test if file don't already exist!
-            if filename.path().exists() {
-                if let Some(result) = dialog::messagebox(
-                    "The given file allready exists, are you sure you want to overwrite it?",
-                    "Are you sure?",
-                    dialog::Icon::Question,
-                    dialog::Buttons::OkCancel,
-                ) {
-                    if result != dialog::Button::Ok {
-                        return Ok(());
-                    }
-                }
-            }
-            self.editor.save(filename.path())?;
-        }
-        Ok(())
-    }
-
-    fn save(&mut self) -> Result<()> {
-        if let Some(filename) = self.editor.filename.clone() {
-            self.editor.save(filename)?;
-            
-        } else {
-            self.save_as()?;
-        }
-        Ok(())
-    }
-
-    pub fn key_down(&mut self, event: KeyEvent) -> bool {
-        if let Some(text) = event.text() {
-            if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
-                self.editor.insert(text);
-                self.handle.invalidate();
-                return true;
-            }
-        }
-
-        // if HotKey::new(SysMods::CmdShift, KeyCode::KeyP).matches(event) {
-        //     self.handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
-        //     self.handle.invalidate();
-        //     return true;
+    fn save_as(&mut self,editor: &mut EditStack) -> Result<()> {
+        // let options = FileDialogOptions::new().show_hidden();
+        // let filename = handle.save_as_sync(options);
+        // if let Some(filename) = filename {
+        //     // TODO: test if file don't already exist!
+        //     if filename.path().exists() {
+        //         if let Some(result) = dialog::messagebox(
+        //             "The given file allready exists, are you sure you want to overwrite it?",
+        //             "Are you sure?",
+        //             dialog::Icon::Question,
+        //             dialog::Buttons::OkCancel,
+        //         ) {
+        //             if result != dialog::Button::Ok {
+        //                 return Ok(());
+        //             }
+        //         }
+        //     }
+        //     editor.save(filename.path())?;
         // }
-
-        if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
-            self.editor.duplicate_down();
-            self.handle.invalidate();
-            return true;
-        }
-        if HotKey::new(SysMods::AltCmd, KeyCode::ArrowUp).matches(event) {
-            self.editor.duplicate_up();
-            self.handle.invalidate();
-            return true;
-        }
-        match event {
-            KeyEvent {
-                key_code: KeyCode::ArrowRight,
-                mods,
-                ..
-            } => {
-                self.editor.forward(mods.shift);
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::ArrowLeft,
-                mods,
-                ..
-            } => {
-                self.editor.backward(mods.shift);
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::ArrowUp,
-                mods,
-                ..
-            } => {
-                self.editor.up(mods.shift);
-                self.put_carret_in_visible_range();
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::ArrowDown,
-                mods,
-                ..
-            } => {
-                self.editor.down(mods.shift);
-                self.put_carret_in_visible_range();
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::PageUp,
-                mods,
-                ..
-            } => {
-                for _ in 0..self.page_len {
-                    self.editor.up(mods.shift);
-                }
-                self.put_carret_in_visible_range();
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::PageDown,
-                mods,
-                ..
-            } => {
-                for _ in 0..self.page_len {
-                    self.editor.down(mods.shift)
-                }
-                self.put_carret_in_visible_range();
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::End,
-                mods,
-                ..
-            } => {
-                self.editor.end(mods.shift);
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::Home,
-                mods,
-                ..
-            } => {
-                self.editor.home(mods.shift);
-                self.handle.invalidate();
-                return true;
-            }
-            KeyEvent {
-                key_code: KeyCode::Tab, ..
-            } => {
-                self.editor.tab();
-                self.handle.invalidate();
-                return true;
-            }
-            _ => (),
-        }
-
-        if HotKey::new(None, KeyCode::Escape).matches(event) {
-            self.editor.revert_to_single_carrets();
-            self.editor.cancel_selection();
-            self.handle.invalidate();
-            return true;
-        }
-
-        if HotKey::new(None, KeyCode::Backspace).matches(event) {
-            self.editor.backspace();
-            self.handle.invalidate();
-            return true;
-        }
-        if HotKey::new(None, KeyCode::Delete).matches(event) {
-            self.editor.delete();
-            self.handle.invalidate();
-            return true;
-        }
-
-        if HotKey::new(None, KeyCode::NumpadEnter).matches(event) || HotKey::new(None, KeyCode::Return).matches(event) {
-            self.editor.insert(self.editor.file.linefeed.to_str());
-            self.handle.invalidate();
-            return true;
-        }
-        if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
-            self.editor.undo();
-            self.handle.invalidate();
-            return true;
-        }
-        if HotKey::new(SysMods::Cmd, KeyCode::KeyY).matches(event) {
-            self.editor.redo();
-            self.handle.invalidate();
-            return true;
-        }
-        if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
-            self.save().unwrap();
-            self.handle.invalidate();
-            return true;
-        }
-        if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
-            self.save_as().unwrap();
-            self.handle.invalidate();
-            return true;
-        }
-
-        return false;
+        Ok(())
     }
 
-    pub fn wheel(&mut self, delta: Vec2, _mods: KeyModifiers) {
-        self.delta_y -= delta.y;
-        if self.delta_y > 0. {
-            self.delta_y = 0.
-        }
-        if -self.delta_y > self.editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
-            self.delta_y = -((self.editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
-        }
-        self.handle.invalidate();
-    }
-
-    pub fn size(&mut self, width: u32, height: u32, dpi: f32) {
-        let dpi_scale = dpi as f64 / 96.0;
-        let width_f = (width as f64) / dpi_scale;
-        let height_f = (height as f64) / dpi_scale;
-        self.size = Size::new(width_f, height_f);
-
-        let font = self.handle
-            .text()
-            .new_font_by_name("Consolas", FONT_HEIGHT)
-            .build()
-            .unwrap();
-
-        let layout = self.handle.text().new_text_layout(&font, " ").build().unwrap();
-        self.font_advance = layout.width();
-        //self.font_descent = layout.line_metric().unwrap().baseline;
-        // Calculated with font_kit
-        self.font_descent = -3.2626953;
-        self.font_ascent = 11.958984;
-        self.font_height = 15.22168;
-
-        self.page_len = (height_f / self.font_height).round() as usize;
+    fn save(&mut self,editor: &mut EditStack) -> Result<()> {
+        // if let Some(filename) = editor.filename.clone() {
+        //     editor.save(filename)?;
+        // } else {
+        //     self.save_as(editor,handle)?;
+        // }
+        Ok(())
     }
 }
