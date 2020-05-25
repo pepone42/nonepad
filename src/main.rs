@@ -74,7 +74,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
     })
     .with_text_size(12.0);
     let label_right =
-        Label::new(|data: &MainWindowState, _env: &Env| format!("{}    {}    {}", data.editor.cursor_display_info(), data.editor.file.encoding.name(), data.editor.file.linefeed))
+        Label::new(|data: &MainWindowState, _env: &Env| format!("{}    {}    {}    {}", data.editor.cursor_display_info(), data.editor.file.indentation, data.editor.file.encoding.name(), data.editor.file.linefeed))
             .with_text_size(12.0);
     let edit = EditorView::default().lens(MainWindowState::editor);
     Flex::column()
