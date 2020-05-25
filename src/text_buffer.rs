@@ -23,13 +23,21 @@ pub struct EditStack {
 
 impl Data for EditStack {
     fn same(&self, other: &Self) -> bool {
-        self.buffer.uuid == other.buffer.uuid && self.file == other.file && self.filename== other.filename
+        self.buffer.same(&other.buffer) && self.file == other.file && self.filename== other.filename
     }
 }
 
 impl EditStack {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn cursor_display_info(&self) -> String {
+        if self.buffer.carrets.len()==1 {
+            format!("Ln {}, Col {}",self.buffer.carrets[0].line().index, self.buffer.carrets[0].col().index)
+        } else {
+            format!("{} selections",self.buffer.carrets.len())
+        }
     }
 
     pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -344,7 +352,7 @@ pub struct Buffer {
 
 impl Data for Buffer {
     fn same(&self, other: &Self) -> bool {
-        todo!()
+        self.uuid == other.uuid && self.carrets == other.carrets
     }
 }
 

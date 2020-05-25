@@ -4,7 +4,7 @@ use ropey::{Rope, RopeSlice};
 use std::borrow::Cow;
 use std::fs;
 use std::io::{Read, Result, Write};
-use std::path::Path;
+use std::{fmt::Display, path::Path};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextFileInfo {
@@ -31,6 +31,16 @@ pub enum LineFeed {
     CR,
     LF,
     CRLF,
+}
+
+impl Display for LineFeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LineFeed::CR => write!(f, "CR"),
+            LineFeed::LF => write!(f, "LF"),
+            LineFeed::CRLF => write!(f, "CRLF"),
+        }
+    }
 }
 
 impl Default for LineFeed {

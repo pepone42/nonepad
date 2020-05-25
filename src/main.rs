@@ -64,18 +64,32 @@ impl MainWindowState {
 }
 
 fn build_ui() -> impl Widget<MainWindowState> {
-    let label = Label::new(|data: &MainWindowState, _env: &Env| data.editor.filename.clone().unwrap_or_default().to_string_lossy().to_string()).with_text_size(10.0);
+    let label_left = Label::new(|data: &MainWindowState, _env: &Env| {
+        data.editor
+            .filename
+            .clone()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+    })
+    .with_text_size(12.0);
+    let label_right =
+        Label::new(|data: &MainWindowState, _env: &Env| format!("{}    {}    {}", data.editor.cursor_display_info(), data.editor.file.encoding.name(), data.editor.file.linefeed))
+            .with_text_size(12.0);
     let edit = EditorView::default().lens(MainWindowState::editor);
     Flex::column()
         .with_flex_child(edit, 1.0)
         .must_fill_main_axis(true)
-        .with_child(label.padding(2.0))
-        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .with_child(
+            Flex::row()
+                .with_child(label_left.padding(2.0))
+                .with_flex_spacer(1.0)
+                .with_child(label_right.padding(2.0)),
+        )
         .main_axis_alignment(MainAxisAlignment::Center)
 }
 
 fn main() -> Result<(), PlatformError> {
-
     let app_state = if let Some(filename) = std::env::args().nth(1) {
         MainWindowState::from_file(filename).unwrap()
     } else {

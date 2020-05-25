@@ -7,16 +7,11 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::{Range, RangeInclusive};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Carrets {
     intern: Vec<Carret>,
 }
 
-impl Data for Carrets {
-    fn same(&self, other: &Self) -> bool {
-        todo!()
-    }
-}
 
 impl Carrets {
     pub fn new() -> Self {
