@@ -1,6 +1,6 @@
 use std::io::Result;
 use std::ops::{Deref, DerefMut, Range};
-use std::path::Path;
+use std::path::{Path,PathBuf};
 
 use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
@@ -284,6 +284,8 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, _env: &Env) {
+        let clip_rect = ctx.size().to_rect();
+        ctx.clip(clip_rect);
         self.paint_editor(data,ctx.render_ctx);
     }
 }

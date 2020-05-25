@@ -6,13 +6,14 @@ use std::fs;
 use std::io::{Read, Result, Write};
 use std::path::Path;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextFileInfo {
     pub encoding: &'static Encoding,
     pub bom: Option<Vec<u8>>,
     pub linefeed: LineFeed,
     pub indentation: Indentation,
 }
+
 
 impl Default for TextFileInfo {
     fn default() -> Self {
@@ -25,7 +26,7 @@ impl Default for TextFileInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineFeed {
     CR,
     LF,
@@ -40,7 +41,7 @@ impl Default for LineFeed {
         return LineFeed::LF;
     }
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Indentation {
     Tab(usize),
     Space(usize),

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use ropey::Rope;
 use druid::Data;
+use uuid::Uuid;
 
 use crate::carret::Carrets;
 use crate::position::{self, Absolute, Line, Relative};
@@ -22,8 +23,7 @@ pub struct EditStack {
 
 impl Data for EditStack {
     fn same(&self, other: &Self) -> bool {
-        // we cheat because we have only one view
-        true
+        self.buffer.uuid == other.buffer.uuid && self.file == other.file && self.filename== other.filename
     }
 }
 
@@ -339,6 +339,13 @@ pub enum SelectionLineRange {
 pub struct Buffer {
     pub rope: Rope,
     pub carrets: Carrets,
+    uuid: Uuid,
+}
+
+impl Data for Buffer {
+    fn same(&self, other: &Self) -> bool {
+        todo!()
+    }
 }
 
 impl Default for Buffer {
@@ -352,6 +359,7 @@ impl Buffer {
         Self {
             rope: Rope::new(),
             carrets: Carrets::new(),
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -359,6 +367,7 @@ impl Buffer {
         Self {
             rope: rope.clone(),
             carrets: Carrets::new(),
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -374,6 +383,7 @@ impl Buffer {
             self.carrets[i].update_after_insert(range.start, text.len().into(), &self.rope, tabsize);
         }
         self.carrets.merge();
+        self.uuid = Uuid::new_v4();
     }
 }
 
