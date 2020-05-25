@@ -69,6 +69,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
             .filename
             .clone()
             .unwrap_or_default()
+            .file_name().unwrap_or_default()
             .to_string_lossy()
             .to_string()
     })
@@ -83,7 +84,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
         )
     })
     .with_text_size(12.0);
-    let edit = EditorView::default().lens(MainWindowState::editor);
+    let edit = EditorView::default().lens(MainWindowState::editor).border(Color::rgb8(0x3a, 0x3a, 0x3a),1.0);
     Flex::column()
         .with_flex_child(edit, 1.0)
         .must_fill_main_axis(true)
@@ -91,9 +92,11 @@ fn build_ui() -> impl Widget<MainWindowState> {
             Flex::row()
                 .with_child(label_left.padding(2.0))
                 .with_flex_spacer(1.0)
-                .with_child(label_right.padding(2.0)),
+                .with_child(label_right.padding(2.0))
+                .border(Color::rgb8(0x3a, 0x3a, 0x3a),1.0)
         )
         .main_axis_alignment(MainAxisAlignment::Center)
+        
 }
 
 fn main() -> anyhow::Result<()> {
