@@ -89,9 +89,9 @@ fn build_ui() -> impl Widget<MainWindowState> {
         .main_axis_alignment(MainAxisAlignment::Center)
 }
 
-fn main() -> Result<(), PlatformError> {
+fn main() -> anyhow::Result<()> {
     let app_state = if let Some(filename) = std::env::args().nth(1) {
-        MainWindowState::from_file(filename).unwrap()
+        MainWindowState::from_file(filename)?
     } else {
         MainWindowState::new()
     };
