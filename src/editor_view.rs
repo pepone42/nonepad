@@ -1,18 +1,19 @@
 use std::io::Result;
 use std::ops::{Deref, DerefMut, Range};
-use std::path::{Path,PathBuf};
+use std::path::{Path, PathBuf};
 
 use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
-    Env, Event, EventCtx, FileDialogOptions, HotKey, KeyCode, KeyEvent, KeyModifiers, LayoutCtx, LifeCycle,
-    LifeCycleCtx, SysMods, Widget, WindowHandle, UpdateCtx, BoxConstraints, PaintCtx,
+    BoxConstraints, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, KeyCode, KeyEvent, KeyModifiers,
+    LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, SysMods, UpdateCtx, Widget, WindowHandle, Command, Selector,
 };
 
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
 use position::Relative;
+
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -62,13 +63,13 @@ impl Widget<EditStack> for EditorView {
                         return;
                     }
                 }
-        
+
                 // if HotKey::new(SysMods::CmdShift, KeyCode::KeyP).matches(event) {
                 //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
                 //     _ctx.request_paint();
                 //     return true;
                 // }
-        
+
                 if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
                     editor.duplicate_down();
                     ctx.request_paint();
@@ -167,7 +168,7 @@ impl Widget<EditStack> for EditorView {
                     } => {
                         editor.home(mods.shift);
                         ctx.request_paint();
-                                                ctx.set_handled();
+                        ctx.set_handled();
                         return;
                     }
                     KeyEvent {
@@ -180,7 +181,7 @@ impl Widget<EditStack> for EditorView {
                     }
                     _ => (),
                 }
-        
+
                 if HotKey::new(None, KeyCode::Escape).matches(event) {
                     editor.revert_to_single_carrets();
                     editor.cancel_selection();
@@ -188,7 +189,7 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
-        
+
                 if HotKey::new(None, KeyCode::Backspace).matches(event) {
                     editor.backspace();
                     ctx.request_paint();
@@ -201,8 +202,10 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
-        
-                if HotKey::new(None, KeyCode::NumpadEnter).matches(event) || HotKey::new(None, KeyCode::Return).matches(event) {
+
+                if HotKey::new(None, KeyCode::NumpadEnter).matches(event)
+                    || HotKey::new(None, KeyCode::Return).matches(event)
+                {
                     editor.insert(editor.file.linefeed.to_str());
                     ctx.request_paint();
                     ctx.set_handled();
@@ -221,18 +224,17 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
-                    self.save(editor).unwrap();
+                    self.save(editor, ctx).unwrap();
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
-                    self.save_as(editor).unwrap();
+                    self.save_as(editor, ctx);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                
             }
             Event::Wheel(event) => {
                 self.delta_y -= event.delta.y;
@@ -242,10 +244,38 @@ impl Widget<EditStack> for EditorView {
                 if -self.delta_y > editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
                     self.delta_y = -((editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
                 }
-                ctx.request_paint();        
+                ctx.request_paint();
                 ctx.set_handled();
                 return;
             }
+            Event::Command(cmd) => match cmd.selector {
+                druid::commands::SAVE_FILE => {
+                    if let Ok(file_info) = cmd.get_object::<FileInfo>() {
+                        let f = editor.filename.clone();
+                        let filename = file_info.path().to_path_buf().clone(); 
+                        if filename.exists() {
+                            if let Some(result) = dialog::messagebox(
+                                "The given file allready exists, are you sure you want to overwrite it?",
+                                "Are you sure?",
+                                dialog::Icon::Question,
+                                dialog::Buttons::OkCancel,
+                            ) {
+                                if result != dialog::Button::Ok {
+                                    return;
+                                }
+                            }
+                        }
+
+                        editor.filename = Some(file_info.path().to_path_buf());
+                        if let Err(e) = self.save(editor, ctx) {
+                            println!("Error writing file: {}", e);
+                            editor.filename = f;
+                        }
+                    }
+                }
+                druid::commands::OPEN_FILE => {}
+                _ => (),
+            },
             _ => (),
         }
     }
@@ -286,7 +316,7 @@ impl Widget<EditStack> for EditorView {
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, _env: &Env) {
         let clip_rect = ctx.size().to_rect();
         ctx.clip(clip_rect);
-        self.paint_editor(data,ctx.render_ctx);
+        self.paint_editor(data, ctx.render_ctx);
     }
 }
 
@@ -306,9 +336,7 @@ pub struct EditorView {
 impl EditorView {
     pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
         let editor = EditStack::from_file(path)?;
-        Ok(Self {
-            ..Default::default()
-        })
+        Ok(Self { ..Default::default() })
     }
 
     fn visible_range(&self) -> Range<usize> {
@@ -460,7 +488,7 @@ impl EditorView {
         }
     }
 
-    fn paint_editor(&mut self,editor: &EditStack, piet: &mut Piet) -> bool {
+    fn paint_editor(&mut self, editor: &EditStack, piet: &mut Piet) -> bool {
         let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
@@ -480,8 +508,7 @@ impl EditorView {
         // TODO: cache layout to reuse it when we will draw the text
         for line_idx in visible_range.clone() {
             //editor.buffer.line(line_idx, &mut line);
-            editor
-                .displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
+            editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             editor.selection_on_line(line_idx, &mut ranges);
@@ -546,26 +573,23 @@ impl EditorView {
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
             //editor.buffer.line(line_idx, &mut line);
-            editor
-                .displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
+            editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
-            editor
-                .carrets_on_line(position::Line::from(line_idx))
-                .for_each(|c| {
-                    if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
-                        piet.stroke(
-                            Line::new(
-                                (metrics.point.x + 1.0, self.font_height + dy),
-                                (metrics.point.x + 1.0, dy),
-                            ),
-                            &FG_COLOR,
-                            2.0,
-                        );
-                    }
-                });
+            editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
+                if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
+                    piet.stroke(
+                        Line::new(
+                            (metrics.point.x + 1.0, self.font_height + dy),
+                            (metrics.point.x + 1.0, dy),
+                        ),
+                        &FG_COLOR,
+                        2.0,
+                    );
+                }
+            });
 
             dy += self.font_height;
         }
@@ -573,7 +597,7 @@ impl EditorView {
         false
     }
 
-    fn put_carret_in_visible_range(&mut self,editor: &EditStack) {
+    fn put_carret_in_visible_range(&mut self, editor: &EditStack) {
         if editor.buffer.carrets.len() > 1 {
             return;
         }
@@ -589,34 +613,18 @@ impl EditorView {
         }
     }
 
-    fn save_as(&mut self,editor: &mut EditStack) -> Result<()> {
-        // let options = FileDialogOptions::new().show_hidden();
-        // let filename = handle.save_as_sync(options);
-        // if let Some(filename) = filename {
-        //     // TODO: test if file don't already exist!
-        //     if filename.path().exists() {
-        //         if let Some(result) = dialog::messagebox(
-        //             "The given file allready exists, are you sure you want to overwrite it?",
-        //             "Are you sure?",
-        //             dialog::Icon::Question,
-        //             dialog::Buttons::OkCancel,
-        //         ) {
-        //             if result != dialog::Button::Ok {
-        //                 return Ok(());
-        //             }
-        //         }
-        //     }
-        //     editor.save(filename.path())?;
-        // }
-        Ok(())
+    fn save_as(&mut self, editor: &mut EditStack, ctx: &mut EventCtx) {
+        let options = FileDialogOptions::new().show_hidden();
+        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None)
+        // send a SAVE_FILE command if succesful
     }
 
-    fn save(&mut self,editor: &mut EditStack) -> Result<()> {
-        // if let Some(filename) = editor.filename.clone() {
-        //     editor.save(filename)?;
-        // } else {
-        //     self.save_as(editor,handle)?;
-        // }
+    fn save(&mut self, editor: &mut EditStack, ctx: &mut EventCtx) -> Result<()> {
+        if let Some(filename) = editor.filename.clone() {
+            editor.save(filename.clone())?;
+        } else {
+            self.save_as(editor, ctx);
+        }
         Ok(())
     }
 }
