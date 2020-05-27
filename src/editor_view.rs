@@ -304,11 +304,9 @@ impl Widget<EditStack> for EditorView {
 
         let layout = layout_ctx.text().new_text_layout(&font, " ", None).build().unwrap();
         self.font_advance = layout.width();
-        //self.font_descent = layout.line_metric().unwrap().baseline;
-        // Calculated with font_kit
-        self.font_descent = -3.2626953;
-        self.font_ascent = 11.958984;
-        self.font_height = 15.22168;
+        self.font_baseline  = layout.line_metric(0).unwrap().baseline;
+        self.font_height  = layout.line_metric(0).unwrap().height;
+        self.font_descent  = self.font_height - self.font_baseline;
 
         self.page_len = (self.size.height / self.font_height).round() as usize;
 
@@ -328,7 +326,7 @@ pub struct EditorView {
     delta_y: f64,
     page_len: usize,
     font_advance: f64,
-    font_ascent: f64,
+    font_baseline: f64,
     font_descent: f64,
     font_height: f64,
     size: Size,
@@ -578,7 +576,7 @@ impl EditorView {
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line, None).build().unwrap();
 
-            piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
+            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &FG_COLOR);
 
             editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
