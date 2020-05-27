@@ -130,10 +130,10 @@ fn build_ui() -> impl Widget<MainWindowState> {
     })
     .with_text_size(12.0);
     let edit = EditorView::default()
-        .lens(MainWindowState::editor)
-        .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0);
+        .lens(MainWindowState::editor);
+        //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0);
     Flex::column()
-        .with_flex_child(edit, 1.0)
+        .with_flex_child(edit.padding(2.0), 1.0)
         .must_fill_main_axis(true)
         .with_child(
             Flex::row()
