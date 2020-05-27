@@ -5,15 +5,14 @@ use std::path::{Path, PathBuf};
 use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
-    BoxConstraints, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, KeyCode, KeyEvent, KeyModifiers,
-    LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, SysMods, UpdateCtx, Widget, WindowHandle, Command, Selector,
+    Affine, BoxConstraints, Command, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, KeyCode, KeyEvent,
+    KeyModifiers, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Selector, SysMods, UpdateCtx, Widget, WindowHandle,
 };
 
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
 use position::Relative;
-
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -252,7 +251,7 @@ impl Widget<EditStack> for EditorView {
                 druid::commands::SAVE_FILE => {
                     if let Ok(file_info) = cmd.get_object::<FileInfo>() {
                         let f = editor.filename.clone();
-                        let filename = file_info.path().to_path_buf().clone(); 
+                        let filename = file_info.path().to_path_buf().clone();
                         if filename.exists() {
                             if let Some(result) = dialog::messagebox(
                                 "The given file allready exists, are you sure you want to overwrite it?",
@@ -273,9 +272,7 @@ impl Widget<EditStack> for EditorView {
                         }
                     }
                 }
-                druid::commands::OPEN_FILE => {
-
-                }
+                druid::commands::OPEN_FILE => {}
                 _ => (),
             },
             _ => (),
@@ -304,9 +301,9 @@ impl Widget<EditStack> for EditorView {
 
         let layout = layout_ctx.text().new_text_layout(&font, " ", None).build().unwrap();
         self.font_advance = layout.width();
-        self.font_baseline  = layout.line_metric(0).unwrap().baseline;
-        self.font_height  = layout.line_metric(0).unwrap().height;
-        self.font_descent  = self.font_height - self.font_baseline;
+        self.font_baseline = layout.line_metric(0).unwrap().baseline;
+        self.font_height = layout.line_metric(0).unwrap().height;
+        self.font_descent = self.font_height - self.font_baseline;
 
         self.page_len = (self.size.height / self.font_height).round() as usize;
 
@@ -316,6 +313,7 @@ impl Widget<EditStack> for EditorView {
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, _env: &Env) {
         let clip_rect = ctx.size().to_rect();
         ctx.clip(clip_rect);
+
         self.paint_editor(data, ctx.render_ctx);
     }
 }
@@ -497,6 +495,17 @@ impl EditorView {
         let visible_range = self.visible_range();
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
+        let line_number_char_width = format!("{}",editor.len_lines()).len();
+        let line_number_width = self.font_advance * line_number_char_width as f64; // piet.text().new_text_layout(&font, &format!("{} ",editor.len_lines()),None).build().unwrap().width();
+
+
+        for line_idx in visible_range.clone() {
+            let layout = piet.text().new_text_layout(&font, &format!("{:1$}",line_idx,line_number_char_width),None).build().unwrap();
+            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &FG_COLOR);
+            dy += self.font_height;
+        }
+        piet.transform(Affine::translate((line_number_width+4.0,0.0)));
+        piet.stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &FG_COLOR, 1.0);
         let mut line = String::new();
         let mut indices = Vec::new();
         let mut ranges = Vec::new();
@@ -506,6 +515,7 @@ impl EditorView {
 
         // Draw selection first
         // TODO: cache layout to reuse it when we will draw the text
+        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range.clone() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);

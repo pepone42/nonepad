@@ -32,6 +32,10 @@ impl EditStack {
         Default::default()
     }
 
+    pub fn len_lines(&self) -> usize {
+        self.buffer.rope.len_lines()
+    }
+
     pub fn cursor_display_info(&self) -> String {
         if self.buffer.carrets.len()==1 {
             format!("Ln {}, Col {}",self.buffer.carrets[0].line().index, self.buffer.carrets[0].col().index)
