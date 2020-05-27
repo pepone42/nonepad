@@ -47,7 +47,7 @@ impl SelectionPath {
 
 impl Widget<EditStack> for EditorView {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
-        match dbg!(event) {
+        match event {
             Event::WindowConnected => {
                 ctx.request_focus();
             }
@@ -237,7 +237,7 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
-                self.delta_y -= event.delta.y;
+                self.delta_y -= event.wheel_delta.y;
                 if self.delta_y > 0. {
                     self.delta_y = 0.
                 }
@@ -273,7 +273,9 @@ impl Widget<EditStack> for EditorView {
                         }
                     }
                 }
-                druid::commands::OPEN_FILE => {}
+                druid::commands::OPEN_FILE => {
+
+                }
                 _ => (),
             },
             _ => (),
@@ -300,7 +302,7 @@ impl Widget<EditStack> for EditorView {
             .build()
             .unwrap();
 
-        let layout = layout_ctx.text().new_text_layout(&font, " ").build().unwrap();
+        let layout = layout_ctx.text().new_text_layout(&font, " ", None).build().unwrap();
         self.font_advance = layout.width();
         //self.font_descent = layout.line_metric().unwrap().baseline;
         // Calculated with font_kit
@@ -344,11 +346,11 @@ impl EditorView {
             ..((-self.delta_y + self.size.height) / self.font_height) as usize + 1
     }
 
-    fn add_bounded_range_selection(
+    fn add_bounded_range_selection<L: TextLayout>(
         &mut self,
         y: f64,
         range: Range<position::Relative>,
-        layout: &dyn TextLayout,
+        layout: &L,
         path: &mut SelectionPath,
     ) {
         match (
@@ -367,11 +369,11 @@ impl EditorView {
         }
     }
 
-    fn add_range_from_selection(
+    fn add_range_from_selection<L: TextLayout>(
         &mut self,
         y: f64,
         range: Range<position::Relative>,
-        layout: &dyn TextLayout,
+        layout: &L,
         path: &mut Vec<PathEl>,
     ) -> f64 {
         match (
@@ -393,11 +395,11 @@ impl EditorView {
         }
     }
 
-    fn add_range_to_selection(
+    fn add_range_to_selection<L: TextLayout>(
         &mut self,
         y: f64,
         range: Range<position::Relative>,
-        layout: &dyn TextLayout,
+        layout: &L,
         path: &mut SelectionPath,
     ) {
         if let Some(e) = layout.hit_test_text_position(range.end.into()) {
@@ -439,11 +441,11 @@ impl EditorView {
         }
     }
 
-    fn add_range_full_selection(
+    fn add_range_full_selection<L: TextLayout>(
         &mut self,
         y: f64,
         range: Range<position::Relative>,
-        layout: &dyn TextLayout,
+        layout: &L,
         path: &mut SelectionPath,
     ) {
         if let Some(e) = layout.hit_test_text_position(range.end.into()) {
@@ -509,7 +511,7 @@ impl EditorView {
         for line_idx in visible_range.clone() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
-            let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
+            let layout = piet.text().new_text_layout(&font, &line, None).build().unwrap();
 
             editor.selection_on_line(line_idx, &mut ranges);
 
@@ -574,7 +576,7 @@ impl EditorView {
         for line_idx in visible_range {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
-            let layout = piet.text().new_text_layout(&font, &line).build().unwrap();
+            let layout = piet.text().new_text_layout(&font, &line, None).build().unwrap();
 
             piet.draw_text(&layout, (0.0, self.font_ascent + dy), &FG_COLOR);
 
