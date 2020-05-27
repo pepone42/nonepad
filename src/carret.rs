@@ -1,15 +1,17 @@
 use crate::position::{Absolute, Column, Line, Point, Position, Relative};
 use crate::rope_utils::*;
 use ropey::Rope;
+use druid::Data;
 
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::{Range, RangeInclusive};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Carrets {
     intern: Vec<Carret>,
 }
+
 
 impl Carrets {
     pub fn new() -> Self {
@@ -61,7 +63,7 @@ impl DerefMut for Carrets {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Data)]
 pub struct Carret {
     // pub index: AbsoluteIndex,
     // col: Column,

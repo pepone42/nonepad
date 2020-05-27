@@ -3,6 +3,8 @@ use std::ops::{Range, RangeFrom, RangeTo};
 use std::path::{Path, PathBuf};
 
 use ropey::Rope;
+use druid::Data;
+use uuid::Uuid;
 
 use crate::carret::Carrets;
 use crate::position::{self, Absolute, Line, Relative};
@@ -10,7 +12,7 @@ use crate::carret::Carret;
 use crate::file::{Indentation, TextFileInfo};
 use crate::rope_utils;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct EditStack {
     pub buffer: Buffer,
     undo_stack: Vec<Buffer>,
@@ -19,9 +21,23 @@ pub struct EditStack {
     pub filename: Option<PathBuf>,
 }
 
+impl Data for EditStack {
+    fn same(&self, other: &Self) -> bool {
+        self.buffer.same(&other.buffer) && self.file == other.file && self.filename== other.filename
+    }
+}
+
 impl EditStack {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn cursor_display_info(&self) -> String {
+        if self.buffer.carrets.len()==1 {
+            format!("Ln {}, Col {}",self.buffer.carrets[0].line().index, self.buffer.carrets[0].col().index)
+        } else {
+            format!("{} selections",self.buffer.carrets.len())
+        }
     }
 
     pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -331,6 +347,13 @@ pub enum SelectionLineRange {
 pub struct Buffer {
     pub rope: Rope,
     pub carrets: Carrets,
+    uuid: Uuid,
+}
+
+impl Data for Buffer {
+    fn same(&self, other: &Self) -> bool {
+        self.uuid == other.uuid && self.carrets == other.carrets
+    }
 }
 
 impl Default for Buffer {
@@ -344,6 +367,7 @@ impl Buffer {
         Self {
             rope: Rope::new(),
             carrets: Carrets::new(),
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -351,6 +375,7 @@ impl Buffer {
         Self {
             rope: rope.clone(),
             carrets: Carrets::new(),
+            uuid: Uuid::new_v4(),
         }
     }
 
@@ -366,6 +391,7 @@ impl Buffer {
             self.carrets[i].update_after_insert(range.start, text.len().into(), &self.rope, tabsize);
         }
         self.carrets.merge();
+        self.uuid = Uuid::new_v4();
     }
 }
 

@@ -4,15 +4,16 @@ use ropey::{Rope, RopeSlice};
 use std::borrow::Cow;
 use std::fs;
 use std::io::{Read, Result, Write};
-use std::path::Path;
+use std::{fmt::Display, path::Path};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextFileInfo {
     pub encoding: &'static Encoding,
     pub bom: Option<Vec<u8>>,
     pub linefeed: LineFeed,
     pub indentation: Indentation,
 }
+
 
 impl Default for TextFileInfo {
     fn default() -> Self {
@@ -25,11 +26,21 @@ impl Default for TextFileInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineFeed {
     CR,
     LF,
     CRLF,
+}
+
+impl Display for LineFeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LineFeed::CR => write!(f, "CR"),
+            LineFeed::LF => write!(f, "LF"),
+            LineFeed::CRLF => write!(f, "CRLF"),
+        }
+    }
 }
 
 impl Default for LineFeed {
@@ -40,10 +51,19 @@ impl Default for LineFeed {
         return LineFeed::LF;
     }
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Indentation {
     Tab(usize),
     Space(usize),
+}
+
+impl Display for Indentation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Indentation::Tab(x) => write!(f, "Tab ({})",x),
+            Indentation::Space(x) => write!(f, "Sapce ({})",x),
+        }
+    }
 }
 
 impl Indentation {

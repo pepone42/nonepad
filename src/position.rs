@@ -1,4 +1,5 @@
 use crate::rope_utils::{next_grapheme_boundary, prev_grapheme_boundary};
+use druid::Data;
 use ropey::Rope;
 use std::ops::Add;
 use std::ops::{AddAssign, Sub, SubAssign};
@@ -11,7 +12,7 @@ pub trait Position {
     fn down(&self, rope: &Rope, tabsize: usize) -> Self;
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
 pub struct Point {
     pub col: Column,
     pub line: Line,
@@ -54,7 +55,7 @@ impl Point {
         let mut i = Relative::from(0);
         let a = Absolute::from(rope.line_to_byte(line.index));
         while c < col.index && i < line.byte_len(rope) {
-            let ch = rope.char(rope.byte_to_char((a+i).index));
+            let ch = rope.char(rope.byte_to_char((a + i).index));
             match ch {
                 ' ' => {
                     c += 1;
@@ -79,7 +80,7 @@ impl Point {
         let mut i = Relative::from(0);
         let a = Absolute::from(rope.line_to_byte(line.index));
         while i < relative {
-            let ch = rope.char(rope.byte_to_char((a+i).index));
+            let ch = rope.char(rope.byte_to_char((a + i).index));
             match ch {
                 ' ' => {
                     c += 1;
@@ -114,7 +115,7 @@ impl Point {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
 pub struct Absolute {
     pub index: usize,
 }
@@ -136,7 +137,6 @@ impl AddAssign<Relative> for Absolute {
         self.index += rhs.index;
     }
 }
-
 
 impl AddAssign<usize> for Absolute {
     fn add_assign(&mut self, rhs: usize) {
@@ -202,7 +202,7 @@ impl Position for Absolute {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
 pub struct Relative {
     pub index: usize,
 }
@@ -225,7 +225,7 @@ impl AddAssign<usize> for Relative {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
 pub struct Column {
     pub index: usize,
 }
@@ -248,7 +248,7 @@ impl AddAssign<usize> for Column {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
 pub struct Line {
     pub index: usize,
 }
@@ -288,7 +288,7 @@ impl Line {
         let mut i = Relative::from(0);
         let a = Absolute::from(rope.line_to_byte(self.index));
         while i < self.byte_len(rope) {
-            let c = rope.char(rope.byte_to_char((a+i).index));
+            let c = rope.char(rope.byte_to_char((a + i).index));
             match c {
                 ' ' => {
                     col += 1;

@@ -1,29 +1,27 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
-mod dialog;
-mod file;
-mod text_buffer;
-mod editor_view;
-mod app_context;
 mod carret;
-mod rope_utils;
+mod dialog;
+mod editor_view;
+mod file;
 mod position;
+mod rope_utils;
+mod text_buffer;
 
 use std::any::Any;
-use std::io::Result;
 
-use std::path::Path;
-
-use druid_shell::kurbo::Vec2;
-use druid_shell::piet::{Piet, Color};
-
-use druid_shell::{
-    Application, Cursor, HotKey, KeyCode, KeyEvent, KeyModifiers,
-    Menu, MouseEvent, SysMods, TimerToken, WinHandler, WindowBuilder,
-    WindowHandle,
+use std::{
+    error::Error,
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
-use crate::app_context::AppContext;
+use druid::widget::{CrossAxisAlignment, Flex, Label, MainAxisAlignment};
+use druid::{AppLauncher, Data, Env, Lens, LocalizedString, PlatformError, Widget, WidgetExt, WindowDesc};
+
+use druid::{piet::Color, AppDelegate, Command, DelegateCtx, Target, WindowHandle};
+
 use crate::editor_view::EditorView;
+use text_buffer::EditStack;
 
 const BG_COLOR: Color = Color::rgb8(34, 40, 42);
 const FG_COLOR: Color = Color::rgb8(241, 242, 243);
@@ -32,147 +30,129 @@ const BG_SEL_COLOR: Color = Color::rgb8(79, 97, 100);
 
 const FONT_HEIGHT: f64 = 13.0;
 
-#[derive(Default)]
+#[derive(Debug)]
+pub struct Delegate {
+    disabled: bool,
+}
+impl AppDelegate<MainWindowState> for Delegate {
+    fn command(
+        &mut self,
+        _ctx: &mut DelegateCtx,
+        _target: Target,
+        _cmd: &Command,
+        _data: &mut MainWindowState,
+        _env: &Env,
+    ) -> bool {
+        true
+    }
+    fn event(
+        &mut self,
+        _ctx: &mut druid::DelegateCtx,
+        _window_id: druid::WindowId,
+        event: druid::Event,
+        _data: &mut MainWindowState,
+        _env: &Env,
+    ) -> Option<druid::Event> {
+        Some(dbg!(event))
+    }
+    fn window_added(
+        &mut self,
+        id: druid::WindowId,
+        data: &mut MainWindowState,
+        env: &Env,
+        ctx: &mut druid::DelegateCtx,
+    ) {
+    }
+    fn window_removed(
+        &mut self,
+        id: druid::WindowId,
+        data: &mut MainWindowState,
+        env: &Env,
+        ctx: &mut druid::DelegateCtx,
+    ) {
+
+    }
+}
+
+#[derive(Clone, Data, Lens)]
 struct MainWindowState {
-    size: (f64, f64),
-    handle: WindowHandle,
-    editor: EditorView,
-    app_context: AppContext,
+    editor: EditStack,
+    status: String,
+}
+
+impl Default for MainWindowState {
+    fn default() -> Self {
+        MainWindowState {
+            editor: EditStack::default(),
+            status: "Untilted".to_owned(),
+        }
+    }
 }
 
 impl MainWindowState {
     fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
+        Self { ..Default::default() }
     }
 
-    fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
-        let editor_view = EditorView::from_file(path)?;
+    fn from_file<'a, P: AsRef<Path>>(path: P) -> anyhow::Result<MainWindowState> {
         Ok(Self {
-            editor: editor_view,
-            ..Default::default()
+            editor: EditStack::from_file(&path)?,
+            status: path
+                .as_ref()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
         })
     }
 }
 
-impl WinHandler for MainWindowState {
-    fn connect(&mut self, handle: &WindowHandle) {
-        self.handle = handle.clone();
-        self.editor.connect(handle);
-        self.app_context.connect(handle);
-    }
-
-    fn paint(&mut self, piet: &mut Piet) -> bool {
-        let mut repaint = self.editor.paint(piet);
-        if self.app_context.is_palette_active() {
-            repaint = self.app_context.paint_palette(piet);
-            //unimplemented!();
-        }
-
-        repaint
-    }
-
-    fn command(&mut self, id: u32) {
-        match id {
-            0x100 => {
-                self.handle.close();
-                Application::quit();
-            }
-            _ => println!("unexpected id {}", id),
-        }
-    }
-
-    fn key_down(&mut self, event: KeyEvent) -> bool {
-        if self.app_context.is_palette_active() {
-            //unimplemented!()
-            self.app_context.close_palette(0);
-            true
-        } else {
-            self.editor.key_down(event)
-        }
-    }
-
-    fn wheel(&mut self, delta: Vec2, mods: KeyModifiers) {
-        return if self.app_context.is_palette_active() {
-            unimplemented!()
-        } else {
-            self.editor.wheel(delta, mods);
-        };
-    }
-
-    fn mouse_move(&mut self, event: &MouseEvent) {
-        self.handle.set_cursor(&Cursor::Arrow);
-        //println!("mouse_move {:?}", event);
-    }
-
-    fn mouse_down(&mut self, event: &MouseEvent) {
-        println!("mouse_down {:?}", event);
-    }
-
-    fn mouse_up(&mut self, event: &MouseEvent) {
-        println!("mouse_up {:?}", event);
-    }
-
-    fn timer(&mut self, id: TimerToken) {
-        println!("timer fired: {:?}", id);
-    }
-
-    fn size(&mut self, width: u32, height: u32) {
-        self.editor.size(width, height, self.handle.get_dpi());
-        if self.app_context.is_palette_active() {
-            self.app_context.size(width, height, self.handle.get_dpi());
-        }
-    }
-
-    fn destroy(&mut self) {
-        Application::quit()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
+fn build_ui() -> impl Widget<MainWindowState> {
+    let label_left = Label::new(|data: &MainWindowState, _env: &Env| {
+        data.editor
+            .filename
+            .clone()
+            .unwrap_or_default()
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+    })
+    .with_text_size(12.0);
+    let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
+        format!(
+            "{}    {}    {}    {}",
+            data.editor.cursor_display_info(),
+            data.editor.file.indentation,
+            data.editor.file.encoding.name(),
+            data.editor.file.linefeed
+        )
+    })
+    .with_text_size(12.0);
+    let edit = EditorView::default()
+        .lens(MainWindowState::editor);
+        //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0);
+    Flex::column()
+        .with_flex_child(edit.padding(2.0), 1.0)
+        .must_fill_main_axis(true)
+        .with_child(
+            Flex::row()
+                .with_child(label_left.padding(2.0))
+                .with_flex_spacer(1.0)
+                .with_child(label_right.padding(2.0))
+                .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
+        )
+        .main_axis_alignment(MainAxisAlignment::Center)
 }
 
-fn main() {
-
-    let mut file_menu = Menu::new();
-    file_menu.add_item(
-        0x100,
-        "E&xit",
-        Some(&HotKey::new(SysMods::Cmd, "q")),
-        true,
-        false,
-    );
-    file_menu.add_item(
-        0x101,
-        "O&pen",
-        Some(&HotKey::new(SysMods::Cmd, KeyCode::KeyO)),
-        true,
-        false,
-    );
-    let mut menubar = Menu::new();
-
-    //menubar.add_dropdown(Menu::new(), "Application", true);
-
-    menubar.add_dropdown(file_menu, "&File", true);
-    
-
-    let mut run_loop = Application::new(None);
-    let mut builder = WindowBuilder::new();
-    
-    let state = if let Some(filename) = std::env::args().nth(1) {
-        MainWindowState::from_file(filename).unwrap()
+fn main() -> anyhow::Result<()> {
+    let app_state = if let Some(filename) = std::env::args().nth(1) {
+        MainWindowState::from_file(filename)?
     } else {
         MainWindowState::new()
     };
 
-    builder.set_handler(Box::new(state));
-
-    builder.set_title("NonePad");
-    builder.set_menu(menubar);
-    let window = builder.build().unwrap();
-
-    window.show();
-    run_loop.run();
+    let win = WindowDesc::new(build_ui).title(LocalizedString::new("NonePad"));
+    AppLauncher::with_window(win).delegate(Delegate{disabled:false}).launch(app_state)?;
+    Ok(())
 }
