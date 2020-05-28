@@ -6,13 +6,16 @@ use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     Affine, BoxConstraints, Command, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, KeyCode, KeyEvent,
-    KeyModifiers, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Selector, SysMods, UpdateCtx, Widget, WindowHandle,
+    KeyModifiers, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Selector, SysMods, UpdateCtx, Widget, WindowHandle, Key,
 };
 
 use crate::dialog;
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR, FONT_HEIGHT};
+use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR};
 use position::Relative;
+
+pub const FONT_HEIGHT : Key<f64> = Key::new("nonepad.editor.font_height");
+pub const FONT_NAME : Key<&str> = Key::new("nonepad.editor.font_name");
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -290,12 +293,15 @@ impl Widget<EditStack> for EditorView {
         println!("update");
     }
 
-    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
+    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
         self.size = bc.max();
+
+        let font_height = env.get(FONT_HEIGHT);
+        let font_name = env.get(FONT_NAME);
 
         let font = layout_ctx
             .text()
-            .new_font_by_name("Consolas", FONT_HEIGHT)
+            .new_font_by_name(font_name, font_height)
             .build()
             .unwrap();
 
@@ -310,11 +316,11 @@ impl Widget<EditStack> for EditorView {
         bc.max()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, _env: &Env) {
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
         let clip_rect = ctx.size().to_rect();
         ctx.clip(clip_rect);
 
-        self.paint_editor(data, ctx.render_ctx);
+        self.paint_editor(data, ctx.render_ctx, env);
     }
 }
 
@@ -486,8 +492,10 @@ impl EditorView {
         }
     }
 
-    fn paint_editor(&mut self, editor: &EditStack, piet: &mut Piet) -> bool {
-        let font = piet.text().new_font_by_name("Consolas", FONT_HEIGHT).build().unwrap();
+    fn paint_editor(&mut self, editor: &EditStack, piet: &mut Piet, env: &Env) -> bool {
+        let font_height = env.get(FONT_HEIGHT);
+        let font_name = env.get(FONT_NAME);
+        let font = piet.text().new_font_by_name(font_name, font_height).build().unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         piet.fill(rect, &BG_COLOR);
@@ -495,7 +503,7 @@ impl EditorView {
         let visible_range = self.visible_range();
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
-        let line_number_char_width = format!("{}",editor.len_lines()).len();
+        let line_number_char_width = format!(" {}",editor.len_lines()).len();
         let line_number_width = self.font_advance * line_number_char_width as f64; // piet.text().new_text_layout(&font, &format!("{} ",editor.len_lines()),None).build().unwrap().width();
 
 
@@ -504,7 +512,7 @@ impl EditorView {
             piet.draw_text(&layout, (0.0, self.font_baseline + dy), &FG_COLOR);
             dy += self.font_height;
         }
-        piet.transform(Affine::translate((line_number_width+4.0,0.0)));
+        piet.transform(Affine::translate((line_number_width+self.font_advance+4.0,0.0)));
         piet.stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &FG_COLOR, 1.0);
         let mut line = String::new();
         let mut indices = Vec::new();
