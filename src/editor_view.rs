@@ -255,9 +255,8 @@ impl Widget<EditStack> for EditorView {
                 ctx.set_handled();
                 return;
             }
-            Event::Command(cmd) => match cmd.selector {
-                druid::commands::SAVE_FILE => {
-                    if let Ok(file_info) = cmd.get_object::<FileInfo>() {
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
+                    if let Some(file_info) = cmd.get_unchecked(druid::commands::SAVE_FILE) {
                         let f = editor.filename.clone();
                         let filename = file_info.path().to_path_buf().clone();
                         if filename.exists() {
@@ -278,11 +277,9 @@ impl Widget<EditStack> for EditorView {
                             println!("Error writing file: {}", e);
                             editor.filename = f;
                         }
-                    }
                 }
-                druid::commands::OPEN_FILE => {}
-                _ => (),
-            },
+            }
+            Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {}
             _ => (),
         }
     }
