@@ -23,11 +23,6 @@ use druid::{piet::Color, AppDelegate, Command, DelegateCtx, Target, WindowHandle
 use crate::editor_view::EditorView;
 use text_buffer::EditStack;
 
-const BG_COLOR: Color = Color::rgb8(34, 40, 42);
-const FG_COLOR: Color = Color::rgb8(241, 242, 243);
-const FG_SEL_COLOR: Color = Color::rgb8(59, 73, 75);
-const BG_SEL_COLOR: Color = Color::rgb8(79, 97, 100);
-
 #[derive(Debug)]
 pub struct Delegate {
     disabled: bool,
@@ -139,10 +134,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
         )
         .main_axis_alignment(MainAxisAlignment::Center)
-        .env_scope(|env, _| {
-            env.set(crate::editor_view::FONT_HEIGHT, 11.0);
-            env.set(crate::editor_view::FONT_NAME, "Consolas");
-        })
+
 }
 
 fn main() -> anyhow::Result<()> {
@@ -155,6 +147,15 @@ fn main() -> anyhow::Result<()> {
     let win = WindowDesc::new(build_ui).title(LocalizedString::new("NonePad"));
     AppLauncher::with_window(win)
         .delegate(Delegate { disabled: false })
+        .configure_env(|env, _| {
+            env.set(crate::editor_view::FONT_SIZE, 12.0);
+            env.set(crate::editor_view::FONT_NAME, "Consolas");
+
+            env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
+            env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
+            env.set(crate::editor_view::FG_SEL_COLOR, Color::rgb8(59, 73, 75));
+            env.set(crate::editor_view::BG_SEL_COLOR, Color::rgb8(79, 97, 100));
+        })
         .launch(app_state)?;
     Ok(())
 }

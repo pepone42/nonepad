@@ -5,17 +5,22 @@ use std::path::{Path, PathBuf};
 use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
 use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
-    Affine, BoxConstraints, Command, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, KeyCode, KeyEvent,
-    KeyModifiers, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Selector, SysMods, UpdateCtx, Widget, WindowHandle, Key,
+    Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, Key, KeyCode,
+    KeyEvent, KeyModifiers, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Selector, SysMods, UpdateCtx, Widget,
+    WindowHandle,
 };
 
 use crate::dialog;
+use crate::position;
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use crate::{position, BG_COLOR, BG_SEL_COLOR, FG_COLOR, FG_SEL_COLOR};
 use position::Relative;
 
-pub const FONT_HEIGHT : Key<f64> = Key::new("nonepad.editor.font_height");
-pub const FONT_NAME : Key<&str> = Key::new("nonepad.editor.font_name");
+pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
+pub const FONT_NAME: Key<&str> = Key::new("nonepad.editor.font_name");
+pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
+pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
+pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
+pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -282,9 +287,18 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, env: &Env) {
         match event {
-            LifeCycle::WidgetAdded => ctx.register_for_focus(),
+            LifeCycle::WidgetAdded => {
+                self.font_size = env.get(FONT_SIZE);
+                self.font_name = env.get(FONT_NAME).to_owned();
+                self.bg_color = env.get(BG_COLOR);
+                self.fg_color = env.get(FG_COLOR);
+                self.fg_sel_color = env.get(FG_SEL_COLOR);
+                self.bg_sel_color = env.get(BG_SEL_COLOR);
+
+                ctx.register_for_focus();
+            }
             _ => (),
         }
     }
@@ -296,16 +310,16 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
         self.size = bc.max();
 
-        let font_height = env.get(FONT_HEIGHT);
-        let font_name = env.get(FONT_NAME);
+        // self.font_height = env.get(FONT_HEIGHT);
+        // self.font_name = env.get(FONT_NAME).to_owned();
 
         let font = layout_ctx
             .text()
-            .new_font_by_name(font_name, font_height)
+            .new_font_by_name(&self.font_name, self.font_size)
             .build()
             .unwrap();
 
-        let layout = layout_ctx.text().new_text_layout(&font, " ", None).build().unwrap();
+        let layout = layout_ctx.text().new_text_layout(&font, "8", None).build().unwrap();
         self.font_advance = layout.width();
         self.font_baseline = layout.line_metric(0).unwrap().baseline;
         self.font_height = layout.line_metric(0).unwrap().height;
@@ -324,7 +338,6 @@ impl Widget<EditStack> for EditorView {
     }
 }
 
-#[derive(Default)]
 pub struct EditorView {
     //editor: EditStack,
     delta_y: f64,
@@ -333,15 +346,41 @@ pub struct EditorView {
     font_baseline: f64,
     font_descent: f64,
     font_height: f64,
+    font_name: String,
+    font_size: f64,
+
+    bg_color: Color,
+    fg_color: Color,
+    fg_sel_color: Color,
+    bg_sel_color: Color,
+
     size: Size,
     //handle: WindowHandle,
 }
 
-impl EditorView {
-    pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
-        let editor = EditStack::from_file(path)?;
-        Ok(Self { ..Default::default() })
+impl Default for EditorView {
+    fn default() -> Self {
+        EditorView {
+            bg_color: Color::BLACK,
+            fg_color: Color::WHITE,
+            fg_sel_color: Color::BLACK,
+            bg_sel_color: Color::WHITE,
+
+            delta_y: 0.0,
+            page_len: 0,
+            font_advance: 0.0,
+
+            font_baseline: 0.0,
+            font_descent: 0.0,
+            font_height: 0.0,
+            font_size: 0.0,
+            font_name: "".to_owned(),
+            size: Default::default(),
+        }
     }
+}
+
+impl EditorView {
 
     fn visible_range(&self) -> Range<usize> {
         (-self.delta_y / self.font_height) as usize
@@ -493,27 +532,32 @@ impl EditorView {
     }
 
     fn paint_editor(&mut self, editor: &EditStack, piet: &mut Piet, env: &Env) -> bool {
-        let font_height = env.get(FONT_HEIGHT);
-        let font_name = env.get(FONT_NAME);
-        let font = piet.text().new_font_by_name(font_name, font_height).build().unwrap();
+        let font = piet
+            .text()
+            .new_font_by_name(&self.font_name, self.font_size)
+            .build()
+            .unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
-        piet.fill(rect, &BG_COLOR);
+        piet.fill(rect, &self.bg_color);
 
         let visible_range = self.visible_range();
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
-        let line_number_char_width = format!(" {}",editor.len_lines()).len();
+        let line_number_char_width = format!(" {}", editor.len_lines()).len();
         let line_number_width = self.font_advance * line_number_char_width as f64; // piet.text().new_text_layout(&font, &format!("{} ",editor.len_lines()),None).build().unwrap().width();
 
-
         for line_idx in visible_range.clone() {
-            let layout = piet.text().new_text_layout(&font, &format!("{:1$}",line_idx,line_number_char_width),None).build().unwrap();
-            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &FG_COLOR);
+            let layout = piet
+                .text()
+                .new_text_layout(&font, &format!("{:1$}", line_idx, line_number_char_width), None)
+                .build()
+                .unwrap();
+            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
             dy += self.font_height;
         }
-        piet.transform(Affine::translate((line_number_width+self.font_advance+4.0,0.0)));
-        piet.stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &FG_COLOR, 1.0);
+        piet.transform(Affine::translate((line_number_width + self.font_advance + 4.0, 0.0)));
+        piet.stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &self.fg_color, 1.0);
         let mut line = String::new();
         let mut indices = Vec::new();
         let mut ranges = Vec::new();
@@ -582,9 +626,9 @@ impl EditorView {
 
         for path in selection_path {
             let path = BezPath::from_vec(path.elem);
-            let brush = piet.solid_brush(FG_SEL_COLOR);
+            let brush = piet.solid_brush(self.fg_sel_color.clone());
             piet.fill(&path, &brush);
-            let brush = piet.solid_brush(BG_SEL_COLOR);
+            let brush = piet.solid_brush(self.bg_sel_color.clone());
             piet.stroke(&path, &brush, 0.5);
         }
 
@@ -594,7 +638,7 @@ impl EditorView {
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
             let layout = piet.text().new_text_layout(&font, &line, None).build().unwrap();
 
-            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &FG_COLOR);
+            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
 
             editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
@@ -603,7 +647,7 @@ impl EditorView {
                             (metrics.point.x + 1.0, self.font_height + dy),
                             (metrics.point.x + 1.0, dy),
                         ),
-                        &FG_COLOR,
+                        &self.fg_color,
                         2.0,
                     );
                 }
