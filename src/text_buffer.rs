@@ -19,11 +19,12 @@ pub struct EditStack {
     redo_stack: Vec<Buffer>,
     pub file: TextFileInfo,
     pub filename: Option<PathBuf>,
+    dirty: bool,
 }
 
 impl Data for EditStack {
     fn same(&self, other: &Self) -> bool {
-        self.buffer.same(&other.buffer) && self.file == other.file && self.filename== other.filename
+        self.buffer.same(&other.buffer) && self.file == other.file && self.filename== other.filename && self.dirty == other.dirty
     }
 }
 
@@ -53,12 +54,20 @@ impl EditStack {
             redo_stack: Vec::new(),
             file: file.0,
             filename: Some(path.as_ref().to_path_buf()),
+            dirty: false,
         })
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
     }
 
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         self.file.save_as(&self.buffer.rope, &path)?;
         self.filename = Some(path.as_ref().to_path_buf());
+        self.dirty = false;
+        self.undo_stack.clear();
+        self.redo_stack.clear();
         Ok(())
     }
 
@@ -67,6 +76,9 @@ impl EditStack {
             let b = std::mem::take(&mut self.buffer);
             self.redo_stack.push(b);
             self.buffer = buffer;
+        }
+        if self.undo_stack.is_empty() {
+            self.dirty = false;
         }
     }
 
@@ -83,6 +95,7 @@ impl EditStack {
         self.undo_stack.push(b);
         self.buffer = buffer;
         self.redo_stack.clear();
+        self.dirty = true;
     }
 
     pub fn selection_on_line<'a>(&'a self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {

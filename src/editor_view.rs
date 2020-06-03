@@ -273,8 +273,12 @@ impl Widget<EditStack> for EditorView {
                         println!("Error writing file: {}", e);
                     }
                 }
+                ctx.set_handled();
+                return;
             }
-            Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {}
+            Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
+                
+            }
             _ => (),
         }
     }

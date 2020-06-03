@@ -46,7 +46,7 @@ impl AppDelegate<MainWindowState> for Delegate {
         _data: &mut MainWindowState,
         _env: &Env,
     ) -> Option<druid::Event> {
-        Some(dbg!(event))
+        Some(event)
     }
     fn window_added(
         &mut self,
@@ -101,6 +101,7 @@ impl MainWindowState {
 
 fn build_ui() -> impl Widget<MainWindowState> {
     let label_left = Label::new(|data: &MainWindowState, _env: &Env| {
+        format!("{}{}",
         data.editor
             .filename
             .clone()
@@ -108,7 +109,9 @@ fn build_ui() -> impl Widget<MainWindowState> {
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
-            .to_string()
+            .to_string(),
+            if data.editor.is_dirty() {"*"} else {""}
+        )
     })
     .with_text_size(12.0);
     let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
