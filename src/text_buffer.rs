@@ -58,6 +58,12 @@ impl EditStack {
         })
     }
 
+    pub fn open<P>(&mut self, path: P) -> Result<()> where P: AsRef<Path> {
+        let editor = EditStack::from_file(path)?;
+        std::mem::replace(self,editor);
+        Ok(())
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }

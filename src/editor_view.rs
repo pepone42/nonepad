@@ -230,6 +230,26 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyO).matches(event) {
+                    if editor.is_dirty() {
+                        if let Some(result) = dialog::messagebox(
+                            "Discard unsaved change?",
+                            "Are you sure?",
+                            dialog::Icon::Question,
+                            dialog::Buttons::YesNo,
+                        ) {
+                            if result != dialog::Button::Yes {
+                                ctx.set_handled();
+                                return;
+                            }
+                        }
+                    }
+                    let options = FileDialogOptions::new().show_hidden();
+                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options), None);
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
                     //self.save(editor, ctx);
                     if editor.filename.is_some() {
@@ -277,7 +297,17 @@ impl Widget<EditStack> for EditorView {
                 return;
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
-                
+                if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
+                    
+                    if let Err(e) = self.open(editor, file_info.path()) {
+                        dialog::messagebox(
+                            &format!("Error loading file {}", e),
+                            "Error",
+                            dialog::Icon::Error,
+                            dialog::Buttons::Ok,
+                        );
+                    }
+                }
             }
             _ => (),
         }
@@ -670,15 +700,18 @@ impl EditorView {
         }
     }
 
-    fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()> where P: AsRef<Path>  {
+    fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
+    where
+        P: AsRef<Path>,
+    {
         if filename.as_ref().exists() {
             if let Some(result) = dialog::messagebox(
                 "The given file allready exists, are you sure you want to overwrite it?",
-                "Are you sure?",
+                "File Exists",
                 dialog::Icon::Question,
-                dialog::Buttons::OkCancel,
+                dialog::Buttons::YesNo,
             ) {
-                if result != dialog::Button::Ok {
+                if result != dialog::Button::Yes {
                     return Ok(());
                 }
             }
@@ -686,13 +719,20 @@ impl EditorView {
 
         editor.save(&filename)?;
         editor.filename = Some(filename.as_ref().to_path_buf());
-        
+
         Ok(())
     }
 
     fn save(&mut self, editor: &mut EditStack) -> anyhow::Result<()> {
-        anyhow::ensure!(editor.filename.is_some(), "editor.filename must not be None" );
+        anyhow::ensure!(editor.filename.is_some(), "editor.filename must not be None");
         editor.save(editor.filename.clone().as_ref().unwrap())?;
+        Ok(())
+    }
+    fn open<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        editor.open(filename)?;
         Ok(())
     }
 }
