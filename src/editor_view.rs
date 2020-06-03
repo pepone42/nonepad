@@ -231,13 +231,21 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
-                    self.save(editor, ctx).unwrap();
+                    //self.save(editor, ctx);
+                    if editor.filename.is_some() {
+                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, None), None);
+                    } else {
+                        let options = FileDialogOptions::new().show_hidden();
+                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None)
+                    }
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
-                    self.save_as(editor, ctx);
+                    let options = FileDialogOptions::new().show_hidden();
+                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None);
+
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -256,27 +264,14 @@ impl Widget<EditStack> for EditorView {
                 return;
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
-                    if let Some(file_info) = cmd.get_unchecked(druid::commands::SAVE_FILE) {
-                        let f = editor.filename.clone();
-                        let filename = file_info.path().to_path_buf().clone();
-                        if filename.exists() {
-                            if let Some(result) = dialog::messagebox(
-                                "The given file allready exists, are you sure you want to overwrite it?",
-                                "Are you sure?",
-                                dialog::Icon::Question,
-                                dialog::Buttons::OkCancel,
-                            ) {
-                                if result != dialog::Button::Ok {
-                                    return;
-                                }
-                            }
-                        }
-
-                        editor.filename = Some(file_info.path().to_path_buf());
-                        if let Err(e) = self.save(editor, ctx) {
-                            println!("Error writing file: {}", e);
-                            editor.filename = f;
-                        }
+                if let Some(file_info) = cmd.get_unchecked(druid::commands::SAVE_FILE) {
+                    if let Err(e) = self.save_as(editor, file_info.path()) {
+                        println!("Error writing file: {}", e);
+                    }
+                } else {
+                    if let Err(e) = self.save(editor) {
+                        println!("Error writing file: {}", e);
+                    }
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {}
@@ -378,7 +373,6 @@ impl Default for EditorView {
 }
 
 impl EditorView {
-
     fn visible_range(&self) -> Range<usize> {
         (-self.delta_y / self.font_height) as usize
             ..((-self.delta_y + self.size.height) / self.font_height) as usize + 1
@@ -672,18 +666,29 @@ impl EditorView {
         }
     }
 
-    fn save_as(&mut self, editor: &mut EditStack, ctx: &mut EventCtx) {
-        let options = FileDialogOptions::new().show_hidden();
-        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None)
-        // send a SAVE_FILE command if succesful
+    fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()> where P: AsRef<Path>  {
+        if filename.as_ref().exists() {
+            if let Some(result) = dialog::messagebox(
+                "The given file allready exists, are you sure you want to overwrite it?",
+                "Are you sure?",
+                dialog::Icon::Question,
+                dialog::Buttons::OkCancel,
+            ) {
+                if result != dialog::Button::Ok {
+                    return Ok(());
+                }
+            }
+        }
+
+        editor.save(&filename)?;
+        editor.filename = Some(filename.as_ref().to_path_buf());
+        
+        Ok(())
     }
 
-    fn save(&mut self, editor: &mut EditStack, ctx: &mut EventCtx) -> Result<()> {
-        if let Some(filename) = editor.filename.clone() {
-            editor.save(filename.clone())?;
-        } else {
-            self.save_as(editor, ctx);
-        }
+    fn save(&mut self, editor: &mut EditStack) -> anyhow::Result<()> {
+        anyhow::ensure!(editor.filename.is_some(), "editor.filename must not be None" );
+        editor.save(editor.filename.clone().as_ref().unwrap())?;
         Ok(())
     }
 }
