@@ -52,6 +52,27 @@ impl SelectionPath {
     }
 }
 
+pub struct EditorView {
+    //editor: EditStack,
+    delta_y: f64,
+    delta_x: f64,
+    page_len: usize,
+    font_advance: f64,
+    font_baseline: f64,
+    font_descent: f64,
+    font_height: f64,
+    font_name: String,
+    font_size: f64,
+
+    bg_color: Color,
+    fg_color: Color,
+    fg_sel_color: Color,
+    bg_sel_color: Color,
+
+    size: Size,
+    //handle: WindowHandle,
+}
+
 impl Widget<EditStack> for EditorView {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
         match event {
@@ -274,10 +295,15 @@ impl Widget<EditStack> for EditorView {
             Event::Wheel(event) => {
                 self.delta_y -= event.wheel_delta.y;
                 if self.delta_y > 0. {
-                    self.delta_y = 0.
+                    self.delta_y = 0.;
                 }
                 if -self.delta_y > editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
                     self.delta_y = -((editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
+                }
+
+                self.delta_x -= event.wheel_delta.x;
+                if self.delta_x > 0. {
+                    self.delta_x = 0.;
                 }
                 ctx.request_paint();
                 ctx.set_handled();
@@ -298,7 +324,6 @@ impl Widget<EditStack> for EditorView {
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
-                    
                     if let Err(e) = self.open(editor, file_info.path()) {
                         dialog::messagebox(
                             &format!("Error loading file {}", e),
@@ -360,28 +385,8 @@ impl Widget<EditStack> for EditorView {
         let clip_rect = ctx.size().to_rect();
         ctx.clip(clip_rect);
 
-        self.paint_editor(data, ctx.render_ctx, env);
+        self.paint_editor(data, ctx, env);
     }
-}
-
-pub struct EditorView {
-    //editor: EditStack,
-    delta_y: f64,
-    page_len: usize,
-    font_advance: f64,
-    font_baseline: f64,
-    font_descent: f64,
-    font_height: f64,
-    font_name: String,
-    font_size: f64,
-
-    bg_color: Color,
-    fg_color: Color,
-    fg_sel_color: Color,
-    bg_sel_color: Color,
-
-    size: Size,
-    //handle: WindowHandle,
 }
 
 impl Default for EditorView {
@@ -392,6 +397,7 @@ impl Default for EditorView {
             fg_sel_color: Color::BLACK,
             bg_sel_color: Color::WHITE,
 
+            delta_x: 0.0,
             delta_y: 0.0,
             page_len: 0,
             font_advance: 0.0,
@@ -556,38 +562,51 @@ impl EditorView {
         }
     }
 
-    fn paint_editor(&mut self, editor: &EditStack, piet: &mut Piet, env: &Env) -> bool {
-        let font = piet
+    fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) -> bool {
+        let font = ctx
+            .render_ctx
             .text()
             .new_font_by_name(&self.font_name, self.font_size)
             .build()
             .unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
-        piet.fill(rect, &self.bg_color);
+        ctx.render_ctx.fill(rect, &self.bg_color);
 
         let visible_range = self.visible_range();
+
+        // Draw line number
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
         let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        let line_number_width = self.font_advance * line_number_char_width as f64; // piet.text().new_text_layout(&font, &format!("{} ",editor.len_lines()),None).build().unwrap().width();
+        let line_number_width = self.font_advance * line_number_char_width as f64;
 
         for line_idx in visible_range.clone() {
-            let layout = piet
+            let layout = ctx
+                .render_ctx
                 .text()
                 .new_text_layout(&font, &format!("{:1$}", line_idx, line_number_char_width), None)
                 .build()
                 .unwrap();
-            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
+            ctx.render_ctx
+                .draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
             dy += self.font_height;
         }
-        piet.transform(Affine::translate((line_number_width + self.font_advance + 4.0, 0.0)));
-        piet.stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &self.fg_color, 1.0);
+
+        let mut clip_rect = ctx.size().to_rect();
+        clip_rect.x0 += line_number_width + self.font_advance + 2.0;
+        ctx.render_ctx.clip(clip_rect);
+
+        ctx.render_ctx
+            .transform(Affine::translate((line_number_width + self.font_advance + 4.0, 0.0)));
+        ctx.render_ctx
+            .stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &self.fg_color, 1.0);
+        ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
+
         let mut line = String::new();
         let mut indices = Vec::new();
         let mut ranges = Vec::new();
         let mut selection_path = Vec::new();
-        //let mut current_path: Vec<PathEl> = Vec::new();
         let mut current_path = SelectionPath::new();
 
         // Draw selection first
@@ -596,7 +615,12 @@ impl EditorView {
         for line_idx in visible_range.clone() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
-            let layout = piet.text().new_text_layout(&font, &line, None).build().unwrap();
+            let layout = ctx
+                .render_ctx
+                .text()
+                .new_text_layout(&font, &line, None)
+                .build()
+                .unwrap();
 
             editor.selection_on_line(line_idx, &mut ranges);
 
@@ -651,23 +675,29 @@ impl EditorView {
 
         for path in selection_path {
             let path = BezPath::from_vec(path.elem);
-            let brush = piet.solid_brush(self.fg_sel_color.clone());
-            piet.fill(&path, &brush);
-            let brush = piet.solid_brush(self.bg_sel_color.clone());
-            piet.stroke(&path, &brush, 0.5);
+            let brush = ctx.render_ctx.solid_brush(self.fg_sel_color.clone());
+            ctx.render_ctx.fill(&path, &brush);
+            let brush = ctx.render_ctx.solid_brush(self.bg_sel_color.clone());
+            ctx.render_ctx.stroke(&path, &brush, 0.5);
         }
 
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
-            let layout = piet.text().new_text_layout(&font, &line, None).build().unwrap();
+            let layout = ctx
+                .render_ctx
+                .text()
+                .new_text_layout(&font, &line, None)
+                .build()
+                .unwrap();
 
-            piet.draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
+            ctx.render_ctx
+                .draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
 
             editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
-                    piet.stroke(
+                    ctx.render_ctx.stroke(
                         Line::new(
                             (metrics.point.x + 1.0, self.font_height + dy),
                             (metrics.point.x + 1.0, dy),
