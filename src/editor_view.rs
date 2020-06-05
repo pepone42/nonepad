@@ -1,13 +1,11 @@
-use std::io::Result;
 use std::ops::{Deref, DerefMut, Range};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size, Vec2};
-use druid::piet::{FontBuilder, Piet, RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
+use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
-    Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, FileInfo, HotKey, Key, KeyCode,
-    KeyEvent, KeyModifiers, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Selector, SysMods, UpdateCtx, Widget,
-    WindowHandle,
+    Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, HotKey, Key, KeyCode, KeyEvent,
+    LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, SysMods, UpdateCtx, Widget,
 };
 
 use crate::dialog;
@@ -79,7 +77,7 @@ impl Widget<EditStack> for EditorView {
             Event::WindowConnected => {
                 ctx.request_focus();
             }
-            Event::MouseDown(mouse) => {
+            Event::MouseDown(_) => {
                 ctx.request_focus();
             }
             Event::KeyDown(event) => {
@@ -355,10 +353,10 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
-        println!("update");
+
     }
 
-    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
+    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
 
         // self.font_height = env.get(FONT_HEIGHT);
@@ -562,7 +560,7 @@ impl EditorView {
         }
     }
 
-    fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) -> bool {
+    fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, _env: &Env) -> bool {
         let font = ctx
             .render_ctx
             .text()

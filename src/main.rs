@@ -7,18 +7,13 @@ mod position;
 mod rope_utils;
 mod text_buffer;
 
-use std::any::Any;
+use std::path::Path;
 
-use std::{
-    error::Error,
-    path::Path,
-    sync::{Arc, Mutex},
+use druid::widget::{Flex, Label, MainAxisAlignment};
+use druid::{
+    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
+    WidgetExt, WindowDesc,
 };
-
-use druid::widget::{CrossAxisAlignment, Flex, Label, MainAxisAlignment};
-use druid::{AppLauncher, Data, Env, Lens, LocalizedString, PlatformError, Widget, WidgetExt, WindowDesc};
-
-use druid::{piet::Color, AppDelegate, Command, DelegateCtx, Target, WindowHandle};
 
 use crate::editor_view::EditorView;
 use text_buffer::EditStack;
@@ -50,18 +45,18 @@ impl AppDelegate<MainWindowState> for Delegate {
     }
     fn window_added(
         &mut self,
-        id: druid::WindowId,
-        data: &mut MainWindowState,
-        env: &Env,
-        ctx: &mut druid::DelegateCtx,
+        _id: druid::WindowId,
+        _data: &mut MainWindowState,
+        _env: &Env,
+        _ctx: &mut druid::DelegateCtx,
     ) {
     }
     fn window_removed(
         &mut self,
-        id: druid::WindowId,
-        data: &mut MainWindowState,
-        env: &Env,
-        ctx: &mut druid::DelegateCtx,
+        _id: druid::WindowId,
+        _data: &mut MainWindowState,
+        _env: &Env,
+        _ctx: &mut druid::DelegateCtx,
     ) {
     }
 }
@@ -101,16 +96,17 @@ impl MainWindowState {
 
 fn build_ui() -> impl Widget<MainWindowState> {
     let label_left = Label::new(|data: &MainWindowState, _env: &Env| {
-        format!("{}{}",
-        data.editor
-            .filename
-            .clone()
-            .unwrap_or_default()
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string(),
-            if data.editor.is_dirty() {"*"} else {""}
+        format!(
+            "{}{}",
+            data.editor
+                .filename
+                .clone()
+                .unwrap_or_default()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            if data.editor.is_dirty() { "*" } else { "" }
         )
     })
     .with_text_size(12.0);
@@ -137,7 +133,6 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
         )
         .main_axis_alignment(MainAxisAlignment::Center)
-
 }
 
 fn main() -> anyhow::Result<()> {

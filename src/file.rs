@@ -76,7 +76,7 @@ impl Indentation {
 
     pub fn len_as_byte(&self) -> usize {
         match *self {
-            Indentation::Tab(l) => 1,
+            Indentation::Tab(_) => 1,
             Indentation::Space(l) => l,
         }
     }

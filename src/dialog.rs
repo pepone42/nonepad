@@ -1,4 +1,7 @@
+
+
 /// Icons to display on message dialog.
+#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub enum Icon {
     None,
@@ -8,6 +11,7 @@ pub enum Icon {
     Error,
 }
 /// Buttons on message dialog.
+#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub enum Buttons {
     Ok,
@@ -16,6 +20,7 @@ pub enum Buttons {
     AbortRetryIgnore,
 }
 /// Triggered button on message dialog.
+#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub enum Button {
     Ok,

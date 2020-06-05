@@ -20,13 +20,13 @@ pub struct Point {
 }
 
 impl Position for Point {
-    fn absolute(&self, rope: &Rope, tabsize: usize) -> Absolute {
+    fn absolute(&self, rope: &Rope, _tabsize: usize) -> Absolute {
         self.line.start(rope) + self.relative
     }
-    fn point(&self, rope: &Rope, tabsize: usize) -> Point {
+    fn point(&self, _rope: &Rope, _tabsize: usize) -> Point {
         *self
     }
-    fn line(&self, rope: &Rope) -> Line {
+    fn line(&self, _rope: &Rope) -> Line {
         self.line
     }
     fn up(&self, rope: &Rope, tabsize: usize) -> Self {
@@ -105,12 +105,6 @@ impl Point {
             col,
             line,
             relative: Self::relative(col, line, rope, tabsize),
-        }
-    }
-
-    pub fn up(&mut self, rope: &Rope, tabsize: usize) {
-        if self.line > Line::from(0) {
-            self.line -= 1;
         }
     }
 }
@@ -350,7 +344,7 @@ impl Line {
                 }
                 _ => {
                     out.push(c);
-                    for i in index..index + c.len_utf8() {
+                    for _ in index..index + c.len_utf8() {
                         index_conversion.push(index.into());
                     }
                     index += c.len_utf8();
@@ -379,7 +373,7 @@ impl<'r> Iterator for LineIterator<'r> {
 impl SubAssign<usize> for Line {
     fn sub_assign(&mut self, rhs: usize) {
         if self.index > 0 {
-            self.index -= 1;
+            self.index -= rhs;
         }
     }
 }
