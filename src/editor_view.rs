@@ -84,6 +84,7 @@ impl Widget<EditStack> for EditorView {
                 if let Some(text) = event.text() {
                     if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
                         editor.insert(text);
+                        self.put_carret_in_visible_range(editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -183,6 +184,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.end(mods.shift);
+                        self.put_carret_in_visible_range(editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -193,6 +195,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.home(mods.shift);
+                        self.put_carret_in_visible_range(editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -201,6 +204,7 @@ impl Widget<EditStack> for EditorView {
                         key_code: KeyCode::Tab, ..
                     } => {
                         editor.tab();
+                        self.put_carret_in_visible_range(editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -218,12 +222,14 @@ impl Widget<EditStack> for EditorView {
 
                 if HotKey::new(None, KeyCode::Backspace).matches(event) {
                     editor.backspace();
+                    self.put_carret_in_visible_range(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(None, KeyCode::Delete).matches(event) {
                     editor.delete();
+                    self.put_carret_in_visible_range(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -233,6 +239,7 @@ impl Widget<EditStack> for EditorView {
                     || HotKey::new(None, KeyCode::Return).matches(event)
                 {
                     editor.insert(editor.file.linefeed.to_str());
+                    self.put_carret_in_visible_range(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -291,6 +298,11 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
+
+                if editor.buffer.rope.len_lines() as f64 * self.font_height < ctx.size().height {
+                    return;
+                }
+
                 self.delta_y -= event.wheel_delta.y;
                 if self.delta_y > 0. {
                     self.delta_y = 0.;
@@ -580,6 +592,9 @@ impl EditorView {
         let line_number_width = self.font_advance * line_number_char_width as f64;
 
         for line_idx in visible_range.clone() {
+            if line_idx >= editor.len_lines() {
+                break;
+            }
             let layout = ctx
                 .render_ctx
                 .text()

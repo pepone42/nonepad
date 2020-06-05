@@ -1,4 +1,6 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
+#![windows_subsystem = "windows"]
+
 mod carret;
 mod dialog;
 mod editor_view;
