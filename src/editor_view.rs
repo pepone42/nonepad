@@ -298,19 +298,17 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
-
-                if editor.buffer.rope.len_lines() as f64 * self.font_height < ctx.size().height {
-                    return;
+                if editor.buffer.rope.len_lines() as f64 * self.font_height >= ctx.size().height {
+                    self.delta_y -= event.wheel_delta.y;
+                    if self.delta_y > 0. {
+                        self.delta_y = 0.;
+                    }
+                    if -self.delta_y > editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height
+                    {
+                        self.delta_y =
+                            -((editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
+                    }
                 }
-
-                self.delta_y -= event.wheel_delta.y;
-                if self.delta_y > 0. {
-                    self.delta_y = 0.;
-                }
-                if -self.delta_y > editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height {
-                    self.delta_y = -((editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
-                }
-
                 self.delta_x -= event.wheel_delta.x;
                 if self.delta_x > 0. {
                     self.delta_x = 0.;
@@ -364,9 +362,7 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
-
-    }
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
