@@ -77,9 +77,6 @@ impl Widget<EditStack> for EditorView {
             Event::WindowConnected => {
                 ctx.request_focus();
             }
-            Event::MouseDown(_) => {
-                ctx.request_focus();
-            }
             Event::KeyDown(event) => {
                 if let Some(text) = event.text() {
                     if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
@@ -318,6 +315,21 @@ impl Widget<EditStack> for EditorView {
                 ctx.request_paint();
                 ctx.set_handled();
                 return;
+            }
+            Event::MouseDown(event) => {
+                dbg!(self.pix_to_point(event.pos.x,event.pos.y,ctx,editor));
+                ctx.request_focus();
+                ctx.set_active(true);
+                ctx.set_handled();
+            }
+            Event::MouseUp(event) => {
+                ctx.set_active(false);
+                ctx.set_handled();
+            }
+            Event::MouseMove(event) => {
+                if ctx.is_active() {
+                    dbg!(event);
+                }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Some(file_info) = cmd.get_unchecked(druid::commands::SAVE_FILE) {
@@ -722,6 +734,13 @@ impl EditorView {
         }
 
         false
+    }
+
+    fn pix_to_point(&self,x: f64,y: f64, ctx: &EventCtx,editor: &EditStack) -> (usize,usize) {
+        let x = (x - self.delta_x) - self.gutter_width(editor);
+        let y = y - self.delta_y;
+        dbg!((x/self.font_advance,y/self.font_height));
+        (0,0)
     }
 
     fn gutter_width(&self, editor: &EditStack) -> f64 {
