@@ -116,6 +116,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.forward(mods.shift);
+                        self.put_carret_in_visible_range(editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -126,6 +127,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.backward(mods.shift);
+                        self.put_carret_in_visible_range(editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -723,6 +725,15 @@ impl EditorView {
         false
     }
 
+    fn gutter_width(&self, editor: &EditStack) -> f64 {
+        let line_number_char_width = format!(" {}", editor.len_lines()).len();
+        let line_number_width = self.font_advance * line_number_char_width as f64;
+        line_number_width + self.font_advance + 4.0
+    }
+    fn editor_width(&self, editor: &EditStack) -> f64 {
+        self.size.width - self.gutter_width(editor)
+    }
+
     fn put_carret_in_visible_range(&mut self, editor: &EditStack) {
         if editor.buffer.carrets.len() > 1 {
             return;
@@ -735,6 +746,14 @@ impl EditorView {
             }
             if y < -self.delta_y {
                 self.delta_y = -y;
+            }
+
+            let x = carret.col().index as f64 * self.font_advance;
+            if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
+                self.delta_x = -x + self.editor_width(editor) - self.font_advance;
+            }
+            if x < -self.delta_x {
+                self.delta_x = -x;
             }
         }
     }
