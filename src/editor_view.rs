@@ -587,8 +587,7 @@ impl EditorView {
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
 
         let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        let line_number_width = self.font_advance * line_number_char_width as f64;
-
+        
         for line_idx in visible_range.clone() {
             if line_idx >= editor.len_lines() {
                 break;
@@ -605,11 +604,11 @@ impl EditorView {
         }
 
         let mut clip_rect = ctx.size().to_rect();
-        clip_rect.x0 += line_number_width + self.font_advance + 2.0;
+        clip_rect.x0 += self.gutter_width(editor)-2.0;
         ctx.render_ctx.clip(clip_rect);
 
         ctx.render_ctx
-            .transform(Affine::translate((line_number_width + self.font_advance + 4.0, 0.0)));
+            .transform(Affine::translate((self.gutter_width(editor), 0.0)));
         ctx.render_ctx
             .stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &self.fg_color, 1.0);
         ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
