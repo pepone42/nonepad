@@ -5,7 +5,7 @@ use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
 use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, HotKey, Key, KeyCode, KeyEvent,
-    LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, SysMods, UpdateCtx, Widget,
+    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application,
 };
 
 use crate::dialog;
@@ -243,6 +243,20 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyV).matches(event) {
+                    editor.insert(&Application::global().clipboard().get_string().unwrap_or_default());
+
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyC).matches(event) {
+                    Application::global().clipboard().put_string(editor.selected_text());
+
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
                     editor.undo();
                     ctx.request_paint();
@@ -312,23 +326,38 @@ impl Widget<EditStack> for EditorView {
                 if self.delta_x > 0. {
                     self.delta_x = 0.;
                 }
+                if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
+                    let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
+
+                    editor.move_main_cursor_to(x, y, true);
+                    self.put_carret_in_visible_range(ctx, editor);
+                }
                 ctx.request_paint();
                 ctx.set_handled();
                 return;
             }
             Event::MouseDown(event) => {
-                dbg!(self.pix_to_point(event.pos.x,event.pos.y,ctx,editor));
+                if matches!(event.button, MouseButton::Left) {
+                    let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
+                    editor.revert_to_single_carrets();
+                    // FIXME: Update is not called if the carret position is not modified,
+                    editor.move_main_cursor_to(x, y, event.mods.shift);
+                    ctx.set_active(true);
+                }
                 ctx.request_focus();
-                ctx.set_active(true);
+                ctx.request_paint();
                 ctx.set_handled();
             }
-            Event::MouseUp(event) => {
+            Event::MouseUp(_event) => {
                 ctx.set_active(false);
                 ctx.set_handled();
             }
             Event::MouseMove(event) => {
-                if ctx.is_active() {
-                    dbg!(event);
+                if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
+                    let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
+
+                    editor.move_main_cursor_to(x, y, true);
+                    self.put_carret_in_visible_range(ctx, editor);
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
@@ -736,11 +765,30 @@ impl EditorView {
         false
     }
 
-    fn pix_to_point(&self,x: f64,y: f64, ctx: &EventCtx,editor: &EditStack) -> (usize,usize) {
-        let x = (x - self.delta_x) - self.gutter_width(editor);
-        let y = y - self.delta_y;
-        dbg!((x/self.font_advance,y/self.font_height));
-        (0,0)
+    fn pix_to_point(&self, x: f64, y: f64, ctx: &EventCtx, editor: &EditStack) -> (usize, usize) {
+        let mut x = (x - self.delta_x) - self.gutter_width(editor);
+        let mut y = y - self.delta_y;
+
+        if x < 0. {
+            x = 0.
+        }
+        if y < 0. {
+            y = 0.
+        }
+
+        // let mut buf = String::new();
+        // let mut i = Vec::new();
+        // editor.displayable_line(carret.line(), &mut buf, &mut i);
+        // let font = ctx
+        //     .text()
+        //     .new_font_by_name(&self.font_name, self.font_size)
+        //     .build()
+        //     .unwrap();
+
+        // let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
+        // layout.hit_test_point((x,0.0)).metrics.text_position
+
+        ((x / self.font_advance) as usize, (y / self.font_height) as usize)
     }
 
     fn gutter_width(&self, editor: &EditStack) -> f64 {

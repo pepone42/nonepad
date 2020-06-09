@@ -101,6 +101,11 @@ impl Point {
     }
 
     pub fn new(col: Column, line: Line, rope: &Rope, tabsize: usize) -> Self {
+        let line = if line.index>=rope.len_lines() {
+            rope.len_lines().into()
+        } else {
+            line
+        };
         Self {
             col,
             line,
@@ -169,6 +174,13 @@ impl Sub<Relative> for Absolute {
     type Output = Absolute;
     fn sub(self, rhs: Relative) -> Self::Output {
         Absolute::from(self.index - rhs.index)
+    }
+}
+
+impl Sub<usize> for Absolute {
+    type Output = Absolute;
+    fn sub(self, rhs: usize) -> Self::Output {
+        Absolute::from(self.index - rhs)
     }
 }
 

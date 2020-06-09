@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::carret::Carrets;
 use crate::position::{self, Absolute, Line, Relative};
 use crate::carret::Carret;
-use crate::file::{Indentation, TextFileInfo};
+use crate::file::{Indentation, TextFileInfo, LineFeed};
 use crate::rope_utils;
 
 #[derive(Debug, Clone, Default)]
@@ -35,6 +35,16 @@ impl EditStack {
 
     pub fn len_lines(&self) -> usize {
         self.buffer.rope.len_lines()
+    }
+
+    pub fn move_main_cursor_to(&mut self, col: usize, line: usize, expand_selection: bool) {
+        use position::Position;
+        let abs = position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
+        self.buffer.carrets[0].set_index(abs,!expand_selection,true,&self.buffer.rope, self.file.indentation.visible_len());
+    }
+
+    pub fn selected_text(&self) -> String {
+        self.buffer.selected_text(self.file.linefeed)
     }
 
     pub fn cursor_display_info(&self) -> String {
@@ -415,6 +425,20 @@ impl Buffer {
         }
         self.carrets.merge();
         self.uuid = Uuid::new_v4();
+    }
+
+    pub fn selected_text(&self, line_feed: LineFeed) -> String {
+        let mut s = String::new();
+        let multi = self.carrets.len()>1;
+        for c in self.carrets.iter() {
+            for chuck in self.rope.slice(self.rope.byte_to_char(c.start().index)..self.rope.byte_to_char(c.end().index)).chunks() {
+                s.push_str(chuck)
+            }
+            if multi {
+                s.push_str(&line_feed.to_str())
+            }
+        }
+        s
     }
 }
 

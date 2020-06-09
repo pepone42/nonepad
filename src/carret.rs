@@ -145,6 +145,7 @@ impl Carret {
     }
 
     pub fn cancel_selection(&mut self) {
+        
         self.selection = self.index;
     }
 
