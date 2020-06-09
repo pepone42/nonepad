@@ -5,7 +5,7 @@ use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
 use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, HotKey, Key, KeyCode, KeyEvent,
-    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application,
+    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application, ClipboardFormat,
 };
 
 use crate::dialog;
@@ -244,14 +244,25 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyV).matches(event) {
-                    editor.insert(&Application::global().clipboard().get_string().unwrap_or_default());
+                    let clipboard =  Application::global().clipboard();
+                    let supported_types = &[ClipboardFormat::TEXT];
+                    let best_available_type = clipboard.preferred_format(supported_types);
+                    if let Some(format) = best_available_type {
+                        let data = clipboard.get_format(format).expect("I promise not to unwrap in production");
+                        editor.insert(String::from_utf8_lossy(&data).as_ref());
+                    }
+
+                    // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
+                    // get_format correctly close the slipboard
+                    // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
+                    // editor.insert(&dbg!(s));
 
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyC).matches(event) {
-                    Application::global().clipboard().put_string(editor.selected_text());
+                    Application::global().clipboard().put_string(dbg!(editor.selected_text()));
 
                     ctx.request_paint();
                     ctx.set_handled();
