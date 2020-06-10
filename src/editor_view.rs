@@ -836,9 +836,8 @@ impl EditorView {
 
             let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
 
-            if let Some(hit) = layout.hit_test_text_position(carret.relative().index) {
+            if let Some(hit) = layout.hit_test_text_position(i[carret.relative().index].index) {
                 let x = hit.point.x;
-                //let x = carret.col().index as f64 * self.font_advance;
                 if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
                     self.delta_x = -x + self.editor_width(editor) - self.font_advance;
                 }
