@@ -39,7 +39,8 @@ impl EditStack {
 
     pub fn move_main_cursor_to(&mut self, col: usize, line: usize, expand_selection: bool) {
         use position::Position;
-        let abs = position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
+        let line = position::Line::from(line);// position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
+        let abs = line.start(&self.buffer.rope) + position::Relative::from(col);
         self.buffer.carrets[0].set_index(abs,!expand_selection,true,&self.buffer.rope, self.file.indentation.visible_len());
     }
 
@@ -149,8 +150,8 @@ impl EditStack {
     }
 
     /// Construct a string with tab replaced as space
-    pub fn displayable_line(&self, line: Line, out: &mut String, indices: &mut Vec<Relative>) {
-        line.displayable_string(&self.buffer.rope, self.file.indentation.visible_len(), out, indices);
+    pub fn displayable_line(&self, line: Line, out: &mut String, indices: &mut Vec<Relative>,byte_to_rel: &mut Vec<Relative>,) {
+        line.displayable_string(&self.buffer.rope, self.file.indentation.visible_len(), out, indices,byte_to_rel);
     }
 
     pub fn carrets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Carret> {

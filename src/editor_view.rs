@@ -676,7 +676,7 @@ impl EditorView {
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range.clone() {
             //editor.buffer.line(line_idx, &mut line);
-            editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
+            editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let layout = ctx
                 .render_ctx
                 .text()
@@ -746,7 +746,7 @@ impl EditorView {
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
         for line_idx in visible_range {
             //editor.buffer.line(line_idx, &mut line);
-            editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices);
+            editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let layout = ctx
                 .render_ctx
                 .text()
@@ -786,20 +786,25 @@ impl EditorView {
         if y < 0. {
             y = 0.
         }
+        let mut line = (y / self.font_height) as usize;
+        if line >= editor.len_lines() {
+            line = editor.len_lines()-1;
+        }
+        let mut buf = String::new();
+        let mut i = Vec::new();
+        editor.displayable_line(line.into(), &mut buf,&mut Vec::new(), &mut i);
+        let font = ctx
+            .text()
+            .new_font_by_name(&self.font_name, self.font_size)
+            .build()
+            .unwrap();
 
-        // let mut buf = String::new();
-        // let mut i = Vec::new();
-        // editor.displayable_line(carret.line(), &mut buf, &mut i);
-        // let font = ctx
-        //     .text()
-        //     .new_font_by_name(&self.font_name, self.font_size)
-        //     .build()
-        //     .unwrap();
+        let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
+        dbg!(line,editor.len_lines(),&i);
+        let rel = i[layout.hit_test_point((x,0.0).into()).metrics.text_position].index;
 
-        // let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
-        // layout.hit_test_point((x,0.0)).metrics.text_position
 
-        ((x / self.font_advance) as usize, (y / self.font_height) as usize)
+        (rel, line)
     }
 
     fn gutter_width(&self, editor: &EditStack) -> f64 {
@@ -827,7 +832,7 @@ impl EditorView {
 
             let mut buf = String::new();
             let mut i = Vec::new();
-            editor.displayable_line(carret.line(), &mut buf, &mut i);
+            editor.displayable_line(carret.line(), &mut buf, &mut i, &mut Vec::new());
             let font = ctx
                 .text()
                 .new_font_by_name(&self.font_name, self.font_size)

@@ -101,7 +101,7 @@ impl Point {
     }
 
     pub fn new(col: Column, line: Line, rope: &Rope, tabsize: usize) -> Self {
-        let line = if line.index>=rope.len_lines() {
+        let line = if line.index >= rope.len_lines() {
             rope.len_lines().into()
         } else {
             line
@@ -332,38 +332,50 @@ impl Line {
         rope: &Rope,
         tabsize: usize,
         out: &mut String,
-        index_conversion: &mut Vec<Relative>,
+        rel_to_byte: &mut Vec<Relative>,
+        byte_to_rel: &mut Vec<Relative>,
     ) {
         out.clear();
-        index_conversion.clear();
+        rel_to_byte.clear();
+        byte_to_rel.clear();
         if self.index >= rope.len_lines() {
             return;
         }
 
-        let mut index = 0;
+        let mut rel_index = 0;
+        let mut byte_index = 0;
         for c in rope.line(self.index).chars() {
             match c {
                 ' ' => {
-                    index_conversion.push(index.into());
+                    rel_to_byte.push(rel_index.into());
+                    byte_to_rel.push(byte_index.into());
                     out.push(' ');
-                    index += 1;
+                    rel_index += 1;
+                    byte_index += 1;
                 }
                 '\t' => {
-                    let nb_space = tabsize - index % tabsize;
-                    index_conversion.push(index.into());
+                    let nb_space = tabsize - rel_index % tabsize;
+                    rel_to_byte.push(rel_index.into());
+                    for _ in 0..nb_space {
+                        byte_to_rel.push(byte_index.into());
+                    }
                     out.push_str(&" ".repeat(nb_space));
-                    index += nb_space;
+                    rel_index += nb_space;
+                    byte_index += 1;
                 }
                 _ => {
                     out.push(c);
-                    for _ in index..index + c.len_utf8() {
-                        index_conversion.push(index.into());
+                    for _ in rel_index..rel_index + c.len_utf8() {
+                        rel_to_byte.push(rel_index.into());
+                        byte_to_rel.push(byte_index.into());
                     }
-                    index += c.len_utf8();
+                    rel_index += c.len_utf8();
+                    byte_index += c.len_utf8();
                 }
             }
         }
-        index_conversion.push(index.into());
+        rel_to_byte.push(rel_index.into());
+        byte_to_rel.push(byte_index.into());
     }
     pub fn iter<'r>(&self, rope: &'r Rope) -> LineIterator<'r> {
         LineIterator { rope, line: *self }
