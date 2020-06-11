@@ -1,7 +1,7 @@
 use crate::position::{Absolute, Column, Line, Point, Position, Relative};
 use crate::rope_utils::*;
-use ropey::Rope;
 use druid::Data;
+use ropey::Rope;
 
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -11,7 +11,6 @@ use std::ops::{Range, RangeInclusive};
 pub struct Carrets {
     intern: Vec<Carret>,
 }
-
 
 impl Carrets {
     pub fn new() -> Self {
@@ -145,7 +144,6 @@ impl Carret {
     }
 
     pub fn cancel_selection(&mut self) {
-        
         self.selection = self.index;
     }
 
@@ -229,13 +227,21 @@ impl Carret {
         self.set_index(pos.absolute(rope, tabsize), !expand_selection, false, rope, tabsize);
     }
 
-    pub fn move_backward(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let index = prev_grapheme_boundary(&rope.slice(..), self.index);
+    pub fn move_backward(&mut self, expand_selection: bool, word_boundary: bool, rope: &Rope, tabsize: usize) {
+        let index = if word_boundary {
+            prev_word_boundary(&rope.slice(..), self.index)
+        } else {
+            prev_grapheme_boundary(&rope.slice(..), self.index)
+        };
         self.set_index(Absolute::from(index), !expand_selection, true, rope, tabsize);
     }
 
-    pub fn move_forward(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let index = next_grapheme_boundary(&rope.slice(..), self.index);
+    pub fn move_forward(&mut self, expand_selection: bool, word_boundary: bool, rope: &Rope, tabsize: usize) {
+        let index = if word_boundary {
+            next_word_boundary(&rope.slice(..), self.index)
+        } else {
+            next_grapheme_boundary(&rope.slice(..), self.index)
+        };
         self.set_index(Absolute::from(index), !expand_selection, true, rope, tabsize);
     }
 

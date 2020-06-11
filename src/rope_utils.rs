@@ -69,3 +69,60 @@ pub fn next_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) ->
         }
     }
 }
+
+const WORD_BOUNDARY_CHAR: [char; 6] = ['.', ':', ' ', '\n', '\r', '\t'];
+
+pub fn next_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let mut i: usize = byte_idx.into();
+    if WORD_BOUNDARY_CHAR.contains(&slice.char(slice.byte_to_char(i))) {
+        loop {
+            if !WORD_BOUNDARY_CHAR.contains(&slice.char(slice.byte_to_char(i))) {
+                break;
+            }
+            let newi = next_grapheme_boundary(slice, i);
+            if newi == i {
+                break;
+            }
+            i = newi;
+        }
+    }
+    loop {
+        if WORD_BOUNDARY_CHAR.contains(&slice.char(slice.byte_to_char(i))) {
+            break;
+        }
+        let newi = next_grapheme_boundary(slice, i);
+        if newi == i {
+            break;
+        }
+        i = newi;
+    }
+    return i.into();
+}
+
+pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let mut i: usize = byte_idx.into();
+    if WORD_BOUNDARY_CHAR.contains(&slice.char(slice.byte_to_char(i))) {
+        loop {
+            if !WORD_BOUNDARY_CHAR.contains(&slice.char(slice.byte_to_char(i))) {
+                break;
+            }
+            let newi = prev_grapheme_boundary(slice, i);
+            if newi == i {
+                break;
+            }
+            i = newi;
+        }
+    }
+    loop {
+        if WORD_BOUNDARY_CHAR.contains(&slice.char(slice.byte_to_char(i))) {
+            break;
+        }
+        let newi = prev_grapheme_boundary(slice, i);
+        if newi == i {
+            break;
+        }
+        i = newi;
+    }
+
+    return i.into();
+}

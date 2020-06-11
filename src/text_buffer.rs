@@ -2,14 +2,14 @@ use std::io::Result;
 use std::ops::{Range, RangeFrom, RangeTo};
 use std::path::{Path, PathBuf};
 
-use ropey::Rope;
 use druid::Data;
+use ropey::Rope;
 use uuid::Uuid;
 
-use crate::carret::Carrets;
-use crate::position::{self, Absolute, Line, Relative};
 use crate::carret::Carret;
-use crate::file::{Indentation, TextFileInfo, LineFeed};
+use crate::carret::Carrets;
+use crate::file::{Indentation, LineFeed, TextFileInfo};
+use crate::position::{self, Absolute, Line, Relative};
 use crate::rope_utils;
 
 #[derive(Debug, Clone, Default)]
@@ -24,7 +24,10 @@ pub struct EditStack {
 
 impl Data for EditStack {
     fn same(&self, other: &Self) -> bool {
-        self.buffer.same(&other.buffer) && self.file == other.file && self.filename== other.filename && self.dirty == other.dirty
+        self.buffer.same(&other.buffer)
+            && self.file == other.file
+            && self.filename == other.filename
+            && self.dirty == other.dirty
     }
 }
 
@@ -37,11 +40,17 @@ impl EditStack {
         self.buffer.rope.len_lines()
     }
 
-    pub fn move_main_cursor_to(&mut self, col: usize, line: usize, expand_selection: bool) {
+    pub fn move_main_cursor_to(&mut self, rel: usize, line: usize, expand_selection: bool) {
         use position::Position;
-        let line = position::Line::from(line);// position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
-        let abs = line.start(&self.buffer.rope) + position::Relative::from(col);
-        self.buffer.carrets[0].set_index(abs,!expand_selection,true,&self.buffer.rope, self.file.indentation.visible_len());
+        let line = position::Line::from(line); // position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
+        let abs = line.start(&self.buffer.rope) + position::Relative::from(rel);
+        self.buffer.carrets[0].set_index(
+            abs,
+            !expand_selection,
+            true,
+            &self.buffer.rope,
+            self.file.indentation.visible_len(),
+        );
     }
 
     pub fn selected_text(&self) -> String {
@@ -49,10 +58,14 @@ impl EditStack {
     }
 
     pub fn cursor_display_info(&self) -> String {
-        if self.buffer.carrets.len()==1 {
-            format!("Ln {}, Col {}",self.buffer.carrets[0].line().index, self.buffer.carrets[0].col().index)
+        if self.buffer.carrets.len() == 1 {
+            format!(
+                "Ln {}, Col {}",
+                self.buffer.carrets[0].line().index,
+                self.buffer.carrets[0].col().index
+            )
         } else {
-            format!("{} selections",self.buffer.carrets.len())
+            format!("{} selections", self.buffer.carrets.len())
         }
     }
 
@@ -69,9 +82,12 @@ impl EditStack {
         })
     }
 
-    pub fn open<P>(&mut self, path: P) -> Result<()> where P: AsRef<Path> {
+    pub fn open<P>(&mut self, path: P) -> Result<()>
+    where
+        P: AsRef<Path>,
+    {
         let editor = EditStack::from_file(path)?;
-        std::mem::replace(self,editor);
+        std::mem::replace(self, editor);
         Ok(())
     }
 
@@ -150,28 +166,40 @@ impl EditStack {
     }
 
     /// Construct a string with tab replaced as space
-    pub fn displayable_line(&self, line: Line, out: &mut String, indices: &mut Vec<Relative>,byte_to_rel: &mut Vec<Relative>,) {
-        line.displayable_string(&self.buffer.rope, self.file.indentation.visible_len(), out, indices,byte_to_rel);
+    pub fn displayable_line(
+        &self,
+        line: Line,
+        out: &mut String,
+        indices: &mut Vec<Relative>,
+        byte_to_rel: &mut Vec<Relative>,
+    ) {
+        line.displayable_string(
+            &self.buffer.rope,
+            self.file.indentation.visible_len(),
+            out,
+            indices,
+            byte_to_rel,
+        );
     }
 
     pub fn carrets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Carret> {
         self.buffer.carrets.iter().filter(move |c| c.line() == line)
     }
 
-    pub fn backward(&mut self, expand_selection: bool) {
+    pub fn backward(&mut self, expand_selection: bool, word_boundary: bool) {
         let mut buf = self.buffer.clone();
         for s in &mut buf.carrets.iter_mut() {
-            s.move_backward(expand_selection, &self.buffer.rope, self.file.indentation.visible_len());
+            s.move_backward(expand_selection, word_boundary, &self.buffer.rope, self.file.indentation.visible_len());
         }
 
         buf.carrets.merge();
         self.buffer = buf;
     }
 
-    pub fn forward(&mut self, expand_selection: bool) {
+    pub fn forward(&mut self, expand_selection: bool, word_boundary: bool) {
         let mut buf = self.buffer.clone();
         for s in &mut buf.carrets.iter_mut() {
-            s.move_forward(expand_selection, &buf.rope, self.file.indentation.visible_len());
+            s.move_forward(expand_selection, word_boundary, &buf.rope, self.file.indentation.visible_len());
         }
 
         buf.carrets.merge();
@@ -367,6 +395,62 @@ impl EditStack {
         buf.carrets.merge();
         self.push_edit(buf);
     }
+
+    // position handling
+    pub fn point<P>(&self, position: P) -> position::Point
+    where
+        P: position::Position,
+    {
+        position.point(&self.buffer.rope, self.file.indentation.visible_len())
+    }
+
+    pub fn absolute<P>(&self, position: P) -> position::Absolute
+    where
+        P: position::Position,
+    {
+        position.absolute(&self.buffer.rope, self.file.indentation.visible_len())
+    }
+
+    pub fn char_to_absolute(&self, index: usize) -> Absolute {
+        self.buffer.rope.char_to_byte(index).into()
+    }
+
+    fn next_word_boundary<P>(&self, position: P) -> position::Absolute
+    where
+        P: position::Position,
+    {
+        let mut i = self.absolute(position).index;
+        loop {
+            if self.buffer.rope.char(self.char_to_absolute(i).index) == ' ' {
+                break;
+            }
+            let newi = rope_utils::next_grapheme_boundary(&self.buffer.rope.slice(..), i);
+            if newi == i {
+                break;
+            }
+            i = newi;
+        }
+        return i.into();
+    }
+    fn prev_word_boundary<P>(&self, position: P) -> position::Absolute
+    where
+        P: position::Position,
+    {
+        let mut i = self.absolute(position).index;
+        loop {
+            if self.buffer.rope.char(self.char_to_absolute(i).index) == ' ' {
+                break;
+            }
+            let newi = rope_utils::prev_grapheme_boundary(&self.buffer.rope.slice(..), i);
+            if newi == i {
+                break;
+            }
+            i = newi;
+        }
+        return i.into();
+    }
+
+
 }
 
 #[derive(Debug, Clone)]
@@ -430,9 +514,13 @@ impl Buffer {
 
     pub fn selected_text(&self, line_feed: LineFeed) -> String {
         let mut s = String::new();
-        let multi = self.carrets.len()>1;
+        let multi = self.carrets.len() > 1;
         for c in self.carrets.iter() {
-            for chuck in self.rope.slice(self.rope.byte_to_char(c.start().index)..self.rope.byte_to_char(c.end().index)).chunks() {
+            for chuck in self
+                .rope
+                .slice(self.rope.byte_to_char(c.start().index)..self.rope.byte_to_char(c.end().index))
+                .chunks()
+            {
                 s.push_str(chuck)
             }
             if multi {

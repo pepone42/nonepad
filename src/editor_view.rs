@@ -112,7 +112,7 @@ impl Widget<EditStack> for EditorView {
                         mods,
                         ..
                     } => {
-                        editor.forward(mods.shift);
+                        editor.forward(mods.shift, mods.ctrl);
                         self.put_carret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
@@ -123,7 +123,7 @@ impl Widget<EditStack> for EditorView {
                         mods,
                         ..
                     } => {
-                        editor.backward(mods.shift);
+                        editor.backward(mods.shift, mods.ctrl);
                         self.put_carret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
