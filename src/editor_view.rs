@@ -262,8 +262,15 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyC).matches(event) {
-                    Application::global().clipboard().put_string(dbg!(editor.selected_text()));
+                    Application::global().clipboard().put_string(editor.selected_text());
 
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyX).matches(event) {
+                    Application::global().clipboard().put_string(editor.selected_text());
+                    editor.delete();
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
