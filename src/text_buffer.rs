@@ -57,6 +57,13 @@ impl EditStack {
         self.buffer.selected_text(self.file.linefeed)
     }
 
+    pub fn select_all(&mut self) {
+        self.revert_to_single_carrets();
+        self.cancel_selection();
+        self.buffer.carrets[0].set_index(0.into(),true,true,&self.buffer.rope,self.file.indentation.visible_len());
+        self.buffer.carrets[0].set_index(self.buffer.rope.len_bytes().into(),false,true,&self.buffer.rope,self.file.indentation.visible_len());
+    }
+
     pub fn cursor_display_info(&self) -> String {
         if self.buffer.carrets.len() == 1 {
             format!(

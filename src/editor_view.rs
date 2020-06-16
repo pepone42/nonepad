@@ -275,6 +275,12 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyA).matches(event) {
+                    editor.select_all();
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
                     editor.undo();
                     ctx.request_paint();
