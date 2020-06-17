@@ -41,7 +41,6 @@ impl EditStack {
     }
 
     pub fn move_main_cursor_to(&mut self, rel: usize, line: usize, expand_selection: bool) {
-        use position::Position;
         let line = position::Line::from(line); // position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
         let abs = line.start(&self.buffer.rope) + position::Relative::from(rel);
         self.buffer.carrets[0].set_index(
@@ -421,42 +420,6 @@ impl EditStack {
     pub fn char_to_absolute(&self, index: usize) -> Absolute {
         self.buffer.rope.char_to_byte(index).into()
     }
-
-    fn next_word_boundary<P>(&self, position: P) -> position::Absolute
-    where
-        P: position::Position,
-    {
-        let mut i = self.absolute(position).index;
-        loop {
-            if self.buffer.rope.char(self.char_to_absolute(i).index) == ' ' {
-                break;
-            }
-            let newi = rope_utils::next_grapheme_boundary(&self.buffer.rope.slice(..), i);
-            if newi == i {
-                break;
-            }
-            i = newi;
-        }
-        return i.into();
-    }
-    fn prev_word_boundary<P>(&self, position: P) -> position::Absolute
-    where
-        P: position::Position,
-    {
-        let mut i = self.absolute(position).index;
-        loop {
-            if self.buffer.rope.char(self.char_to_absolute(i).index) == ' ' {
-                break;
-            }
-            let newi = rope_utils::prev_grapheme_boundary(&self.buffer.rope.slice(..), i);
-            if newi == i {
-                break;
-            }
-            i = newi;
-        }
-        return i.into();
-    }
-
 
 }
 

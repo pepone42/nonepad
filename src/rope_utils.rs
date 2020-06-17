@@ -75,104 +75,97 @@ const WORD_BOUNDARY_PUCTUATION: [char; 31] = [
     '\'', '"', ',', '.', '<', '>', '/', '?',
 ];
 const WORD_BOUNDARY_LINEFEED: [char; 2] = ['\n', '\r'];
-const WORD_BOUNDARY_SPACE: [char; 2] = [' ', '\t'];
-#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharType {
     LINEFEED,
     SPACE,
     PUCTUATION,
     OTHER,
-    FILEBOUNDARY
 }
 
-fn get_prev_char(slice: &RopeSlice, byte_idx: usize) -> Option<char> {
-    let i = prev_grapheme_boundary(slice, byte_idx);
-    if i == byte_idx {
-        None
-    } else {
-        Some(slice.char(slice.byte_to_char(i)))
+fn char_type(c: char) -> CharType {
+    if WORD_BOUNDARY_PUCTUATION.contains(&c) {
+        return CharType::PUCTUATION;
     }
-}
-
-fn get_char(slice: &RopeSlice, byte_idx: usize) -> char {
-    slice.char(slice.byte_to_char(byte_idx))
-}
-
-fn get_prev_char_type(slice: &RopeSlice, byte_idx: usize) -> CharType {
-    if let Some(c) = get_prev_char(slice,byte_idx) {
-        if WORD_BOUNDARY_PUCTUATION.contains(&c) {return CharType::PUCTUATION;}
-        if WORD_BOUNDARY_LINEFEED.contains(&c) {return CharType::LINEFEED;}
-        if WORD_BOUNDARY_SPACE.contains(&c) {return CharType::SPACE;}
-        return CharType::OTHER;
+    if WORD_BOUNDARY_LINEFEED.contains(&c) {
+        return CharType::LINEFEED;
     }
-    return CharType::FILEBOUNDARY;
-}
-
-fn get_char_type(slice: &RopeSlice, byte_idx: usize) -> CharType {
-    let c = get_char(slice,byte_idx);
-    if WORD_BOUNDARY_PUCTUATION.contains(&c) {return CharType::PUCTUATION;}
-    if WORD_BOUNDARY_LINEFEED.contains(&c) {return CharType::LINEFEED;}
-    if WORD_BOUNDARY_SPACE.contains(&c) {return CharType::SPACE;}
+    if c.is_whitespace() {
+        return CharType::SPACE;
+    }
     return CharType::OTHER;
 }
 
-fn is_prev_word_boundary(slice: &RopeSlice, byte_idx: usize) -> bool {
-    get_prev_char_type(slice, byte_idx) != get_char_type(slice,byte_idx)
+fn is_boundary(a: char, b: char) -> bool {
+    char_type(a) != char_type(b)
 }
 
 pub fn next_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
-    let mut i: usize = byte_idx.into();
-    if WORD_BOUNDARY_PUCTUATION.contains(&slice.char(slice.byte_to_char(i))) {
-        loop {
-            if !WORD_BOUNDARY_PUCTUATION.contains(&slice.char(slice.byte_to_char(i))) {
-                break;
-            }
-            let nexti = next_grapheme_boundary(slice, i);
-            if nexti == i {
-                break;
-            }
-            i = nexti;
-        }
+    let mut i: usize = slice.byte_to_char(byte_idx.into());
+
+    // discard all space
+    i += slice.chars_at(i).take_while(|c| c.is_whitespace()).count();
+
+    // if multi puctionation, skip to new non puctuation char
+    let fp = slice
+        .chars_at(i)
+        .take_while(|c| WORD_BOUNDARY_PUCTUATION.contains(c))
+        .count();
+    i += fp;
+    if i >= slice.len_chars() {
+        return slice.len_bytes();
     }
-    loop {
-        if WORD_BOUNDARY_PUCTUATION.contains(&slice.char(slice.byte_to_char(i))) {
-            break;
-        }
-        let netxi = next_grapheme_boundary(slice, i);
-        if netxi == i {
-            break;
-        }
-        i = netxi;
+    let current_char = slice.char(i);
+    if fp > 1 || (fp == 1 && char_type(current_char) != CharType::OTHER) {
+        return slice.char_to_byte(i);
     }
-    return i.into();
+
+    i += slice.chars_at(i).take_while(|c| !is_boundary(*c, current_char)).count();
+
+    return slice.char_to_byte(i);
 }
 
 pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
-    let mut i: usize = byte_idx.into();
-    if WORD_BOUNDARY_PUCTUATION.contains(&slice.char(slice.byte_to_char(i))) {
-        loop {
-            let previ = prev_grapheme_boundary(slice, i);
-            if !WORD_BOUNDARY_PUCTUATION.contains(&slice.char(slice.byte_to_char(previ))) {
-                break;
-            }
+    let mut i: usize = slice.byte_to_char(byte_idx.into());
 
-            if previ == i {
-                break;
-            }
-            i = previ;
+    // discard all space
+    let mut iter = slice.chars_at(i);
+    let mut count = 0;
+    i -= loop {
+        match iter.prev() {
+            Some(c) if c.is_whitespace() => count += 1,
+            _ => break count,
         }
+    };
+
+    // if multi puctionation, skip to new non puctuation char
+    let mut iter = slice.chars_at(i);
+    let mut count = 0;
+    let fp = loop {
+        match iter.prev() {
+            Some(c) if WORD_BOUNDARY_PUCTUATION.contains(&c) => count += 1,
+            _ => break count,
+        }
+    };
+    i -= fp;
+    if i == 0 {
+        return 0;
     }
-    loop {
 
-        let previ = prev_grapheme_boundary(slice, i);
-        if WORD_BOUNDARY_PUCTUATION.contains(&slice.char(slice.byte_to_char(previ))) {
-            break;
-        }
-        if previ == i {
-            break;
-        }
-        i = previ;
+    let current_char = slice.char(i - 1);
+    if fp > 1 || (fp == 1 && char_type(current_char) != CharType::OTHER) {
+        return slice.char_to_byte(i);
     }
 
-    return i.into();
+    let mut iter = slice.chars_at(i);
+    let mut count = 0;
+    i -= loop {
+        match iter.prev() {
+            Some(c) if !is_boundary(c, current_char) => count += 1,
+            _ => break count,
+        }
+    };
+
+    return slice.char_to_byte(i);
 }
