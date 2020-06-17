@@ -813,7 +813,6 @@ impl EditorView {
             .unwrap();
 
         let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
-        dbg!(line,editor.len_lines(),&i);
         let rel = i[layout.hit_test_point((x,0.0).into()).metrics.text_position].index;
 
 
