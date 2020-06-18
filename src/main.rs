@@ -1,7 +1,7 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
 #![windows_subsystem = "windows"]
 
-mod carret;
+mod caret;
 mod dialog;
 mod editor_view;
 mod file;
@@ -115,7 +115,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
     let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(
             "{}    {}    {}    {}",
-            data.editor.cursor_display_info(),
+            data.editor.caret_display_info(),
             data.editor.file.indentation,
             data.editor.file.encoding.name(),
             data.editor.file.linefeed

@@ -6,8 +6,8 @@ use druid::Data;
 use ropey::Rope;
 use uuid::Uuid;
 
-use crate::carret::Carret;
-use crate::carret::Carrets;
+use crate::caret::Caret;
+use crate::caret::Carets;
 use crate::file::{Indentation, LineFeed, TextFileInfo};
 use crate::position::{self, Absolute, Line, Relative};
 use crate::rope_utils;
@@ -40,10 +40,10 @@ impl EditStack {
         self.buffer.rope.len_lines()
     }
 
-    pub fn move_main_cursor_to(&mut self, rel: usize, line: usize, expand_selection: bool) {
+    pub fn move_main_caret_to(&mut self, rel: usize, line: usize, expand_selection: bool) {
         let line = position::Line::from(line); // position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
         let abs = line.start(&self.buffer.rope) + position::Relative::from(rel);
-        self.buffer.carrets[0].set_index(
+        self.buffer.carets[0].set_index(
             abs,
             !expand_selection,
             true,
@@ -57,21 +57,21 @@ impl EditStack {
     }
 
     pub fn select_all(&mut self) {
-        self.revert_to_single_carrets();
+        self.cancel_mutli_carets();
         self.cancel_selection();
-        self.buffer.carrets[0].set_index(0.into(),true,true,&self.buffer.rope,self.file.indentation.visible_len());
-        self.buffer.carrets[0].set_index(self.buffer.rope.len_bytes().into(),false,true,&self.buffer.rope,self.file.indentation.visible_len());
+        self.buffer.carets[0].set_index(0.into(),true,true,&self.buffer.rope,self.file.indentation.visible_len());
+        self.buffer.carets[0].set_index(self.buffer.rope.len_bytes().into(),false,true,&self.buffer.rope,self.file.indentation.visible_len());
     }
 
-    pub fn cursor_display_info(&self) -> String {
-        if self.buffer.carrets.len() == 1 {
+    pub fn caret_display_info(&self) -> String {
+        if self.buffer.carets.len() == 1 {
             format!(
                 "Ln {}, Col {}",
-                self.buffer.carrets[0].line().index,
-                self.buffer.carrets[0].col().index
+                self.buffer.carets[0].line().index,
+                self.buffer.carets[0].col().index
             )
         } else {
-            format!("{} selections", self.buffer.carrets.len())
+            format!("{} selections", self.buffer.carets.len())
         }
     }
 
@@ -139,7 +139,7 @@ impl EditStack {
 
     pub fn selection_on_line<'a>(&'a self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {
         ranges.clear();
-        for r in self.buffer.carrets.iter().filter_map(move |c| {
+        for r in self.buffer.carets.iter().filter_map(move |c| {
             if !c.selection_is_empty() {
                 let r = c.range();
                 match (
@@ -188,110 +188,110 @@ impl EditStack {
         );
     }
 
-    pub fn carrets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Carret> {
-        self.buffer.carrets.iter().filter(move |c| c.line() == line)
+    pub fn carets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Caret> {
+        self.buffer.carets.iter().filter(move |c| c.line() == line)
     }
 
     pub fn backward(&mut self, expand_selection: bool, word_boundary: bool) {
         let mut buf = self.buffer.clone();
-        for s in &mut buf.carrets.iter_mut() {
+        for s in &mut buf.carets.iter_mut() {
             s.move_backward(expand_selection, word_boundary, &self.buffer.rope, self.file.indentation.visible_len());
         }
 
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
 
     pub fn forward(&mut self, expand_selection: bool, word_boundary: bool) {
         let mut buf = self.buffer.clone();
-        for s in &mut buf.carrets.iter_mut() {
+        for s in &mut buf.carets.iter_mut() {
             s.move_forward(expand_selection, word_boundary, &buf.rope, self.file.indentation.visible_len());
         }
 
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
 
     pub fn up(&mut self, expand_selection: bool) {
         let mut buf = self.buffer.clone();
-        for s in &mut buf.carrets.iter_mut() {
+        for s in &mut buf.carets.iter_mut() {
             s.move_up(expand_selection, &buf.rope, self.file.indentation.visible_len());
         }
 
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
     pub fn down(&mut self, expand_selection: bool) {
         let mut buf = self.buffer.clone();
-        for s in &mut buf.carrets.iter_mut() {
+        for s in &mut buf.carets.iter_mut() {
             s.move_down(expand_selection, &buf.rope, self.file.indentation.visible_len());
         }
 
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
     pub fn duplicate_down(&mut self) {
         let tabsize = self.file.indentation.visible_len();
         let mut buf = self.buffer.clone();
-        buf.carrets.sort_unstable();
+        buf.carets.sort_unstable();
 
-        if let Some(c) = buf.carrets.last().and_then(|c| c.duplicate_down(&buf.rope, tabsize)) {
-            buf.carrets.push(c);
+        if let Some(c) = buf.carets.last().and_then(|c| c.duplicate_down(&buf.rope, tabsize)) {
+            buf.carets.push(c);
         }
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
 
     pub fn duplicate_up(&mut self) {
         let tabsize = self.file.indentation.visible_len();
         let mut buf = self.buffer.clone();
-        buf.carrets.sort_unstable();
+        buf.carets.sort_unstable();
 
-        if let Some(c) = buf.carrets.first().and_then(|c| c.duplicate_up(&buf.rope, tabsize)) {
-            buf.carrets.push(c);
+        if let Some(c) = buf.carets.first().and_then(|c| c.duplicate_up(&buf.rope, tabsize)) {
+            buf.carets.push(c);
         }
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
 
     pub fn cancel_selection(&mut self) {
         let mut buf = self.buffer.clone();
-        for c in &mut buf.carrets.iter_mut() {
+        for c in &mut buf.carets.iter_mut() {
             c.cancel_selection();
         }
         self.buffer = buf
     }
 
     pub fn have_selection(&self) -> bool {
-        self.buffer.carrets.iter().any(|c| !c.selection_is_empty())
+        self.buffer.carets.iter().any(|c| !c.selection_is_empty())
     }
 
-    pub fn revert_to_single_carrets(&mut self) {
+    pub fn cancel_mutli_carets(&mut self) {
         let mut buf = self.buffer.clone();
-        buf.carrets.retain(|c| !c.is_clone);
-        buf.carrets.merge();
+        buf.carets.retain(|c| !c.is_clone);
+        buf.carets.merge();
         self.buffer = buf;
     }
 
     pub fn end(&mut self, expand_selection: bool) {
         let tabsize = self.file.indentation.visible_len();
         let mut buf = self.buffer.clone();
-        for s in &mut buf.carrets.iter_mut() {
+        for s in &mut buf.carets.iter_mut() {
             s.move_end(expand_selection, &buf.rope, tabsize);
         }
 
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf;
     }
 
     pub fn home(&mut self, expand_selection: bool) {
         let mut buf = self.buffer.clone();
         let tabsize = self.file.indentation.visible_len();
-        for s in &mut buf.carrets.iter_mut() {
+        for s in &mut buf.carets.iter_mut() {
             s.move_home(expand_selection, &buf.rope, tabsize);
         }
 
-        buf.carrets.merge();
+        buf.carets.merge();
         self.buffer = buf
     }
 
@@ -299,12 +299,12 @@ impl EditStack {
         let mut buf = self.buffer.clone();
         let tabsize = self.file.indentation.visible_len();
 
-        for i in 0..buf.carrets.len() {
-            let r = buf.carrets[i].range();
+        for i in 0..buf.carets.len() {
+            let r = buf.carets[i].range();
             buf.edit(&r, text, tabsize);
-            buf.carrets[i].set_index(r.start + text.len(), true, true, &buf.rope, tabsize);
+            buf.carets[i].set_index(r.start + text.len(), true, true, &buf.rope, tabsize);
         }
-        buf.carrets.merge();
+        buf.carets.merge();
 
         self.push_edit(buf);
     }
@@ -314,20 +314,20 @@ impl EditStack {
         let tabsize = self.file.indentation.visible_len();
 
         let mut did_nothing = true;
-        for i in 0..buf.carrets.len() {
-            if !buf.carrets[i].selection_is_empty() {
+        for i in 0..buf.carets.len() {
+            if !buf.carets[i].selection_is_empty() {
                 // delete all the selection
-                let r = buf.carrets[i].range();
+                let r = buf.carets[i].range();
                 buf.edit(&r, "", tabsize);
-                buf.carrets[i].set_index(r.start, true, true, &buf.rope, tabsize);
+                buf.carets[i].set_index(r.start, true, true, &buf.rope, tabsize);
 
                 did_nothing = false;
-            } else if buf.carrets[i].index > 0.into() {
+            } else if buf.carets[i].index > 0.into() {
                 // delete the preceding grapheme
-                let r = rope_utils::prev_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index).into()
-                    ..buf.carrets[i].index;
+                let r = rope_utils::prev_grapheme_boundary(&buf.rope.slice(..), buf.carets[i].index).into()
+                    ..buf.carets[i].index;
                 buf.edit(&r, "", tabsize);
-                buf.carrets[i].set_index(r.start, true, true, &buf.rope, tabsize);
+                buf.carets[i].set_index(r.start, true, true, &buf.rope, tabsize);
 
                 did_nothing = false;
             } else {
@@ -335,7 +335,7 @@ impl EditStack {
             }
         }
         if !did_nothing {
-            buf.carrets.merge();
+            buf.carets.merge();
             self.push_edit(buf);
         }
     }
@@ -344,18 +344,18 @@ impl EditStack {
         let mut buf = self.buffer.clone();
         let tabsize = self.file.indentation.visible_len();
         let mut did_nothing = true;
-        for i in 0..buf.carrets.len() {
-            if !buf.carrets[i].selection_is_empty() {
-                let r = buf.carrets[i].range();
+        for i in 0..buf.carets.len() {
+            if !buf.carets[i].selection_is_empty() {
+                let r = buf.carets[i].range();
                 buf.edit(&r, "", tabsize);
-                buf.carrets[i].set_index(r.start, true, true, &buf.rope, tabsize);
+                buf.carets[i].set_index(r.start, true, true, &buf.rope, tabsize);
 
                 did_nothing = false;
-            } else if buf.carrets[i].index < buf.rope.len_bytes().into() {
-                let r = buf.carrets[i].index
-                    ..rope_utils::next_grapheme_boundary(&buf.rope.slice(..), buf.carrets[i].index).into();
+            } else if buf.carets[i].index < buf.rope.len_bytes().into() {
+                let r = buf.carets[i].index
+                    ..rope_utils::next_grapheme_boundary(&buf.rope.slice(..), buf.carets[i].index).into();
                 buf.edit(&r, "", tabsize);
-                buf.carrets[i].set_index(r.start, true, true, &buf.rope, tabsize);
+                buf.carets[i].set_index(r.start, true, true, &buf.rope, tabsize);
 
                 did_nothing = false;
             } else {
@@ -363,7 +363,7 @@ impl EditStack {
             }
         }
         if !did_nothing {
-            buf.carrets.merge();
+            buf.carets.merge();
             self.push_edit(buf);
         }
     }
@@ -372,8 +372,8 @@ impl EditStack {
         let mut buf = self.buffer.clone();
         let tabsize = self.file.indentation.visible_len();
 
-        for i in 0..buf.carrets.len() {
-            if let Some(line_range) = buf.carrets[i].selected_lines_range(&buf.rope) {
+        for i in 0..buf.carets.len() {
+            if let Some(line_range) = buf.carets[i].selected_lines_range(&buf.rope) {
                 // TODO: Find a better way to iterate over line of a selection
                 for line_idx in line_range.start().index..line_range.end().index + 1 {
                     let line_start: position::Absolute = buf.rope.line_to_byte(line_idx).into();
@@ -385,20 +385,20 @@ impl EditStack {
                     buf.edit(&r, &text, tabsize);
                 }
             } else {
-                let r = buf.carrets[i].range();
+                let r = buf.carets[i].range();
                 let text = match self.file.indentation {
                     Indentation::Space(n) => {
-                        let start: usize = buf.carrets[i].col().into();
+                        let start: usize = buf.carets[i].col().into();
                         let nb_space = n - start % n;
                         " ".repeat(nb_space).to_owned()
                     }
                     Indentation::Tab(_) => "\t".to_owned(),
                 };
                 buf.edit(&r, &text, tabsize);
-                buf.carrets[i].set_index(r.start + Relative::from(text.len()), true, true, &buf.rope, tabsize);
+                buf.carets[i].set_index(r.start + Relative::from(text.len()), true, true, &buf.rope, tabsize);
             }
         }
-        buf.carrets.merge();
+        buf.carets.merge();
         self.push_edit(buf);
     }
 
@@ -434,13 +434,13 @@ pub enum SelectionLineRange {
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub rope: Rope,
-    pub carrets: Carrets,
+    pub carets: Carets,
     uuid: Uuid,
 }
 
 impl Data for Buffer {
     fn same(&self, other: &Self) -> bool {
-        self.uuid == other.uuid && self.carrets == other.carrets
+        self.uuid == other.uuid && self.carets == other.carets
     }
 }
 
@@ -454,7 +454,7 @@ impl Buffer {
     pub fn new() -> Self {
         Self {
             rope: Rope::new(),
-            carrets: Carrets::new(),
+            carets: Carets::new(),
             uuid: Uuid::new_v4(),
         }
     }
@@ -462,7 +462,7 @@ impl Buffer {
     pub fn from_rope(rope: Rope) -> Self {
         Self {
             rope: rope.clone(),
-            carrets: Carrets::new(),
+            carets: Carets::new(),
             uuid: Uuid::new_v4(),
         }
     }
@@ -474,18 +474,18 @@ impl Buffer {
         self.rope.remove(cr);
         self.rope.insert(insert_index, text);
 
-        for i in 0..self.carrets.len() {
-            self.carrets[i].update_after_delete(range.start, (range.end - range.start).into(), &self.rope, tabsize); // TODO verify this
-            self.carrets[i].update_after_insert(range.start, text.len().into(), &self.rope, tabsize);
+        for i in 0..self.carets.len() {
+            self.carets[i].update_after_delete(range.start, (range.end - range.start).into(), &self.rope, tabsize); // TODO verify this
+            self.carets[i].update_after_insert(range.start, text.len().into(), &self.rope, tabsize);
         }
-        self.carrets.merge();
+        self.carets.merge();
         self.uuid = Uuid::new_v4();
     }
 
     pub fn selected_text(&self, line_feed: LineFeed) -> String {
         let mut s = String::new();
-        let multi = self.carrets.len() > 1;
-        for c in self.carrets.iter() {
+        let multi = self.carets.len() > 1;
+        for c in self.carets.iter() {
             for chuck in self
                 .rope
                 .slice(self.rope.byte_to_char(c.start().index)..self.rope.byte_to_char(c.end().index))

@@ -81,7 +81,7 @@ impl Widget<EditStack> for EditorView {
                 if let Some(text) = event.text() {
                     if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
                         editor.insert(text);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -113,7 +113,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.forward(mods.shift, mods.ctrl);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -124,7 +124,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.backward(mods.shift, mods.ctrl);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -135,7 +135,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.up(mods.shift);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -146,7 +146,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.down(mods.shift);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -159,7 +159,7 @@ impl Widget<EditStack> for EditorView {
                         for _ in 0..self.page_len {
                             editor.up(mods.shift);
                         }
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -172,7 +172,7 @@ impl Widget<EditStack> for EditorView {
                         for _ in 0..self.page_len {
                             editor.down(mods.shift)
                         }
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -183,7 +183,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.end(mods.shift);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -194,7 +194,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.home(mods.shift);
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -203,7 +203,7 @@ impl Widget<EditStack> for EditorView {
                         key_code: KeyCode::Tab, ..
                     } => {
                         editor.tab();
-                        self.put_carret_in_visible_range(ctx, editor);
+                        self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
@@ -212,7 +212,7 @@ impl Widget<EditStack> for EditorView {
                 }
 
                 if HotKey::new(None, KeyCode::Escape).matches(event) {
-                    editor.revert_to_single_carrets();
+                    editor.cancel_mutli_carets();
                     editor.cancel_selection();
                     ctx.request_paint();
                     ctx.set_handled();
@@ -221,14 +221,14 @@ impl Widget<EditStack> for EditorView {
 
                 if HotKey::new(None, KeyCode::Backspace).matches(event) {
                     editor.backspace();
-                    self.put_carret_in_visible_range(ctx, editor);
+                    self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(None, KeyCode::Delete).matches(event) {
                     editor.delete();
-                    self.put_carret_in_visible_range(ctx, editor);
+                    self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -238,7 +238,7 @@ impl Widget<EditStack> for EditorView {
                     || HotKey::new(None, KeyCode::Return).matches(event)
                 {
                     editor.insert(editor.file.linefeed.to_str());
-                    self.put_carret_in_visible_range(ctx, editor);
+                    self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -353,8 +353,8 @@ impl Widget<EditStack> for EditorView {
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
 
-                    editor.move_main_cursor_to(x, y, true);
-                    self.put_carret_in_visible_range(ctx, editor);
+                    editor.move_main_caret_to(x, y, true);
+                    self.put_caret_in_visible_range(ctx, editor);
                 }
                 ctx.request_paint();
                 ctx.set_handled();
@@ -363,9 +363,9 @@ impl Widget<EditStack> for EditorView {
             Event::MouseDown(event) => {
                 if matches!(event.button, MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
-                    editor.revert_to_single_carrets();
-                    // FIXME: Update is not called if the carret position is not modified,
-                    editor.move_main_cursor_to(x, y, event.mods.shift);
+                    editor.cancel_mutli_carets();
+                    // FIXME: Update is not called if the caret position is not modified,
+                    editor.move_main_caret_to(x, y, event.mods.shift);
                     ctx.set_active(true);
                 }
                 ctx.request_focus();
@@ -380,8 +380,8 @@ impl Widget<EditStack> for EditorView {
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
 
-                    editor.move_main_cursor_to(x, y, true);
-                    self.put_carret_in_visible_range(ctx, editor);
+                    editor.move_main_caret_to(x, y, true);
+                    self.put_caret_in_visible_range(ctx, editor);
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
@@ -770,7 +770,7 @@ impl EditorView {
             ctx.render_ctx
                 .draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
 
-            editor.carrets_on_line(position::Line::from(line_idx)).for_each(|c| {
+            editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
                     ctx.render_ctx.stroke(
                         Line::new(
@@ -828,12 +828,12 @@ impl EditorView {
         self.size.width - self.gutter_width(editor)
     }
 
-    fn put_carret_in_visible_range(&mut self, ctx: &mut EventCtx, editor: &EditStack) {
-        if editor.buffer.carrets.len() > 1 {
+    fn put_caret_in_visible_range(&mut self, ctx: &mut EventCtx, editor: &EditStack) {
+        if editor.buffer.carets.len() > 1 {
             return;
         }
-        if let Some(carret) = editor.buffer.carrets.first() {
-            let y = carret.line().index as f64 * self.font_height;
+        if let Some(caret) = editor.buffer.carets.first() {
+            let y = caret.line().index as f64 * self.font_height;
 
             if y > -self.delta_y + self.size.height - self.font_height {
                 self.delta_y = -y + self.size.height - self.font_height;
@@ -844,7 +844,7 @@ impl EditorView {
 
             let mut buf = String::new();
             let mut i = Vec::new();
-            editor.displayable_line(carret.line(), &mut buf, &mut i, &mut Vec::new());
+            editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
             let font = ctx
                 .text()
                 .new_font_by_name(&self.font_name, self.font_size)
@@ -853,7 +853,7 @@ impl EditorView {
 
             let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
 
-            if let Some(hit) = layout.hit_test_text_position(i[carret.relative().index].index) {
+            if let Some(hit) = layout.hit_test_text_position(i[caret.relative().index].index) {
                 let x = hit.point.x;
                 if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
                     self.delta_x = -x + self.editor_width(editor) - self.font_advance;
