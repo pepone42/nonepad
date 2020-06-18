@@ -41,7 +41,7 @@ impl EditStack {
     }
 
     pub fn move_main_caret_to(&mut self, rel: usize, line: usize, expand_selection: bool) {
-        let line = position::Line::from(line); // position::Point::new(col.into(), line.into(), &self.buffer.rope, self.file.indentation.visible_len()).absolute(&self.buffer.rope, self.file.indentation.visible_len());
+        let line = position::Line::from(line);
         let abs = line.start(&self.buffer.rope) + position::Relative::from(rel);
         self.buffer.carets[0].set_index(
             abs,
@@ -176,14 +176,14 @@ impl EditStack {
         &self,
         line: Line,
         out: &mut String,
-        indices: &mut Vec<Relative>,
+        rel_to_byte: &mut Vec<Relative>,
         byte_to_rel: &mut Vec<Relative>,
     ) {
         line.displayable_string(
             &self.buffer.rope,
             self.file.indentation.visible_len(),
             out,
-            indices,
+            rel_to_byte,
             byte_to_rel,
         );
     }
