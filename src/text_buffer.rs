@@ -67,8 +67,8 @@ impl EditStack {
         if self.buffer.carets.len() == 1 {
             format!(
                 "Ln {}, Col {}",
-                self.buffer.carets[0].line().index,
-                self.buffer.carets[0].col().index
+                self.buffer.carets[0].line().index + 1 ,
+                self.buffer.carets[0].col().index + 1 
             )
         } else {
             format!("{} selections", self.buffer.carets.len())
