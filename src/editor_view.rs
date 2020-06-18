@@ -5,12 +5,12 @@ use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
 use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, HotKey, Key, KeyCode, KeyEvent,
-    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application, ClipboardFormat,
+    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application, ClipboardFormat, Target,
 };
 
 use crate::dialog;
 use crate::position;
-use crate::text_buffer::{EditStack, SelectionLineRange};
+use crate::{bottom_panel, text_buffer::{EditStack, SelectionLineRange}};
 use position::Relative;
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
@@ -328,6 +328,13 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
                     let options = FileDialogOptions::new().show_hidden();
                     ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None);
+
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyH).matches(event) {
+                    ctx.submit_command(Command::new(bottom_panel::SHOW_SEARCH_PANEL, ()), Target::Global);
 
                     ctx.request_paint();
                     ctx.set_handled();
