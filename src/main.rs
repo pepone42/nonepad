@@ -1,6 +1,7 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
 #![windows_subsystem = "windows"]
 
+mod bottom_panel;
 mod caret;
 mod dialog;
 mod editor_view;
@@ -13,11 +14,12 @@ use std::path::Path;
 
 use druid::widget::{Flex, Label, MainAxisAlignment};
 use druid::{
-    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
-    WidgetExt, WindowDesc,
+    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event, Lens, LocalizedString, Target,
+    Widget, WidgetExt, WindowDesc,
 };
 
 use crate::editor_view::EditorView;
+use bottom_panel::BottonPanelState;
 use text_buffer::EditStack;
 
 #[derive(Debug)]
@@ -29,10 +31,13 @@ impl AppDelegate<MainWindowState> for Delegate {
         &mut self,
         _ctx: &mut DelegateCtx,
         _target: Target,
-        _cmd: &Command,
-        _data: &mut MainWindowState,
+        cmd: &Command,
+        data: &mut MainWindowState,
         _env: &Env,
     ) -> bool {
+        if cmd.is(bottom_panel::SHOW_SEARCH_PANEL) {
+            data.bottom_panel.current = 0x1;
+        }
         true
     }
     fn event(
@@ -67,6 +72,7 @@ impl AppDelegate<MainWindowState> for Delegate {
 struct MainWindowState {
     editor: EditStack,
     status: String,
+    bottom_panel: BottonPanelState,
 }
 
 impl Default for MainWindowState {
@@ -74,6 +80,7 @@ impl Default for MainWindowState {
         MainWindowState {
             editor: EditStack::default(),
             status: "Untilted".to_owned(),
+            bottom_panel: BottonPanelState::default(),
         }
     }
 }
@@ -92,6 +99,7 @@ impl MainWindowState {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
+            bottom_panel: BottonPanelState::default(),
         })
     }
 }
@@ -110,8 +118,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .to_string(),
             if data.editor.is_dirty() { "*" } else { "" }
         )
-    })
-    .with_text_size(12.0);
+    });
     let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(
             "{}    {}    {}    {}",
@@ -120,13 +127,13 @@ fn build_ui() -> impl Widget<MainWindowState> {
             data.editor.file.encoding.name(),
             data.editor.file.linefeed
         )
-    })
-    .with_text_size(12.0);
+    });
     let edit = EditorView::default().lens(MainWindowState::editor);
     //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0);
     Flex::column()
         .with_flex_child(edit.padding(2.0), 1.0)
         .must_fill_main_axis(true)
+        .with_child(bottom_panel::build().lens(MainWindowState::bottom_panel))
         .with_child(
             Flex::row()
                 .with_child(label_left.padding(2.0))
@@ -135,6 +142,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
         )
         .main_axis_alignment(MainAxisAlignment::Center)
+        
 }
 
 fn main() -> anyhow::Result<()> {
@@ -148,6 +156,7 @@ fn main() -> anyhow::Result<()> {
     AppLauncher::with_window(win)
         .delegate(Delegate { disabled: false })
         .configure_env(|env, _| {
+            env.set(druid::theme::TEXT_SIZE_NORMAL, 12.0);
             env.set(crate::editor_view::FONT_SIZE, 12.0);
             env.set(crate::editor_view::FONT_NAME, "Consolas");
 
