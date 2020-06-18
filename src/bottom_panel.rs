@@ -23,20 +23,19 @@ pub fn build() -> impl Widget<BottonPanelState> {
     view_switcher
 }
 
-
 struct EmptyWidget;
 
-impl Widget<BottonPanelState> for EmptyWidget {
-    fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut BottonPanelState, env: &druid::Env) {
+impl<T> Widget<T> for EmptyWidget {
+    fn event(&mut self, _ctx: &mut druid::EventCtx, _event: &druid::Event, _data: &mut T, _env: &druid::Env) {
     }
-    fn lifecycle(&mut self, ctx: &mut druid::LifeCycleCtx, event: &druid::LifeCycle, data: &BottonPanelState, env: &druid::Env) {
+    fn lifecycle(&mut self, _ctx: &mut druid::LifeCycleCtx, _event: &druid::LifeCycle, _data: &T, _env: &druid::Env) {
     }
-    fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &BottonPanelState, data: &BottonPanelState, env: &druid::Env) {
+    fn update(&mut self, _ctx: &mut druid::UpdateCtx, _old_data: &T, _data: &T, _env: &druid::Env) {
     }
-    fn layout(&mut self, ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, data: &BottonPanelState, env: &druid::Env) -> druid::Size {
+    fn layout(&mut self, _ctx: &mut druid::LayoutCtx, _bc: &druid::BoxConstraints, _data: &T, _env: &druid::Env) -> druid::Size {
         druid::Size::ZERO
     }
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &BottonPanelState, env: &druid::Env) {
+    fn paint(&mut self, _ctx: &mut druid::PaintCtx, _data: &T, _env: &druid::Env) {
     }
     
 }
