@@ -251,7 +251,7 @@ impl Widget<EditStack> for EditorView {
                         let data = clipboard.get_format(format).expect("I promise not to unwrap in production");
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
                     }
-
+                    self.put_caret_in_visible_range(ctx,editor);
                     // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
                     // get_format correctly close the slipboard
                     // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
@@ -263,7 +263,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyC).matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
-
+                    
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -283,6 +283,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
                     editor.undo();
+                    self.put_caret_in_visible_range(ctx,editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -333,7 +334,7 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyH).matches(event) {
+                if HotKey::new(SysMods::Cmd, KeyCode::KeyF).matches(event) {
                     ctx.submit_command(Command::new(bottom_panel::SHOW_SEARCH_PANEL, ()), Target::Global);
 
                     ctx.request_paint();
