@@ -33,16 +33,10 @@ impl AppDelegate<MainWindowState> for Delegate {
         &mut self,
         _ctx: &mut DelegateCtx,
         _target: Target,
-        cmd: &Command,
-        data: &mut MainWindowState,
+        _cmd: &Command,
+        _data: &mut MainWindowState,
         _env: &Env,
     ) -> bool {
-        if cmd.is(commands::SHOW_SEARCH_PANEL) {
-            data.bottom_panel.current = 0x1;
-        }
-        if cmd.is(commands::CLOSE_BOTTOM_PANEL) {
-            data.bottom_panel.current = 0x0;
-        }
         true
     }
     fn event(

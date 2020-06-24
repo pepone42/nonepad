@@ -35,27 +35,21 @@ pub fn build() -> impl Widget<BottonPanelState> {
     view_switcher.controller(BottomPanel {})
 }
 
-impl<T: Data, W: Widget<T>> Controller<T, W> for BottomPanel {
-    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
-        if matches!(event,Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL)) {
-            ctx.submit_command(Command::new(commands::GIVE_FOCUS, ()), crate::editor_view::WIDGET_ID);
-
-            dbg!("toto");
+impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPanel {
+    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut BottonPanelState, env: &Env) {
+        match event {
+            Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL) => {
+                ctx.submit_command(Command::new(commands::GIVE_FOCUS, ()), crate::editor_view::WIDGET_ID);
+                data.current = PANEL_CLOSED;
+                return;
+            }
+            Event::Command(cmd) if cmd.is(commands::SHOW_SEARCH_PANEL) => {
+                data.current = PANEL_SEARCH;
+                return;
+            }
+            _ => (),
         }
         child.event(ctx, event, data, env)
-    }
-    fn lifecycle(
-        &mut self,
-        child: &mut W,
-        ctx: &mut druid::LifeCycleCtx,
-        event: &druid::LifeCycle,
-        data: &T,
-        env: &Env,
-    ) {
-        child.lifecycle(ctx, event, data, env)
-    }
-    fn update(&mut self, child: &mut W, ctx: &mut druid::UpdateCtx, old_data: &T, data: &T, env: &Env) {
-        child.update(ctx, old_data, data, env)
     }
 }
 
@@ -82,4 +76,3 @@ fn build_search_panel() -> impl Widget<SearchState> {
                 .on_click(|ctx, _, _| (ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, ()), None))),
         )
 }
-
