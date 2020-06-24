@@ -1,7 +1,6 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
 #![windows_subsystem = "windows"]
 
-mod bottom_panel;
 mod caret;
 mod dialog;
 mod editor_view;
@@ -9,12 +8,15 @@ mod file;
 mod position;
 mod rope_utils;
 mod text_buffer;
+mod commands;
+mod widgets;
+mod bottom_panel;
 
 use std::path::Path;
 
 use druid::widget::{Flex, Label, MainAxisAlignment};
 use druid::{
-    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Event, Lens, LocalizedString, Target,
+    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target,
     Widget, WidgetExt, WindowDesc,
 };
 
@@ -35,19 +37,26 @@ impl AppDelegate<MainWindowState> for Delegate {
         data: &mut MainWindowState,
         _env: &Env,
     ) -> bool {
-        if cmd.is(bottom_panel::SHOW_SEARCH_PANEL) {
+        if cmd.is(commands::SHOW_SEARCH_PANEL) {
             data.bottom_panel.current = 0x1;
+        }
+        if cmd.is(commands::CLOSE_BOTTOM_PANEL) {
+            data.bottom_panel.current = 0x0;
         }
         true
     }
     fn event(
         &mut self,
-        _ctx: &mut druid::DelegateCtx,
+        ctx: &mut druid::DelegateCtx,
         _window_id: druid::WindowId,
         event: druid::Event,
-        _data: &mut MainWindowState,
+        data: &mut MainWindowState,
         _env: &Env,
     ) -> Option<druid::Event> {
+        if matches!(event, druid::Event::KeyDown(druid::KeyEvent{key_code: druid::KeyCode::Escape,..})) && data.bottom_panel.is_open() {
+            ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, ()), None);
+            return None;
+        }
         Some(event)
     }
     fn window_added(
@@ -128,7 +137,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
             data.editor.file.linefeed
         )
     });
-    let edit = EditorView::default().lens(MainWindowState::editor);
+    let edit = EditorView::default().lens(MainWindowState::editor).with_id(crate::editor_view::WIDGET_ID);
     //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0);
     Flex::column()
         .with_flex_child(edit.padding(2.0), 1.0)

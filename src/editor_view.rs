@@ -5,12 +5,12 @@ use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
 use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, HotKey, Key, KeyCode, KeyEvent,
-    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application, ClipboardFormat, Target,
+    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application, ClipboardFormat, Target, WidgetId,
 };
 
 use crate::dialog;
 use crate::position;
-use crate::{bottom_panel, text_buffer::{EditStack, SelectionLineRange}};
+use crate::text_buffer::{EditStack, SelectionLineRange};
 use position::Relative;
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
@@ -19,6 +19,8 @@ pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
 pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
 pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
 pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
+
+pub const WIDGET_ID :WidgetId = WidgetId::reserved(0xED17);
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -49,7 +51,7 @@ impl SelectionPath {
         }
     }
 }
-
+#[derive(Debug)]
 pub struct EditorView {
     //editor: EditStack,
     delta_y: f64,
@@ -335,7 +337,7 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyF).matches(event) {
-                    ctx.submit_command(Command::new(bottom_panel::SHOW_SEARCH_PANEL, ()), Target::Global);
+                    ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, ()), Target::Global);
 
                     ctx.request_paint();
                     ctx.set_handled();
@@ -417,6 +419,12 @@ impl Widget<EditStack> for EditorView {
                     }
                 }
             }
+            Event::Command(cmd) if cmd.is(crate::commands::REQUEST_NEXT_SEARCH) => {
+                if let Some(data) = cmd.get(crate::commands::REQUEST_NEXT_SEARCH) {
+                    dbg!(data);
+                }
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
             _ => (),
         }
     }
@@ -437,7 +445,8 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
+    }
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
