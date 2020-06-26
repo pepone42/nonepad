@@ -52,6 +52,50 @@ impl EditStack {
         );
     }
 
+    pub fn main_caret(&self) -> &Caret {
+        self.buffer
+            .carets
+            .iter()
+            .filter(|c| c.is_clone == false)
+            .nth(0)
+            .expect("No main cursor found!")
+    }
+    pub fn main_caret_mut(&mut self) -> &mut Caret {
+        self.buffer
+            .carets
+            .iter_mut()
+            .filter(|c| c.is_clone == false)
+            .nth(0)
+            .expect("No main cursor found!")
+    }
+
+    pub fn search_next(&mut self, s: &str) {
+        let start_index = self.main_caret().index;
+        let mut index = start_index;
+        let slice = self
+            .buffer
+            .rope
+            .slice(self.buffer.rope.byte_to_char(start_index.index)..);
+        dbg!(start_index);
+        match slice.lines().find_map(|l| match l.to_string().find(s) {
+            Some(i) => return Some(index + i),
+            None => {index += l.len_bytes(); return None;}
+        }) {
+            Some(i) => {
+                dbg!(i);
+                self.cancel_mutli_carets();
+                self.buffer.carets[0].set_index(
+                    index+s.len(),
+                    true,
+                    true,
+                    &self.buffer.rope,
+                    self.file.indentation.visible_len(),
+                );
+            }
+            None => {}
+        }
+    }
+
     pub fn selected_text(&self) -> String {
         self.buffer.selected_text(self.file.linefeed)
     }
@@ -59,16 +103,28 @@ impl EditStack {
     pub fn select_all(&mut self) {
         self.cancel_mutli_carets();
         self.cancel_selection();
-        self.buffer.carets[0].set_index(0.into(),true,true,&self.buffer.rope,self.file.indentation.visible_len());
-        self.buffer.carets[0].set_index(self.buffer.rope.len_bytes().into(),false,true,&self.buffer.rope,self.file.indentation.visible_len());
+        self.buffer.carets[0].set_index(
+            0.into(),
+            true,
+            true,
+            &self.buffer.rope,
+            self.file.indentation.visible_len(),
+        );
+        self.buffer.carets[0].set_index(
+            self.buffer.rope.len_bytes().into(),
+            false,
+            true,
+            &self.buffer.rope,
+            self.file.indentation.visible_len(),
+        );
     }
 
     pub fn caret_display_info(&self) -> String {
         if self.buffer.carets.len() == 1 {
             format!(
                 "Ln {}, Col {}",
-                self.buffer.carets[0].line().index + 1 ,
-                self.buffer.carets[0].col().index + 1 
+                self.buffer.carets[0].line().index + 1,
+                self.buffer.carets[0].col().index + 1
             )
         } else {
             format!("{} selections", self.buffer.carets.len())
@@ -195,7 +251,12 @@ impl EditStack {
     pub fn backward(&mut self, expand_selection: bool, word_boundary: bool) {
         let mut buf = self.buffer.clone();
         for s in &mut buf.carets.iter_mut() {
-            s.move_backward(expand_selection, word_boundary, &self.buffer.rope, self.file.indentation.visible_len());
+            s.move_backward(
+                expand_selection,
+                word_boundary,
+                &self.buffer.rope,
+                self.file.indentation.visible_len(),
+            );
         }
 
         buf.carets.merge();
@@ -205,7 +266,12 @@ impl EditStack {
     pub fn forward(&mut self, expand_selection: bool, word_boundary: bool) {
         let mut buf = self.buffer.clone();
         for s in &mut buf.carets.iter_mut() {
-            s.move_forward(expand_selection, word_boundary, &buf.rope, self.file.indentation.visible_len());
+            s.move_forward(
+                expand_selection,
+                word_boundary,
+                &buf.rope,
+                self.file.indentation.visible_len(),
+            );
         }
 
         buf.carets.merge();
@@ -420,7 +486,6 @@ impl EditStack {
     pub fn char_to_absolute(&self, index: usize) -> Absolute {
         self.buffer.rope.char_to_byte(index).into()
     }
-
 }
 
 #[derive(Debug, Clone)]

@@ -421,7 +421,7 @@ impl Widget<EditStack> for EditorView {
             }
             Event::Command(cmd) if cmd.is(crate::commands::REQUEST_NEXT_SEARCH) => {
                 if let Some(data) = cmd.get(crate::commands::REQUEST_NEXT_SEARCH) {
-                    dbg!(data);
+                    editor.search_next(data);
                 }
             }
             Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
