@@ -422,6 +422,7 @@ impl Widget<EditStack> for EditorView {
             Event::Command(cmd) if cmd.is(crate::commands::REQUEST_NEXT_SEARCH) => {
                 if let Some(data) = cmd.get(crate::commands::REQUEST_NEXT_SEARCH) {
                     editor.search_next(data);
+                    self.put_caret_in_visible_range(ctx, editor);
                 }
             }
             Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),

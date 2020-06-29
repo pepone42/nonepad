@@ -69,30 +69,43 @@ impl EditStack {
             .expect("No main cursor found!")
     }
 
-    pub fn search_next(&mut self, s: &str) {
-        let start_index = self.main_caret().index;
-        let mut index = start_index;
+    fn search_next_in_range(&self, s: &str, r: Range<Absolute>) -> Option<Absolute> {
+        let mut index = r.start;
         let slice = self
             .buffer
             .rope
-            .slice(self.buffer.rope.byte_to_char(start_index.index)..);
-        dbg!(start_index);
-        match slice.lines().find_map(|l| match l.to_string().find(s) {
+            .slice(self.buffer.rope.byte_to_char(index.index)..self.buffer.rope.byte_to_char(r.end.index));
+        slice.lines().find_map(|l| match l.to_string().find(s) {
             Some(i) => return Some(index + i),
-            None => {index += l.len_bytes(); return None;}
-        }) {
-            Some(i) => {
-                dbg!(i);
-                self.cancel_mutli_carets();
-                self.buffer.carets[0].set_index(
-                    index+s.len(),
-                    true,
-                    true,
-                    &self.buffer.rope,
-                    self.file.indentation.visible_len(),
-                );
+            None => {
+                index += l.len_bytes();
+                return None;
             }
-            None => {}
+        })
+    }
+
+    pub fn search_next(&mut self, s: &str) {
+        let start_index = self.main_caret().index;
+        dbg!(start_index);
+        let i = self
+            .search_next_in_range(s, start_index..self.buffer.len())
+            .or(self.search_next_in_range(s, 0.into()..start_index));
+        if let Some(i) = i {
+            self.cancel_mutli_carets();
+            self.buffer.carets[0].set_index(
+                i,
+                true,
+                true,
+                &self.buffer.rope,
+                self.file.indentation.visible_len(),
+            );
+            self.buffer.carets[0].set_index(
+                i + s.len(),
+                false,
+                true,
+                &self.buffer.rope,
+                self.file.indentation.visible_len(),
+            );
         }
     }
 
@@ -545,6 +558,10 @@ impl Buffer {
         }
         self.carets.merge();
         self.uuid = Uuid::new_v4();
+    }
+
+    pub fn len(&self) -> Absolute {
+        self.rope.len_bytes().into()
     }
 
     pub fn selected_text(&self, line_feed: LineFeed) -> String {
