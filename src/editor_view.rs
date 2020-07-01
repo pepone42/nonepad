@@ -4,14 +4,14 @@ use std::path::Path;
 use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
 use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
-    Affine, BoxConstraints, Color, Command, Env, Event, EventCtx, FileDialogOptions, HotKey, Key, KeyCode, KeyEvent,
-    LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, Application, ClipboardFormat, Target, WidgetId,
+    Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
+    HotKey, Key, KeyCode, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
+    UpdateCtx, Widget, WidgetId,
 };
 
 use crate::dialog;
-use crate::position;
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use position::Relative;
+use crate::text_buffer::position;
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
 pub const FONT_NAME: Key<&str> = Key::new("nonepad.editor.font_name");
@@ -20,7 +20,7 @@ pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
 pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
 pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
 
-pub const WIDGET_ID :WidgetId = WidgetId::reserved(0xED17);
+pub const WIDGET_ID: WidgetId = WidgetId::reserved(0xED17);
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -246,14 +246,16 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyV).matches(event) {
-                    let clipboard =  Application::global().clipboard();
+                    let clipboard = Application::global().clipboard();
                     let supported_types = &[ClipboardFormat::TEXT];
                     let best_available_type = clipboard.preferred_format(supported_types);
                     if let Some(format) = best_available_type {
-                        let data = clipboard.get_format(format).expect("I promise not to unwrap in production");
+                        let data = clipboard
+                            .get_format(format)
+                            .expect("I promise not to unwrap in production");
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
                     }
-                    self.put_caret_in_visible_range(ctx,editor);
+                    self.put_caret_in_visible_range(ctx, editor);
                     // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
                     // get_format correctly close the slipboard
                     // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
@@ -265,7 +267,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyC).matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
-                    
+
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -285,7 +287,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
                     editor.undo();
-                    self.put_caret_in_visible_range(ctx,editor);
+                    self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -345,15 +347,13 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
-                if editor.buffer.rope.len_lines() as f64 * self.font_height >= ctx.size().height {
+                if editor.len_lines() as f64 * self.font_height >= ctx.size().height {
                     self.delta_y -= event.wheel_delta.y;
                     if self.delta_y > 0. {
                         self.delta_y = 0.;
                     }
-                    if -self.delta_y > editor.buffer.rope.len_lines() as f64 * self.font_height - 4. * self.font_height
-                    {
-                        self.delta_y =
-                            -((editor.buffer.rope.len_lines() as f64) * self.font_height - 4. * self.font_height)
+                    if -self.delta_y > editor.len_lines() as f64 * self.font_height - 4. * self.font_height {
+                        self.delta_y = -((editor.len_lines() as f64) * self.font_height - 4. * self.font_height)
                     }
                 }
                 self.delta_x -= event.wheel_delta.x;
@@ -362,8 +362,8 @@ impl Widget<EditStack> for EditorView {
                 }
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
-
-                    editor.move_main_caret_to(x, y, true);
+                    let p = editor.point(x, y);
+                    editor.move_main_caret_to(p, true);
                     self.put_caret_in_visible_range(ctx, editor);
                 }
                 ctx.request_paint();
@@ -375,7 +375,8 @@ impl Widget<EditStack> for EditorView {
                     let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
                     editor.cancel_mutli_carets();
                     // FIXME: Update is not called if the caret position is not modified,
-                    editor.move_main_caret_to(x, y, event.mods.shift);
+                    let p = editor.point(x, y);
+                    editor.move_main_caret_to(p, event.mods.shift);
                     ctx.set_active(true);
                 }
                 ctx.request_focus();
@@ -389,8 +390,8 @@ impl Widget<EditStack> for EditorView {
             Event::MouseMove(event) => {
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
-
-                    editor.move_main_caret_to(x, y, true);
+                    let p = editor.point(x, y);
+                    editor.move_main_caret_to(p, true);
                     self.put_caret_in_visible_range(ctx, editor);
                 }
             }
@@ -446,8 +447,7 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
-    }
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
@@ -731,17 +731,17 @@ impl EditorView {
                     SelectionLineRange::RangeFrom(r) => {
                         current_path.last_x = self.add_range_from_selection(
                             dy,
-                            indices[r.start]..Relative::from(line.len() - 1),
+                            indices[r.start]..position::Relative::from(line.len() - 1),
                             &layout,
                             &mut current_path,
                         )
                     }
                     SelectionLineRange::RangeTo(r) => {
-                        self.add_range_to_selection(dy, Relative::from(0)..indices[r.end], &layout, &mut current_path)
+                        self.add_range_to_selection(dy, position::Relative::from(0)..indices[r.end], &layout, &mut current_path)
                     }
                     SelectionLineRange::RangeFull => self.add_range_full_selection(
                         dy,
-                        Relative::from(0)..Relative::from(line.len() - 1),
+                        position::Relative::from(0)..position::Relative::from(line.len() - 1),
                         &layout,
                         &mut current_path,
                     ),
@@ -819,11 +819,11 @@ impl EditorView {
         }
         let mut line = (y / self.font_height) as usize;
         if line >= editor.len_lines() {
-            line = editor.len_lines()-1;
+            line = editor.len_lines() - 1;
         }
         let mut buf = String::new();
         let mut i = Vec::new();
-        editor.displayable_line(line.into(), &mut buf,&mut Vec::new(), &mut i);
+        editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
         let font = ctx
             .text()
             .new_font_by_name(&self.font_name, self.font_size)
@@ -831,8 +831,7 @@ impl EditorView {
             .unwrap();
 
         let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
-        let rel = i[layout.hit_test_point((x,0.0).into()).metrics.text_position].index;
-
+        let rel = i[layout.hit_test_point((x, 0.0).into()).metrics.text_position].index;
 
         (rel, line)
     }
@@ -847,38 +846,37 @@ impl EditorView {
     }
 
     fn put_caret_in_visible_range(&mut self, ctx: &mut EventCtx, editor: &EditStack) {
-        if editor.buffer.carets.len() > 1 {
+        if editor.has_many_carets() {
             return;
         }
-        if let Some(caret) = editor.buffer.carets.first() {
-            let y = caret.line().index as f64 * self.font_height;
+        let caret = editor.main_caret();
+        let y = caret.line().index as f64 * self.font_height;
 
-            if y > -self.delta_y + self.size.height - self.font_height {
-                self.delta_y = -y + self.size.height - self.font_height;
+        if y > -self.delta_y + self.size.height - self.font_height {
+            self.delta_y = -y + self.size.height - self.font_height;
+        }
+        if y < -self.delta_y {
+            self.delta_y = -y;
+        }
+
+        let mut buf = String::new();
+        let mut i = Vec::new();
+        editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
+        let font = ctx
+            .text()
+            .new_font_by_name(&self.font_name, self.font_size)
+            .build()
+            .unwrap();
+
+        let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
+
+        if let Some(hit) = layout.hit_test_text_position(i[caret.relative().index].index) {
+            let x = hit.point.x;
+            if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
+                self.delta_x = -x + self.editor_width(editor) - self.font_advance;
             }
-            if y < -self.delta_y {
-                self.delta_y = -y;
-            }
-
-            let mut buf = String::new();
-            let mut i = Vec::new();
-            editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
-            let font = ctx
-                .text()
-                .new_font_by_name(&self.font_name, self.font_size)
-                .build()
-                .unwrap();
-
-            let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
-
-            if let Some(hit) = layout.hit_test_text_position(i[caret.relative().index].index) {
-                let x = hit.point.x;
-                if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
-                    self.delta_x = -x + self.editor_width(editor) - self.font_advance;
-                }
-                if x < -self.delta_x {
-                    self.delta_x = -x;
-                }
+            if x < -self.delta_x {
+                self.delta_x = -x;
             }
         }
     }

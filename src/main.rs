@@ -1,23 +1,19 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
 #![windows_subsystem = "windows"]
 
-mod caret;
+mod bottom_panel;
+mod commands;
 mod dialog;
 mod editor_view;
-mod file;
-mod position;
-mod rope_utils;
 mod text_buffer;
-mod commands;
 mod widgets;
-mod bottom_panel;
 
 use std::path::Path;
 
 use druid::widget::{Flex, Label, MainAxisAlignment};
 use druid::{
-    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target,
-    Widget, WidgetExt, WindowDesc,
+    piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
+    WidgetExt, WindowDesc,
 };
 
 use crate::editor_view::EditorView;
@@ -47,7 +43,14 @@ impl AppDelegate<MainWindowState> for Delegate {
         data: &mut MainWindowState,
         _env: &Env,
     ) -> Option<druid::Event> {
-        if matches!(event, druid::Event::KeyDown(druid::KeyEvent{key_code: druid::KeyCode::Escape,..})) && data.bottom_panel.is_open() {
+        if matches!(
+            event,
+            druid::Event::KeyDown(druid::KeyEvent {
+                key_code: druid::KeyCode::Escape,
+                ..
+            })
+        ) && data.bottom_panel.is_open()
+        {
             ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, ()), None);
             return None;
         }
@@ -131,7 +134,9 @@ fn build_ui() -> impl Widget<MainWindowState> {
             data.editor.file.linefeed
         )
     });
-    let edit = EditorView::default().lens(MainWindowState::editor).with_id(crate::editor_view::WIDGET_ID);
+    let edit = EditorView::default()
+        .lens(MainWindowState::editor)
+        .with_id(crate::editor_view::WIDGET_ID);
     //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0);
     Flex::column()
         .with_flex_child(edit.padding(2.0), 1.0)
@@ -145,7 +150,6 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
         )
         .main_axis_alignment(MainAxisAlignment::Center)
-        
 }
 
 fn main() -> anyhow::Result<()> {

@@ -1,4 +1,7 @@
-use druid::{widget::{Controller, ControllerHost}, Data, EventCtx, Env, Event, KeyEvent, Widget, KeyCode, Command};
+use druid::{
+    widget::{Controller, ControllerHost},
+    Command, Data, Env, Event, EventCtx, KeyCode, KeyEvent, Widget,
+};
 
 pub struct OnEnter<T> {
     action: Box<dyn Fn(&mut EventCtx, &mut T, &Env)>,
@@ -34,7 +37,7 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for OnEnter<T> {
 pub struct TakeFocus;
 impl TakeFocus {
     pub fn new() -> Self {
-        TakeFocus{}
+        TakeFocus {}
     }
 }
 impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
@@ -59,7 +62,6 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
         child.lifecycle(ctx, event, data, env)
     }
 }
-
 
 pub trait Extension<T: Data>: Widget<T> + Sized + 'static {
     fn on_enter(self, f: impl Fn(&mut EventCtx, &mut T, &Env) + 'static) -> ControllerHost<Self, OnEnter<T>> {
