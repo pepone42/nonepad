@@ -1,5 +1,5 @@
-use crate::position::{Absolute, Column, Line, Point, Position, Relative};
-use crate::rope_utils::*;
+use super::position::{Absolute, Column, Line, Point, Position, Relative};
+use super::rope_utils::*;
 use druid::Data;
 use ropey::Rope;
 

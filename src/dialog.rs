@@ -1,5 +1,3 @@
-
-
 /// Icons to display on message dialog.
 #[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]

@@ -1,4 +1,3 @@
-
 use druid::Selector;
 
 pub const SHOW_SEARCH_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.show_search");
