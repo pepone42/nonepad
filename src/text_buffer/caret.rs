@@ -1,5 +1,5 @@
 use super::position::{Absolute, Column, Line, Point, Position, Relative};
-use super::rope_utils::*;
+use super::{buffer::Buffer, rope_utils::*};
 use druid::Data;
 use ropey::Rope;
 
@@ -105,10 +105,10 @@ impl Caret {
             is_clone: false,
         }
     }
-    fn from_point(p: Point, rope: &Rope, tabsize: usize) -> Self {
+    fn from_point(p: Point, buffer: &Buffer) -> Self {
         Self {
-            index: p.absolute(rope, tabsize),
-            selection: p.absolute(rope, tabsize),
+            index: p.absolute(buffer),
+            selection: p.absolute(buffer),
             point: p,
             sticky_col: p.col,
             is_clone: false,
@@ -165,19 +165,19 @@ impl Caret {
         self.range().end
     }
 
-    pub fn start_line(&self, rope: &Rope) -> Line {
-        self.start().line(rope)
+    pub fn start_line(&self, buffer: &Buffer) -> Line {
+        self.start().line(buffer)
     }
 
-    pub fn end_line(&self, rope: &Rope) -> Line {
-        self.end().line(rope)
+    pub fn end_line(&self, buffer: &Buffer) -> Line {
+        self.end().line(buffer)
     }
 
-    pub fn selected_lines_range(&self, rope: &Rope) -> Option<RangeInclusive<Line>> {
+    pub fn selected_lines_range(&self, buffer: &Buffer) -> Option<RangeInclusive<Line>> {
         if self.selection_is_empty() {
             None
         } else {
-            Some(self.start_line(rope)..=self.end_line(rope))
+            Some(self.start_line(buffer)..=self.end_line(buffer))
         }
     }
 
@@ -198,50 +198,49 @@ impl Caret {
         index: Absolute,
         reset_selection: bool,
         reset_sticky_col: bool,
-        rope: &Rope,
-        tabsize: usize,
+        buffer: &Buffer
     ) {
         self.index = index;
         if reset_selection {
             self.selection = index;
         }
-        self.point = self.index.point(rope, tabsize);
+        self.point = self.index.point(buffer);
         if reset_sticky_col {
             self.sticky_col = self.point.col;
         }
     }
 
-    pub fn move_up(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let pos = Point::new(self.sticky_col, self.line(), rope, tabsize).up(rope, tabsize);
-        self.set_index(pos.absolute(rope, tabsize), !expand_selection, false, rope, tabsize);
+    pub fn move_up(&mut self, expand_selection: bool, buffer: &Buffer) {
+        let pos = Point::new(self.sticky_col, self.line(), buffer).up(buffer);
+        self.set_index(pos.absolute(buffer), !expand_selection, false, buffer);
     }
 
-    pub fn move_down(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let pos = Point::new(self.sticky_col, self.line(), rope, tabsize).down(rope, tabsize);
-        self.set_index(pos.absolute(rope, tabsize), !expand_selection, false, rope, tabsize);
+    pub fn move_down(&mut self, expand_selection: bool, buffer: &Buffer) {
+        let pos = Point::new(self.sticky_col, self.line(), buffer).down(buffer);
+        self.set_index(pos.absolute(buffer), !expand_selection, false, buffer);
     }
 
-    pub fn move_backward(&mut self, expand_selection: bool, word_boundary: bool, rope: &Rope, tabsize: usize) {
+    pub fn move_backward(&mut self, expand_selection: bool, word_boundary: bool, buffer: &Buffer) {
         let index = if word_boundary {
-            prev_word_boundary(&rope.slice(..), self.index)
+            prev_word_boundary(&buffer.slice(..), self.index)
         } else {
-            prev_grapheme_boundary(&rope.slice(..), self.index)
+            prev_grapheme_boundary(&buffer.slice(..), self.index)
         };
-        self.set_index(Absolute::from(index), !expand_selection, true, rope, tabsize);
+        self.set_index(Absolute::from(index), !expand_selection, true, buffer);
     }
 
-    pub fn move_forward(&mut self, expand_selection: bool, word_boundary: bool, rope: &Rope, tabsize: usize) {
+    pub fn move_forward(&mut self, expand_selection: bool, word_boundary: bool, buffer: &Buffer) {
         let index = if word_boundary {
-            next_word_boundary(&rope.slice(..), self.index)
+            next_word_boundary(&buffer.slice(..), self.index)
         } else {
-            next_grapheme_boundary(&rope.slice(..), self.index)
+            next_grapheme_boundary(&buffer.slice(..), self.index)
         };
-        self.set_index(Absolute::from(index), !expand_selection, true, rope, tabsize);
+        self.set_index(Absolute::from(index), !expand_selection, true, buffer);
     }
 
-    pub fn duplicate_down(&self, rope: &Rope, tabsize: usize) -> Option<Self> {
-        if self.line().next(rope).is_some() {
-            let mut c = Caret::from_point(self.point.down(rope, tabsize), rope, tabsize);
+    pub fn duplicate_down(&self, buffer: &Buffer) -> Option<Self> {
+        if self.line().next(buffer).is_some() {
+            let mut c = Caret::from_point(self.point.down(buffer), buffer);
             c.is_clone = true;
             Some(c)
         } else {
@@ -249,9 +248,9 @@ impl Caret {
         }
     }
 
-    pub fn duplicate_up(&self, rope: &Rope, tabsize: usize) -> Option<Self> {
+    pub fn duplicate_up(&self, buffer: &Buffer) -> Option<Self> {
         if self.line().prev().is_some() {
-            let mut c = Caret::from_point(self.point.up(rope, tabsize), rope, tabsize);
+            let mut c = Caret::from_point(self.point.up(buffer), buffer);
             c.is_clone = true;
             Some(c)
         } else {
@@ -259,20 +258,20 @@ impl Caret {
         }
     }
 
-    pub fn move_end(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let index = self.line().end(rope);
-        self.set_index(index, !expand_selection, true, rope, tabsize);
+    pub fn move_end(&mut self, expand_selection: bool, buffer: &Buffer) {
+        let index = self.line().end(buffer);
+        self.set_index(index, !expand_selection, true, buffer);
     }
 
-    pub fn move_home(&mut self, expand_selection: bool, rope: &Rope, tabsize: usize) {
-        let index = self.line().start(rope);
-        self.set_index(index, !expand_selection, true, rope, tabsize);
+    pub fn move_home(&mut self, expand_selection: bool, buffer: &Buffer) {
+        let index = self.line().start(buffer);
+        self.set_index(index, !expand_selection, true, buffer);
     }
 
-    pub fn update_after_insert(&mut self, index: Absolute, delta: Relative, rope: &Rope, tabsize: usize) {
+    pub fn update_after_insert(&mut self, index: Absolute, delta: Relative, buffer: &Buffer) {
         if self.index > index {
             let col = self.col();
-            self.set_index(self.index + delta, false, false, rope, tabsize);
+            self.set_index(self.index + delta, false, false, buffer);
             // Update virtal column position only if the real column position changed
             if col != self.col() {
                 self.sticky_col = col;
@@ -282,10 +281,10 @@ impl Caret {
             self.selection += delta;
         }
     }
-    pub fn update_after_delete(&mut self, index: Absolute, delta: Relative, rope: &Rope, tabsize: usize) {
+    pub fn update_after_delete(&mut self, index: Absolute, delta: Relative, buffer: &Buffer) {
         if self.index > index {
             let col = self.col();
-            self.set_index(self.index - delta, false, false, rope, tabsize);
+            self.set_index(self.index - delta, false, false, buffer);
             // Update virtal column position only if the real column position changed
             if col != self.col() {
                 self.sticky_col = col;
