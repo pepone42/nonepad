@@ -227,7 +227,7 @@ impl Buffer {
     pub fn insert(&mut self, text: &str) {
         for i in 0..self.carets.len() {
             let r = self.carets[i].range();
-            self.edit(&r, text, self.tabsize);
+            self.edit(&r, text);
             let b = self.clone();
             self.carets[i].set_index(r.start + text.len(), true, true, &b);
         }
@@ -240,7 +240,7 @@ impl Buffer {
             if !self.carets[i].selection_is_empty() {
                 // delete all the selection
                 let r = self.carets[i].range();
-                self.edit(&r, "", self.tabsize);
+                self.edit(&r, "");
                 let b = self.clone();
                 self.carets[i].set_index(r.start, true, true, &b);
 
@@ -249,7 +249,7 @@ impl Buffer {
                 // delete the preceding grapheme
                 let r = rope_utils::prev_grapheme_boundary(&self.rope.slice(..), self.carets[i].index).into()
                     ..self.carets[i].index;
-                self.edit(&r, "", self.tabsize);
+                self.edit(&r, "");
                 let b = self.clone();
                 self.carets[i].set_index(r.start, true, true, &b);
 
@@ -270,7 +270,7 @@ impl Buffer {
         for i in 0..self.carets.len() {
             if !self.carets[i].selection_is_empty() {
                 let r = self.carets[i].range();
-                self.edit(&r, "", self.tabsize);
+                self.edit(&r, "");
                 let b = self.clone();
                 self.carets[i].set_index(r.start, true, true, &b);
 
@@ -278,7 +278,7 @@ impl Buffer {
             } else if self.carets[i].index < self.rope.len_bytes().into() {
                 let r = self.carets[i].index
                     ..rope_utils::next_grapheme_boundary(&self.rope.slice(..), self.carets[i].index).into();
-                self.edit(&r, "", self.tabsize);
+                self.edit(&r, "");
                 let b = self.clone();
                 self.carets[i].set_index(r.start, true, true, &b);
 
@@ -305,7 +305,7 @@ impl Buffer {
                         Indentation::Space(n) => " ".repeat(n).to_owned(),
                         Indentation::Tab(_) => "\t".to_owned(),
                     };
-                    self.edit(&r, &text, self.tabsize);
+                    self.edit(&r, &text);
                 }
             } else {
                 let r = self.carets[i].range();
@@ -317,7 +317,7 @@ impl Buffer {
                     }
                     Indentation::Tab(_) => "\t".to_owned(),
                 };
-                self.edit(&r, &text, self.tabsize);
+                self.edit(&r, &text);
                 let b = self.clone();
                 self.carets[i].set_index(r.start + Relative::from(text.len()), true, true, &b);
             }
@@ -325,7 +325,7 @@ impl Buffer {
         self.carets.merge();
     }
 
-    pub fn edit(&mut self, range: &Range<Absolute>, text: &str, tabsize: usize) {
+    pub fn edit(&mut self, range: &Range<Absolute>, text: &str) {
         let insert_index = self.rope.byte_to_char(range.start.into());
         let end_index = self.rope.byte_to_char(range.end.into());
         let cr = insert_index..end_index;

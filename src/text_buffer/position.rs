@@ -1,6 +1,5 @@
 use super::rope_utils::{next_grapheme_boundary, prev_grapheme_boundary};
 use druid::Data;
-use ropey::Rope;
 use std::ops::Add;
 use std::ops::{AddAssign, Sub, SubAssign};
 use super::buffer::Buffer;
