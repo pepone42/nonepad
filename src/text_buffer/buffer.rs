@@ -2,18 +2,18 @@ use super::{
     caret::{Caret, Carets},
     file::{Indentation, LineFeed},
     position::{Absolute, Column, Line, Point, Position, Relative},
-    SelectionLineRange, rope_utils,
+    rope_utils, SelectionLineRange,
 };
 use druid::Data;
 use ropey::{Rope, RopeSlice};
-use std::ops::Range;
+use std::ops::{Bound, Range, RangeBounds};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Buffer {
     rope: Rope,
     carets: Carets,
-    tabsize: usize,
+    pub(super) tabsize: usize,
     uuid: Uuid,
 }
 
@@ -56,13 +56,7 @@ impl Buffer {
         rel_to_byte: &mut Vec<Relative>,
         byte_to_rel: &mut Vec<Relative>,
     ) {
-        line.displayable_string(
-            &self.rope,
-            self.tabsize,
-            out,
-            rel_to_byte,
-            byte_to_rel,
-        );
+        line.displayable_string(&self, self.tabsize, out, rel_to_byte, byte_to_rel);
     }
 
     pub fn carets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Caret> {
@@ -98,50 +92,95 @@ impl Buffer {
         }
     }
 
+    pub fn position_to_absolute<P>(&self, pos: P) -> Absolute
+    where
+        P: Position,
+    {
+        pos.absolute(&self)
+    }
+    pub fn position_to_point<P>(&self, pos: P) -> Point
+    where
+        P: Position,
+    {
+        pos.point(&self)
+    }
+
+    pub fn len(&self) -> Absolute {
+        self.rope.len_bytes().into()
+    }
+
+    pub fn len_lines(&self) -> usize {
+        self.rope.len_lines()
+    }
+
     pub fn point<C, L>(&self, col: C, line: L) -> Point
     where
         C: Into<Column>,
         L: Into<Line>,
     {
-        Point::new(col.into(), line.into(), &self.rope, self.tabsize)
+        Point::new(col.into(), line.into(), &self)
+    }
+
+    pub fn line(&self, line_index: usize) -> Line {
+        Line::from(line_index)
+    }
+
+    pub(super) fn line_slice<L>(&self, line: L) -> RopeSlice
+    where
+        L: Into<Line>,
+    {
+        self.rope.line(line.into().index)
+    }
+
+    pub(super) fn absolute_to_line(&self, a: Absolute) -> Line {
+        self.rope.byte_to_line(a.index).into()
+    }
+
+    pub(super) fn line_to_absolute<L>(&self, line: L) -> Absolute
+    where
+        L: Into<Line>,
+    {
+        self.rope.line_to_byte(line.into().index).into()
+    }
+
+    pub fn char<P>(&self, pos: P) -> char
+    where
+        P: Position,
+    {
+        let a = pos.absolute(&self);
+        self.rope.char(self.rope.byte_to_char(a.index))
     }
 
     pub fn backward(&mut self, expand_selection: bool, word_boundary: bool) {
-        for s in &mut self.carets.iter_mut() {
-            s.move_backward(
-                expand_selection,
-                word_boundary,
-                &self.rope,
-                self.tabsize,
-            );
+        let b = self.clone();
+        for s in &mut self.carets.iter_mut() { // TODO: Found a way to not clone, even if it's cheap
+            s.move_backward(expand_selection, word_boundary, &b);
         }
 
         self.carets.merge();
     }
 
     pub fn forward(&mut self, expand_selection: bool, word_boundary: bool) {
+        let b = self.clone();
         for s in &mut self.carets.iter_mut() {
-            s.move_forward(
-                expand_selection,
-                word_boundary,
-                &self.rope,
-                self.tabsize,
-            );
+            s.move_forward(expand_selection, word_boundary, &b);
         }
 
         self.carets.merge();
     }
 
     pub fn up(&mut self, expand_selection: bool) {
+        let b = self.clone();
         for s in &mut self.carets.iter_mut() {
-            s.move_up(expand_selection, &self.rope, self.tabsize);
+            s.move_up(expand_selection, &b);
         }
 
         self.carets.merge();
     }
     pub fn down(&mut self, expand_selection: bool) {
+        let b = self.clone();
         for s in &mut self.carets.iter_mut() {
-            s.move_down(expand_selection, &self.rope, self.tabsize);
+            s.move_down(expand_selection, &b);
         }
 
         self.carets.merge();
@@ -149,7 +188,7 @@ impl Buffer {
     pub fn duplicate_down(&mut self) {
         self.carets.sort_unstable();
 
-        if let Some(c) = self.carets.last().and_then(|c| c.duplicate_down(&self.rope, self.tabsize)) {
+        if let Some(c) = self.carets.last().and_then(|c| c.duplicate_down(&self)) {
             self.carets.push(c);
         }
         self.carets.merge();
@@ -158,7 +197,7 @@ impl Buffer {
     pub fn duplicate_up(&mut self) {
         self.carets.sort_unstable();
 
-        if let Some(c) = self.carets.first().and_then(|c| c.duplicate_up(&self.rope, self.tabsize)) {
+        if let Some(c) = self.carets.first().and_then(|c| c.duplicate_up(&self)) {
             self.carets.push(c);
         }
         self.carets.merge();
@@ -169,16 +208,18 @@ impl Buffer {
     }
 
     pub fn end(&mut self, expand_selection: bool) {
+        let b = self.clone();
         for s in &mut self.carets.iter_mut() {
-            s.move_end(expand_selection, &self.rope, self.tabsize);
+            s.move_end(expand_selection, &b);
         }
 
         self.carets.merge();
     }
 
     pub fn home(&mut self, expand_selection: bool) {
+        let b = self.clone();
         for s in &mut self.carets.iter_mut() {
-            s.move_home(expand_selection, &self.rope, self.tabsize);
+            s.move_home(expand_selection, &b);
         }
         self.carets.merge();
     }
@@ -187,7 +228,8 @@ impl Buffer {
         for i in 0..self.carets.len() {
             let r = self.carets[i].range();
             self.edit(&r, text, self.tabsize);
-            self.carets[i].set_index(r.start + text.len(), true, true, &self.rope, self.tabsize);
+            let b = self.clone();
+            self.carets[i].set_index(r.start + text.len(), true, true, &b);
         }
         self.carets.merge();
     }
@@ -199,7 +241,8 @@ impl Buffer {
                 // delete all the selection
                 let r = self.carets[i].range();
                 self.edit(&r, "", self.tabsize);
-                self.carets[i].set_index(r.start, true, true, &self.rope, self.tabsize);
+                let b = self.clone();
+                self.carets[i].set_index(r.start, true, true, &b);
 
                 did_nothing = false;
             } else if self.carets[i].index > 0.into() {
@@ -207,7 +250,8 @@ impl Buffer {
                 let r = rope_utils::prev_grapheme_boundary(&self.rope.slice(..), self.carets[i].index).into()
                     ..self.carets[i].index;
                 self.edit(&r, "", self.tabsize);
-                self.carets[i].set_index(r.start, true, true, &self.rope, self.tabsize);
+                let b = self.clone();
+                self.carets[i].set_index(r.start, true, true, &b);
 
                 did_nothing = false;
             } else {
@@ -227,14 +271,16 @@ impl Buffer {
             if !self.carets[i].selection_is_empty() {
                 let r = self.carets[i].range();
                 self.edit(&r, "", self.tabsize);
-                self.carets[i].set_index(r.start, true, true, &self.rope, self.tabsize);
+                let b = self.clone();
+                self.carets[i].set_index(r.start, true, true, &b);
 
                 did_nothing = false;
             } else if self.carets[i].index < self.rope.len_bytes().into() {
                 let r = self.carets[i].index
                     ..rope_utils::next_grapheme_boundary(&self.rope.slice(..), self.carets[i].index).into();
                 self.edit(&r, "", self.tabsize);
-                self.carets[i].set_index(r.start, true, true, &self.rope, self.tabsize);
+                let b = self.clone();
+                self.carets[i].set_index(r.start, true, true, &b);
 
                 did_nothing = false;
             } else {
@@ -250,7 +296,7 @@ impl Buffer {
 
     pub fn tab(&mut self, indentation: Indentation) {
         for i in 0..self.carets.len() {
-            if let Some(line_range) = self.carets[i].selected_lines_range(&self.rope) {
+            if let Some(line_range) = self.carets[i].selected_lines_range(&self) {
                 // TODO: Find a better way to iterate over line of a selection
                 for line_idx in line_range.start().index..line_range.end().index + 1 {
                     let line_start: Absolute = self.rope.line_to_byte(line_idx).into();
@@ -272,7 +318,8 @@ impl Buffer {
                     Indentation::Tab(_) => "\t".to_owned(),
                 };
                 self.edit(&r, &text, self.tabsize);
-                self.carets[i].set_index(r.start + Relative::from(text.len()), true, true, &self.rope, self.tabsize);
+                let b = self.clone();
+                self.carets[i].set_index(r.start + Relative::from(text.len()), true, true, &b);
             }
         }
         self.carets.merge();
@@ -286,32 +333,13 @@ impl Buffer {
         self.rope.insert(insert_index, text);
 
         for i in 0..self.carets.len() {
-            self.carets[i].update_after_delete(range.start, (range.end - range.start).into(), &self.rope, tabsize); // TODO verify this
-            self.carets[i].update_after_insert(range.start, text.len().into(), &self.rope, tabsize);
+            let b = self.clone();
+            self.carets[i].update_after_delete(range.start, (range.end - range.start).into(), &b); // TODO verify this
+            let b = self.clone();
+            self.carets[i].update_after_insert(range.start, text.len().into(), &b);
         }
         self.carets.merge();
         self.uuid = Uuid::new_v4();
-    }
-
-    pub fn position_to_absolute<P>(&self, pos: P) -> Absolute
-    where
-        P: Position,
-    {
-        pos.absolute(&self.rope, self.tabsize)
-    }
-    pub fn position_to_point<P>(&self, pos: P) -> Point
-    where
-        P: Position,
-    {
-        pos.point(&self.rope, self.tabsize)
-    }
-
-    pub fn len(&self) -> Absolute {
-        self.rope.len_bytes().into()
-    }
-
-    pub fn len_lines(&self) -> usize {
-        self.rope.len_lines()
     }
 
     pub fn has_many_carets(&self) -> bool {
@@ -323,9 +351,15 @@ impl Buffer {
         self.carets.merge();
     }
 
-    fn slice(&self, r: Range<Absolute>) -> RopeSlice {
+    pub(super) fn slice<R>(&self, r: R) -> RopeSlice
+    where
+        R: RangeBounds<Absolute>,
+    {
+        let start = start_bound_to_num(r.start_bound()).unwrap_or(Absolute::from(0));
+        let end = end_bound_to_num(r.end_bound()).unwrap_or_else(|| self.len());
+
         self.rope
-            .slice(self.rope.byte_to_char(r.start.index)..self.rope.byte_to_char(r.end.index))
+            .slice(self.rope.byte_to_char(start.index)..self.rope.byte_to_char(end.index))
     }
 
     fn search_next_in_range(&self, s: &str, r: Range<Absolute>) -> Option<Absolute> {
@@ -375,13 +409,8 @@ impl Buffer {
     {
         let p = self.position_to_absolute(pos);
         self.cancel_mutli_carets();
-        self.carets[0].set_index(
-            p,
-            !expand_selection,
-            true,
-            &self.rope,
-            self.tabsize,
-        )
+        let b = self.clone();
+        self.carets[0].set_index(p, !expand_selection, true, &b)
     }
 
     pub fn selected_text(&self, line_feed: LineFeed) -> String {
@@ -431,5 +460,23 @@ impl Buffer {
 impl ToString for Buffer {
     fn to_string(&self) -> String {
         self.rope.to_string()
+    }
+}
+
+#[inline(always)]
+pub(super) fn start_bound_to_num(b: Bound<&Absolute>) -> Option<Absolute> {
+    match b {
+        Bound::Included(n) => Some(*n),
+        Bound::Excluded(n) => Some(*n + 1),
+        Bound::Unbounded => None,
+    }
+}
+
+#[inline(always)]
+pub(super) fn end_bound_to_num(b: Bound<&Absolute>) -> Option<Absolute> {
+    match b {
+        Bound::Included(n) => Some(*n + 1),
+        Bound::Excluded(n) => Some(*n),
+        Bound::Unbounded => None,
     }
 }

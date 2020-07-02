@@ -3,13 +3,15 @@ use druid::Data;
 use ropey::Rope;
 use std::ops::Add;
 use std::ops::{AddAssign, Sub, SubAssign};
+use super::buffer::Buffer;
 
 pub trait Position {
-    fn absolute(&self, rope: &Rope, tabsize: usize) -> Absolute;
-    fn point(&self, rope: &Rope, tabsize: usize) -> Point;
-    fn line(&self, rope: &Rope) -> Line;
-    fn up(&self, rope: &Rope, tabsize: usize) -> Self;
-    fn down(&self, rope: &Rope, tabsize: usize) -> Self;
+    fn absolute(&self, buffer: &Buffer) -> Absolute;
+    fn point(&self, buffer: &Buffer) -> Point;
+    fn line(&self, buffer: &Buffer) -> Line;
+    fn up(&self, buffer: &Buffer) -> Self;
+    fn down(&self, buffer: &Buffer) -> Self;
+    //fn relative(&self, buffer: &Buffer) -> Relative;
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
@@ -20,54 +22,55 @@ pub struct Point {
 }
 
 impl Position for Point {
-    fn absolute(&self, rope: &Rope, _tabsize: usize) -> Absolute {
-        self.line.start(rope) + self.relative
+    fn absolute(&self, buffer: &Buffer) -> Absolute {
+        self.line.start(buffer) + self.relative
     }
-    fn point(&self, _rope: &Rope, _tabsize: usize) -> Point {
+    fn point(&self, _buffer: &Buffer) -> Point {
         *self
     }
-    fn line(&self, _rope: &Rope) -> Line {
+    fn line(&self, _buffer: &Buffer) -> Line {
         self.line
     }
-    fn up(&self, rope: &Rope, tabsize: usize) -> Self {
-        let line = self.line(rope).prev().unwrap_or(self.line);
-        let col = if self.col > line.grapheme_len(rope, tabsize) {
-            line.grapheme_len(rope, tabsize)
+
+    fn up(&self, buffer: &Buffer) -> Self {
+        let line = self.line(buffer).prev().unwrap_or(self.line);
+        let col = if self.col > line.grapheme_len(buffer) {
+            line.grapheme_len(buffer)
         } else {
             self.col
         };
-        Self::new(col, line, rope, tabsize)
+        Self::new(col, line, buffer)
     }
-    fn down(&self, rope: &Rope, tabsize: usize) -> Self {
-        let line = self.line(rope).next(rope).unwrap_or(self.line);
-        let col = if self.col > line.grapheme_len(rope, tabsize) {
-            line.grapheme_len(rope, tabsize)
+    fn down(&self, buffer: &Buffer) -> Self {
+        let line = self.line(buffer).next(buffer).unwrap_or(self.line);
+        let col = if self.col > line.grapheme_len(buffer) {
+            line.grapheme_len(buffer)
         } else {
             self.col
         };
-        Self::new(col, line, rope, tabsize)
+        Self::new(col, line, buffer)
     }
 }
 
 impl Point {
-    fn relative(col: Column, line: Line, rope: &Rope, tabsize: usize) -> Relative {
+    fn calc_relative(col: Column, line: Line, buffer: &Buffer) -> Relative {
         let mut c = 0;
         let mut i = Relative::from(0);
-        let a = Absolute::from(rope.line_to_byte(line.index));
-        while c < col.index && i < line.byte_len(rope) {
-            let ch = rope.char(rope.byte_to_char((a + i).index));
+        let a = line.start(buffer);
+        while c < col.index && i < line.byte_len(buffer) {
+            let ch = buffer.char(a + i);
             match ch {
                 ' ' => {
                     c += 1;
                     i += 1;
                 }
                 '\t' => {
-                    let nb_space = tabsize - c % tabsize;
+                    let nb_space = buffer.tabsize - c % buffer.tabsize;
                     c += nb_space;
                     i += 1;
                 }
                 _ => {
-                    i = next_grapheme_boundary(&rope.line(line.index), i).into();
+                    i = next_grapheme_boundary(&buffer.line_slice(line), i).into();
                     c += 1;
                 }
             }
@@ -75,24 +78,24 @@ impl Point {
         i
     }
 
-    fn col(relative: Relative, line: Line, rope: &Rope, tabsize: usize) -> Column {
+    fn calc_col(relative: Relative, line: Line, buffer: &Buffer) -> Column {
         let mut c = Column::from(0);
         let mut i = Relative::from(0);
-        let a = Absolute::from(rope.line_to_byte(line.index));
+        let a = line.start(buffer);// Absolute::from(rope.line_to_byte(line.index));
         while i < relative {
-            let ch = rope.char(rope.byte_to_char((a + i).index));
+            let ch = buffer.char(a + i);
             match ch {
                 ' ' => {
                     c += 1;
                     i += 1;
                 }
                 '\t' => {
-                    let nb_space = tabsize - c.index % tabsize;
+                    let nb_space = buffer.tabsize - c.index % buffer.tabsize;
                     c += nb_space;
                     i += 1;
                 }
                 _ => {
-                    i = next_grapheme_boundary(&rope.line(line.index), i).into();
+                    i = next_grapheme_boundary(&buffer.line_slice(line), i).into();
                     c += 1;
                 }
             }
@@ -100,16 +103,16 @@ impl Point {
         c
     }
 
-    pub fn new(col: Column, line: Line, rope: &Rope, tabsize: usize) -> Self {
-        let line = if line.index >= rope.len_lines() {
-            rope.len_lines().into()
+    pub fn new(col: Column, line: Line, buffer: &Buffer) -> Self {
+        let line = if line.index >= buffer.len_lines() {
+            buffer.len_lines().into()
         } else {
             line
         };
         Self {
             col,
             line,
-            relative: Self::relative(col, line, rope, tabsize),
+            relative: Self::calc_relative(col, line, buffer),
         }
     }
 }
@@ -185,26 +188,26 @@ impl Sub<usize> for Absolute {
 }
 
 impl Position for Absolute {
-    fn absolute(&self, _rope: &Rope, _tabsize: usize) -> Absolute {
+    fn absolute(&self, _buffer: &Buffer) -> Absolute {
         *self
     }
-    fn point(&self, rope: &Rope, tabsize: usize) -> Point {
-        let line = Line::from(rope.byte_to_line(self.index));
-        let relative = Relative::from(self.index - line.start(rope).index);
+    fn point(&self, buffer: &Buffer) -> Point {
+        let line = self.line(buffer);// buffer.absolute_to_line(*self);
+        let relative = *self - line.start(buffer);
         Point {
             line,
             relative,
-            col: Point::col(relative, line, rope, tabsize),
+            col: Point::calc_col(relative, line, buffer),
         }
     }
-    fn line(&self, rope: &Rope) -> Line {
-        Line::from(rope.byte_to_line(self.index))
+    fn line(&self, buffer: &Buffer) -> Line {
+        Line::from(buffer.absolute_to_line(*self))
     }
-    fn up(&self, rope: &Rope, tabsize: usize) -> Self {
-        self.point(rope, tabsize).up(rope, tabsize).absolute(rope, tabsize)
+    fn up(&self, buffer: &Buffer) -> Self {
+        self.point(buffer).up(buffer).absolute(buffer)
     }
-    fn down(&self, rope: &Rope, tabsize: usize) -> Self {
-        self.point(rope, tabsize).down(rope, tabsize).absolute(rope, tabsize)
+    fn down(&self, buffer: &Buffer) -> Self {
+        self.point(buffer).down(buffer).absolute(buffer)
     }
 }
 
@@ -272,41 +275,41 @@ impl Into<usize> for Line {
 }
 
 impl Line {
-    pub fn start(&self, rope: &Rope) -> Absolute {
-        rope.line_to_byte(self.index).into()
+    pub fn start(&self, buffer: &Buffer) -> Absolute {
+        buffer.line_to_absolute(*self)
     }
-    pub fn end(&self, rope: &Rope) -> Absolute {
+    pub fn end(&self, buffer: &Buffer) -> Absolute {
         // TODO use self.next
-        if self.index + 1 >= rope.len_lines() {
-            Absolute::from(rope.len_bytes())
+        if self.index + 1 >= buffer.len_lines() {
+            Absolute::from(buffer.len())
         } else {
             Absolute::from(prev_grapheme_boundary(
-                &rope.slice(..),
-                rope.line_to_byte((self.index + 1).into()),
+                &buffer.slice(..),
+                buffer.line_to_absolute(self.index + 1),
             ))
         }
     }
-    pub fn byte_len(&self, rope: &Rope) -> Relative {
-        self.end(rope) - self.start(rope)
+    pub fn byte_len(&self, buffer: &Buffer) -> Relative {
+        self.end(buffer) - self.start(buffer)
     }
-    pub fn grapheme_len(&self, rope: &Rope, tabsize: usize) -> Column {
+    pub fn grapheme_len(&self, buffer: &Buffer) -> Column {
         let mut col = Column::from(0);
         let mut i = Relative::from(0);
-        let a = Absolute::from(rope.line_to_byte(self.index));
-        while i < self.byte_len(rope) {
-            let c = rope.char(rope.byte_to_char((a + i).index));
+        let a = Absolute::from(buffer.line_to_absolute(self.index));
+        while i < self.byte_len(buffer) {
+            let c = buffer.char(a + i);
             match c {
                 ' ' => {
                     col += 1;
                     i += 1;
                 }
                 '\t' => {
-                    let nb_space: usize = tabsize - col.index % tabsize;
+                    let nb_space: usize = buffer.tabsize - col.index % buffer.tabsize;
                     col += nb_space;
                     i += 1;
                 }
                 _ => {
-                    i = next_grapheme_boundary(&rope.line(self.index), i).into();
+                    i = next_grapheme_boundary(&buffer.line_slice(*self), i).into();
                     col += 1;
                 }
             }
@@ -320,8 +323,8 @@ impl Line {
             Some(Self { index: self.index - 1 })
         }
     }
-    pub fn next(&self, rope: &Rope) -> Option<Self> {
-        if self.index == rope.len_lines() - 1 {
+    pub fn next(&self, buffer: &Buffer) -> Option<Self> {
+        if self.index == buffer.len_lines() - 1 {
             None
         } else {
             Some(Self { index: self.index + 1 })
@@ -329,7 +332,7 @@ impl Line {
     }
     pub fn displayable_string(
         &self,
-        rope: &Rope,
+        buffer: &Buffer,
         tabsize: usize,
         out: &mut String,
         rel_to_byte: &mut Vec<Relative>,
@@ -338,13 +341,13 @@ impl Line {
         out.clear();
         rel_to_byte.clear();
         byte_to_rel.clear();
-        if self.index >= rope.len_lines() {
+        if self.index >= buffer.len_lines() {
             return;
         }
 
         let mut rel_index = 0;
         let mut byte_index = 0;
-        for c in rope.line(self.index).chars() {
+        for c in buffer.line_slice(*self).chars() {
             match c {
                 ' ' => {
                     rel_to_byte.push(rel_index.into());
@@ -377,20 +380,20 @@ impl Line {
         rel_to_byte.push(rel_index.into());
         byte_to_rel.push(byte_index.into());
     }
-    pub fn iter<'r>(&self, rope: &'r Rope) -> LineIterator<'r> {
-        LineIterator { rope, line: *self }
+    pub fn iter<'r>(&self, buffer: &'r Buffer) -> LineIterator<'r> {
+        LineIterator { buffer, line: *self }
     }
 }
 
 pub struct LineIterator<'r> {
-    rope: &'r Rope,
+    buffer: &'r Buffer,
     line: Line,
 }
 
 impl<'r> Iterator for LineIterator<'r> {
     type Item = Line;
     fn next(&mut self) -> Option<Self::Item> {
-        self.line.next(self.rope)
+        self.line.next(self.buffer)
     }
 }
 
