@@ -1,7 +1,6 @@
 use super::position::{Absolute, Column, Line, Point, Position, Relative};
 use super::{buffer::Buffer, rope_utils::*};
 use druid::Data;
-use ropey::Rope;
 
 use std::ops::Deref;
 use std::ops::DerefMut;
