@@ -1,5 +1,6 @@
 use ropey::RopeSlice;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
+use super::{buffer::Buffer, position::{Line, Column, Relative}};
 
 /// Finds the previous grapheme boundary before the given char position.
 pub fn prev_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
@@ -168,4 +169,54 @@ pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usi
     };
 
     return slice.char_to_byte(i);
+}
+
+pub(super) fn column_to_relative(col: Column, line: Line, buffer: &Buffer) -> Relative {
+    let mut c = 0;
+    let mut i = Relative::from(0);
+    let a = line.start(buffer);
+    while c < col.index && i < line.byte_len(buffer) {
+        let ch = buffer.char(a + i);
+        match ch {
+            ' ' => {
+                c += 1;
+                i += 1;
+            }
+            '\t' => {
+                let nb_space = buffer.tabsize - c % buffer.tabsize;
+                c += nb_space;
+                i += 1;
+            }
+            _ => {
+                i = next_grapheme_boundary(&buffer.line_slice(line), i).into();
+                c += 1;
+            }
+        }
+    }
+    i
+}
+
+pub(super) fn relative_to_column(relative: Relative, line: Line, buffer: &Buffer) -> Column {
+    let mut c = Column::from(0);
+    let mut i = Relative::from(0);
+    let a = line.start(buffer);// Absolute::from(rope.line_to_byte(line.index));
+    while i < relative {
+        let ch = buffer.char(a + i);
+        match ch {
+            ' ' => {
+                c += 1;
+                i += 1;
+            }
+            '\t' => {
+                let nb_space = buffer.tabsize - c.index % buffer.tabsize;
+                c += nb_space;
+                i += 1;
+            }
+            _ => {
+                i = next_grapheme_boundary(&buffer.line_slice(line), i).into();
+                c += 1;
+            }
+        }
+    }
+    c
 }
