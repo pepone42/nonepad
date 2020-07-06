@@ -52,56 +52,6 @@ impl Position for Point {
 }
 
 impl Point {
-    fn calc_relative(col: Column, line: Line, buffer: &Buffer) -> Relative {
-        let mut c = 0;
-        let mut i = Relative::from(0);
-        let a = line.start(buffer);
-        while c < col.index && i < line.byte_len(buffer) {
-            let ch = buffer.char(a + i);
-            match ch {
-                ' ' => {
-                    c += 1;
-                    i += 1;
-                }
-                '\t' => {
-                    let nb_space = buffer.tabsize - c % buffer.tabsize;
-                    c += nb_space;
-                    i += 1;
-                }
-                _ => {
-                    i = next_grapheme_boundary(&buffer.line_slice(line), i).into();
-                    c += 1;
-                }
-            }
-        }
-        i
-    }
-
-    fn calc_col(relative: Relative, line: Line, buffer: &Buffer) -> Column {
-        let mut c = Column::from(0);
-        let mut i = Relative::from(0);
-        let a = line.start(buffer);// Absolute::from(rope.line_to_byte(line.index));
-        while i < relative {
-            let ch = buffer.char(a + i);
-            match ch {
-                ' ' => {
-                    c += 1;
-                    i += 1;
-                }
-                '\t' => {
-                    let nb_space = buffer.tabsize - c.index % buffer.tabsize;
-                    c += nb_space;
-                    i += 1;
-                }
-                _ => {
-                    i = next_grapheme_boundary(&buffer.line_slice(line), i).into();
-                    c += 1;
-                }
-            }
-        }
-        c
-    }
-
     pub fn new(col: Column, line: Line, buffer: &Buffer) -> Self {
         let line = if line.index >= buffer.len_lines() {
             buffer.len_lines().into()
@@ -111,7 +61,7 @@ impl Point {
         Self {
             col,
             line,
-            relative: Self::calc_relative(col, line, buffer),
+            relative: super::rope_utils::column_to_relative(col, line, buffer),
         }
     }
 }
@@ -196,7 +146,7 @@ impl Position for Absolute {
         Point {
             line,
             relative,
-            col: Point::calc_col(relative, line, buffer),
+            col: super::rope_utils::relative_to_column(relative, line, buffer),
         }
     }
     fn line(&self, buffer: &Buffer) -> Line {
