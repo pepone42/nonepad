@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use druid::piet::{RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::{Modifiers, piet::{RenderContext, Text, TextLayout, TextLayoutBuilder}};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor, Value,
@@ -85,16 +85,6 @@ impl Widget<EditStack> for EditorView {
                 ctx.request_focus();
             }
             Event::KeyDown(event) => {
-                if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
-                    if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
-                        editor.insert(&text);
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                }
-
                 // if HotKey::new(SysMods::CmdShift, Key::KeyP).matches(event) {
                 //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
                 //     _ctx.request_paint();
@@ -346,6 +336,20 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, (), Target::Global));
 
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+
+                if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
+                    if event.mods.ctrl() || event.mods.alt() ||event.mods.meta() {
+                        return;
+                    }
+                    if (text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
+                        return;
+                    }
+                    editor.insert(&text);
+                    self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;

@@ -54,11 +54,7 @@ impl AppDelegate<MainWindowState> for Delegate {
         _data: &mut MainWindowState,
         _env: &Env,
     ) -> druid::Handled {
-        if _cmd.is(druid::commands::QUIT_APP) || _cmd.is(druid::commands::CLOSE_WINDOW) {
-            druid::Handled::No
-        } else {
-            druid::Handled::Yes
-        }
+        druid::Handled::No
     }
     fn window_added(
         &mut self,
