@@ -52,7 +52,7 @@ impl EditStack {
         P: AsRef<Path>,
     {
         let editor = EditStack::from_file(path)?;
-        std::mem::replace(self, editor);
+        let _ = std::mem::replace(self, editor);
         Ok(())
     }
 

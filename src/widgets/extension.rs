@@ -1,7 +1,4 @@
-use druid::{
-    widget::{Controller, ControllerHost},
-    Command, Data, Env, Event, EventCtx, KeyCode, KeyEvent, Widget,
-};
+use druid::{Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, widget::{Controller, ControllerHost}};
 
 pub struct OnEnter<T> {
     action: Box<dyn Fn(&mut EventCtx, &mut T, &Env)>,
@@ -18,13 +15,14 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for OnEnter<T> {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
             Event::KeyDown(KeyEvent {
-                key_code: KeyCode::NumpadEnter,
+                key: KbKey::Enter,
                 ..
             })
-            | Event::KeyDown(KeyEvent {
-                key_code: KeyCode::Return,
-                ..
-            }) => {
+            // | Event::KeyDown(KeyEvent {
+            //     key_code: KeyCode::Return,
+            //     ..
+            // }) 
+            => {
                 (self.action)(ctx, data, env);
             }
             _ => (),
@@ -57,7 +55,7 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
         env: &Env,
     ) {
         if let druid::LifeCycle::WidgetAdded = event {
-            ctx.submit_command(Command::new(crate::commands::GIVE_FOCUS, ()), ctx.widget_id());
+            ctx.submit_command(Command::new(crate::commands::GIVE_FOCUS, (), ctx.widget_id()));
         }
         child.lifecycle(ctx, event, data, env)
     }

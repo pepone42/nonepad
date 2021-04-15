@@ -1,20 +1,25 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use druid::kurbo::{BezPath, Line, PathEl, Point, Rect, Size};
-use druid::piet::{FontBuilder, RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::piet::{RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::{
+    kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
+    FontDescriptor,
+};
 use druid::{
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    HotKey, Key, KeyCode, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
-    UpdateCtx, Widget, WidgetId,
+    HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
+    Widget, WidgetId,
 };
 
 use crate::dialog;
-use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::text_buffer::position;
+use crate::text_buffer::{EditStack, SelectionLineRange};
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
-pub const FONT_NAME: Key<&str> = Key::new("nonepad.editor.font_name");
+//pub const FONT_NAME: Key<druid::Value> = Key::new("nonepad.editor.font_name");
+
+pub const FONT_DESCRIPTOR: Key<FontDescriptor> = Key::new("nonepad.editor.font_descriptor");
 pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
 pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
 pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
@@ -80,29 +85,19 @@ impl Widget<EditStack> for EditorView {
                 ctx.request_focus();
             }
             Event::KeyDown(event) => {
-                if let Some(text) = event.text() {
-                    if !(text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
-                        editor.insert(text);
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                }
-
-                // if HotKey::new(SysMods::CmdShift, KeyCode::KeyP).matches(event) {
+                // if HotKey::new(SysMods::CmdShift, Key::KeyP).matches(event) {
                 //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
                 //     _ctx.request_paint();
                 //     return true;
                 // }
 
-                if HotKey::new(SysMods::AltCmd, KeyCode::ArrowDown).matches(event) {
+                if HotKey::new(SysMods::AltCmd, druid::keyboard_types::Key::ArrowDown).matches(event) {
                     editor.duplicate_down();
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::AltCmd, KeyCode::ArrowUp).matches(event) {
+                if HotKey::new(SysMods::AltCmd, druid::keyboard_types::Key::ArrowUp).matches(event) {
                     editor.duplicate_up();
                     ctx.request_paint();
                     ctx.set_handled();
@@ -110,56 +105,56 @@ impl Widget<EditStack> for EditorView {
                 }
                 match event {
                     KeyEvent {
-                        key_code: KeyCode::ArrowRight,
+                        key: druid::keyboard_types::Key::ArrowRight,
                         mods,
                         ..
                     } => {
-                        editor.forward(mods.shift, mods.ctrl);
+                        editor.forward(mods.shift(), mods.ctrl());
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::ArrowLeft,
+                        key: druid::keyboard_types::Key::ArrowLeft,
                         mods,
                         ..
                     } => {
-                        editor.backward(mods.shift, mods.ctrl);
+                        editor.backward(mods.shift(), mods.ctrl());
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::ArrowUp,
+                        key: druid::keyboard_types::Key::ArrowUp,
                         mods,
                         ..
                     } => {
-                        editor.up(mods.shift);
+                        editor.up(mods.shift());
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::ArrowDown,
+                        key: druid::keyboard_types::Key::ArrowDown,
                         mods,
                         ..
                     } => {
-                        editor.down(mods.shift);
+                        editor.down(mods.shift());
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::PageUp,
+                        key: druid::keyboard_types::Key::PageUp,
                         mods,
                         ..
                     } => {
                         for _ in 0..self.page_len {
-                            editor.up(mods.shift);
+                            editor.up(mods.shift());
                         }
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
@@ -167,12 +162,12 @@ impl Widget<EditStack> for EditorView {
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::PageDown,
+                        key: druid::keyboard_types::Key::PageDown,
                         mods,
                         ..
                     } => {
                         for _ in 0..self.page_len {
-                            editor.down(mods.shift)
+                            editor.down(mods.shift())
                         }
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
@@ -180,29 +175,30 @@ impl Widget<EditStack> for EditorView {
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::End,
+                        key: druid::keyboard_types::Key::End,
                         mods,
                         ..
                     } => {
-                        editor.end(mods.shift);
+                        editor.end(mods.shift());
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::Home,
+                        key: druid::keyboard_types::Key::Home,
                         mods,
                         ..
                     } => {
-                        editor.home(mods.shift);
+                        editor.home(mods.shift());
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
                         return;
                     }
                     KeyEvent {
-                        key_code: KeyCode::Tab, ..
+                        key: druid::keyboard_types::Key::Tab,
+                        ..
                     } => {
                         editor.tab();
                         self.put_caret_in_visible_range(ctx, editor);
@@ -213,7 +209,7 @@ impl Widget<EditStack> for EditorView {
                     _ => (),
                 }
 
-                if HotKey::new(None, KeyCode::Escape).matches(event) {
+                if HotKey::new(None, druid::keyboard_types::Key::Escape).matches(event) {
                     editor.cancel_mutli_carets();
                     editor.cancel_selection();
                     ctx.request_paint();
@@ -221,14 +217,14 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
 
-                if HotKey::new(None, KeyCode::Backspace).matches(event) {
+                if HotKey::new(None, druid::keyboard_types::Key::Backspace).matches(event) {
                     editor.backspace();
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(None, KeyCode::Delete).matches(event) {
+                if HotKey::new(None, druid::keyboard_types::Key::Delete).matches(event) {
                     editor.delete();
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
@@ -236,16 +232,15 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
 
-                if HotKey::new(None, KeyCode::NumpadEnter).matches(event)
-                    || HotKey::new(None, KeyCode::Return).matches(event)
-                {
+                if HotKey::new(None, druid::keyboard_types::Key::Enter).matches(event) {
+                    // || HotKey::new(None, druid::keyboard_types::Key::Return).matches(event) {
                     editor.insert(editor.file.linefeed.to_str());
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyV).matches(event) {
+                if HotKey::new(SysMods::Cmd, "v").matches(event) {
                     let clipboard = Application::global().clipboard();
                     let supported_types = &[ClipboardFormat::TEXT];
                     let best_available_type = clipboard.preferred_format(supported_types);
@@ -265,40 +260,40 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyC).matches(event) {
+                if HotKey::new(SysMods::Cmd, "c").matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
 
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyX).matches(event) {
+                if HotKey::new(SysMods::Cmd, "x").matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
                     editor.delete();
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyA).matches(event) {
+                if HotKey::new(SysMods::Cmd, "a").matches(event) {
                     editor.select_all();
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyZ).matches(event) {
+                if HotKey::new(SysMods::Cmd, "z").matches(event) {
                     editor.undo();
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyY).matches(event) {
+                if HotKey::new(SysMods::Cmd, "y").matches(event) {
                     editor.redo();
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyO).matches(event) {
+                if HotKey::new(SysMods::Cmd, "o").matches(event) {
                     if editor.is_dirty() {
                         if let Some(result) = dialog::messagebox(
                             "Discard unsaved change?",
@@ -313,34 +308,48 @@ impl Widget<EditStack> for EditorView {
                         }
                     }
                     let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options), None);
+                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyS).matches(event) {
+                if HotKey::new(SysMods::Cmd, "s").matches(event) {
                     //self.save(editor, ctx);
                     if editor.filename.is_some() {
-                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, None), None);
+                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
                     } else {
                         let options = FileDialogOptions::new().show_hidden();
-                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None)
+                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
                     }
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::CmdShift, KeyCode::KeyS).matches(event) {
+                if HotKey::new(SysMods::CmdShift, "s").matches(event) {
                     let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options), None);
+                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
 
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
-                if HotKey::new(SysMods::Cmd, KeyCode::KeyF).matches(event) {
-                    ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, ()), Target::Global);
+                if HotKey::new(SysMods::Cmd, "f").matches(event) {
+                    ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, (), Target::Global));
 
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    return;
+                }
+
+                if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
+                    if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
+                        return;
+                    }
+                    if text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control() {
+                        return;
+                    }
+                    editor.insert(&text);
+                    self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -376,7 +385,7 @@ impl Widget<EditStack> for EditorView {
                     editor.cancel_mutli_carets();
                     // FIXME: Update is not called if the caret position is not modified,
                     let p = editor.point(x, y);
-                    editor.move_main_caret_to(p, event.mods.shift);
+                    editor.move_main_caret_to(p, event.mods.shift());
                     ctx.set_active(true);
                 }
                 ctx.request_focus();
@@ -395,16 +404,19 @@ impl Widget<EditStack> for EditorView {
                     self.put_caret_in_visible_range(ctx, editor);
                 }
             }
-            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
-                if let Some(file_info) = cmd.get_unchecked(druid::commands::SAVE_FILE) {
-                    if let Err(e) = self.save_as(editor, file_info.path()) {
-                        println!("Error writing file: {}", e);
-                    }
-                } else {
-                    if let Err(e) = self.save(editor) {
-                        println!("Error writing file: {}", e);
-                    }
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
+                let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
+                if let Err(e) = self.save_as(editor, file_info.path()) {
+                    println!("Error writing file: {}", e);
                 }
+                ctx.set_handled();
+                return;
+            }
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
+                if let Err(e) = self.save(editor) {
+                    println!("Error writing file: {}", e);
+                }
+
                 ctx.set_handled();
                 return;
             }
@@ -435,7 +447,7 @@ impl Widget<EditStack> for EditorView {
         match event {
             LifeCycle::WidgetAdded => {
                 self.font_size = env.get(FONT_SIZE);
-                self.font_name = env.get(FONT_NAME).to_owned();
+                //self.font_name = env.get(FONT_NAME).to_owned();
                 self.bg_color = env.get(BG_COLOR);
                 self.fg_color = env.get(FG_COLOR);
                 self.fg_sel_color = env.get(FG_SEL_COLOR);
@@ -452,17 +464,18 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
 
-        // self.font_height = env.get(FONT_HEIGHT);
+        // self.font_height = _env.get(FONT_HEIGHT);
         // self.font_name = env.get(FONT_NAME).to_owned();
 
-        let font = layout_ctx
+        let font = layout_ctx.text().font_family("consolas").unwrap();
+
+        let layout = layout_ctx
             .text()
-            .new_font_by_name(&self.font_name, self.font_size)
+            .new_text_layout("8")
+            .font(font, self.font_size)
             .build()
             .unwrap();
-
-        let layout = layout_ctx.text().new_text_layout(&font, "8", None).build().unwrap();
-        self.font_advance = layout.width();
+        self.font_advance = layout.size().width;
         self.font_baseline = layout.line_metric(0).unwrap().baseline;
         self.font_height = layout.line_metric(0).unwrap().height;
         self.font_descent = self.font_height - self.font_baseline;
@@ -516,20 +529,15 @@ impl EditorView {
         layout: &L,
         path: &mut SelectionPath,
     ) {
-        match (
-            layout.hit_test_text_position(range.start.into()),
-            layout.hit_test_text_position(range.end.into()),
-        ) {
-            (Some(s), Some(e)) => {
-                path.clear();
-                path.push(PathEl::MoveTo(Point::new(s.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(s.point.x, self.font_height + y)));
-                path.push(PathEl::ClosePath);
-            }
-            _ => (),
-        }
+        let s = layout.hit_test_text_position(range.start.into());
+        let e = layout.hit_test_text_position(range.end.into());
+
+        path.clear();
+        path.push(PathEl::MoveTo(Point::new(s.point.x, y)));
+        path.push(PathEl::LineTo(Point::new(e.point.x, y)));
+        path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+        path.push(PathEl::LineTo(Point::new(s.point.x, self.font_height + y)));
+        path.push(PathEl::ClosePath);
     }
 
     fn add_range_from_selection<L: TextLayout>(
@@ -539,23 +547,18 @@ impl EditorView {
         layout: &L,
         path: &mut Vec<PathEl>,
     ) -> f64 {
-        match (
-            layout.hit_test_text_position(range.start.into()),
-            layout.hit_test_text_position(range.end.into()),
-        ) {
-            (Some(s), Some(e)) => {
-                path.clear();
-                path.push(PathEl::MoveTo(Point::new(s.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(s.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
-                )));
-                s.point.x
-            }
-            _ => 0.,
-        }
+        let s = layout.hit_test_text_position(range.start.into());
+        let e = layout.hit_test_text_position(range.end.into());
+
+        path.clear();
+        path.push(PathEl::MoveTo(Point::new(s.point.x, self.font_height + y)));
+        path.push(PathEl::LineTo(Point::new(s.point.x, y)));
+        path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+        path.push(PathEl::LineTo(Point::new(
+            e.point.x + self.font_advance,
+            self.font_height + y,
+        )));
+        s.point.x
     }
 
     fn add_range_to_selection<L: TextLayout>(
@@ -565,41 +568,40 @@ impl EditorView {
         layout: &L,
         path: &mut SelectionPath,
     ) {
-        if let Some(e) = layout.hit_test_text_position(range.end.into()) {
-            match &path.last_range {
-                Some(SelectionLineRange::RangeFrom(_)) if range.end == position::Relative::from(0) => {
-                    path.push(PathEl::ClosePath);
-                }
-                Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
-                    path.push(PathEl::LineTo(Point::new(0., y)));
-                    path.push(PathEl::ClosePath);
-                }
-                Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
-                    path.push(PathEl::ClosePath);
-                    path.push(PathEl::MoveTo(Point::new(e.point.x, y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                    path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
-                    path.push(PathEl::LineTo(Point::new(0., y)));
-                    path.push(PathEl::ClosePath);
-                }
-                Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
-                    path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                    path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
-                    path.push(PathEl::LineTo(Point::new(0., y)));
-                    path.push(PathEl::ClosePath);
-                }
-                None => {
-                    path.clear();
-                    path.push(PathEl::MoveTo(Point::new(0., y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                    path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
-                    path.push(PathEl::ClosePath);
-                }
-                _ => {
-                    unreachable!();
-                }
+        let e = layout.hit_test_text_position(range.end.into());
+        match &path.last_range {
+            Some(SelectionLineRange::RangeFrom(_)) if range.end == position::Relative::from(0) => {
+                path.push(PathEl::ClosePath);
+            }
+            Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
+                path.push(PathEl::LineTo(Point::new(0., y)));
+                path.push(PathEl::ClosePath);
+            }
+            Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
+                path.push(PathEl::ClosePath);
+                path.push(PathEl::MoveTo(Point::new(e.point.x, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., y)));
+                path.push(PathEl::ClosePath);
+            }
+            Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
+                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., y)));
+                path.push(PathEl::ClosePath);
+            }
+            None => {
+                path.clear();
+                path.push(PathEl::MoveTo(Point::new(0., y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                path.push(PathEl::ClosePath);
+            }
+            _ => {
+                unreachable!();
             }
         }
     }
@@ -611,44 +613,43 @@ impl EditorView {
         layout: &L,
         path: &mut SelectionPath,
     ) {
-        if let Some(e) = layout.hit_test_text_position(range.end.into()) {
-            match &path.last_range {
-                Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
-                    path.push(PathEl::ClosePath);
-                    path.push(PathEl::MoveTo(Point::new(0., y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                    path.push(PathEl::LineTo(Point::new(
-                        e.point.x + self.font_advance,
-                        self.font_height + y,
-                    )));
-                }
-                Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
-                    // insert a point at the begining of the line
-                    path[0] = PathEl::LineTo(Point::new(path.last_x, y));
-                    path.insert(0, PathEl::MoveTo(Point::new(0., y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                    path.push(PathEl::LineTo(Point::new(
-                        e.point.x + self.font_advance,
-                        self.font_height + y,
-                    )));
-                }
-                None => {
-                    // the precedent line was outside the visible range
-                    path.clear();
-                    path.push(PathEl::MoveTo(Point::new(0., y)));
-                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                    path.push(PathEl::LineTo(Point::new(
-                        e.point.x + self.font_advance,
-                        self.font_height + y,
-                    )));
-                }
-                _ => {
-                    path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
-                    path.push(PathEl::LineTo(Point::new(
-                        e.point.x + self.font_advance,
-                        self.font_height + y,
-                    )));
-                }
+        let e = layout.hit_test_text_position(range.end.into());
+        match &path.last_range {
+            Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
+                path.push(PathEl::ClosePath);
+                path.push(PathEl::MoveTo(Point::new(0., y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(
+                    e.point.x + self.font_advance,
+                    self.font_height + y,
+                )));
+            }
+            Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
+                // insert a point at the begining of the line
+                path[0] = PathEl::LineTo(Point::new(path.last_x, y));
+                path.insert(0, PathEl::MoveTo(Point::new(0., y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(
+                    e.point.x + self.font_advance,
+                    self.font_height + y,
+                )));
+            }
+            None => {
+                // the precedent line was outside the visible range
+                path.clear();
+                path.push(PathEl::MoveTo(Point::new(0., y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(
+                    e.point.x + self.font_advance,
+                    self.font_height + y,
+                )));
+            }
+            _ => {
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(
+                    e.point.x + self.font_advance,
+                    self.font_height + y,
+                )));
             }
         }
     }
@@ -657,8 +658,9 @@ impl EditorView {
         let font = ctx
             .render_ctx
             .text()
-            .new_font_by_name(&self.font_name, self.font_size)
-            .build()
+            .font_family("consolas")
+            //.new_font_by_name(&self.font_name, self.font_size)
+            //.build()
             .unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
@@ -678,11 +680,12 @@ impl EditorView {
             let layout = ctx
                 .render_ctx
                 .text()
-                .new_text_layout(&font, &format!("{:1$}", line_idx, line_number_char_width), None)
+                .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
+                .font(font.clone(), self.font_size)
+                .text_color(self.fg_color.clone())
                 .build()
                 .unwrap();
-            ctx.render_ctx
-                .draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
+            ctx.render_ctx.draw_text(&layout, (0.0, /*self.font_baseline + */ dy));
             dy += self.font_height;
         }
 
@@ -711,7 +714,8 @@ impl EditorView {
             let layout = ctx
                 .render_ctx
                 .text()
-                .new_text_layout(&font, &line, None)
+                .new_text_layout(line.clone()) // TODO: comment ne pas faire de clone?
+                .font(font.clone(), self.font_size)
                 .build()
                 .unwrap();
 
@@ -736,9 +740,12 @@ impl EditorView {
                             &mut current_path,
                         )
                     }
-                    SelectionLineRange::RangeTo(r) => {
-                        self.add_range_to_selection(dy, position::Relative::from(0)..indices[r.end], &layout, &mut current_path)
-                    }
+                    SelectionLineRange::RangeTo(r) => self.add_range_to_selection(
+                        dy,
+                        position::Relative::from(0)..indices[r.end],
+                        &layout,
+                        &mut current_path,
+                    ),
                     SelectionLineRange::RangeFull => self.add_range_full_selection(
                         dy,
                         position::Relative::from(0)..position::Relative::from(line.len() - 1),
@@ -781,24 +788,24 @@ impl EditorView {
             let layout = ctx
                 .render_ctx
                 .text()
-                .new_text_layout(&font, &line, None)
+                .new_text_layout(line.clone())
+                .font(font.clone(), self.font_size)
+                .text_color(self.fg_color.clone())
                 .build()
                 .unwrap();
 
-            ctx.render_ctx
-                .draw_text(&layout, (0.0, self.font_baseline + dy), &self.fg_color);
+            ctx.render_ctx.draw_text(&layout, (0.0, /*self.font_baseline + */ dy));
 
             editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
-                if let Some(metrics) = layout.hit_test_text_position(indices[c.relative().index].index) {
-                    ctx.render_ctx.stroke(
-                        Line::new(
-                            (metrics.point.x + 1.0, self.font_height + dy),
-                            (metrics.point.x + 1.0, dy),
-                        ),
-                        &self.fg_color,
-                        2.0,
-                    );
-                }
+                let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
+                ctx.render_ctx.stroke(
+                    Line::new(
+                        (metrics.point.x + 1.0, self.font_height + dy),
+                        (metrics.point.x + 1.0, dy),
+                    ),
+                    &self.fg_color,
+                    2.0,
+                );
             });
 
             dy += self.font_height;
@@ -807,7 +814,7 @@ impl EditorView {
         false
     }
 
-    fn pix_to_point(&self, x: f64, y: f64, ctx: &EventCtx, editor: &EditStack) -> (usize, usize) {
+    fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
         let mut x = (x - self.delta_x) - self.gutter_width(editor);
         let mut y = y - self.delta_y;
 
@@ -824,14 +831,15 @@ impl EditorView {
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
-        let font = ctx
+        let font = ctx.text().font_family("consolas").unwrap();
+
+        let layout = ctx
             .text()
-            .new_font_by_name(&self.font_name, self.font_size)
+            .new_text_layout(buf)
+            .font(font, self.font_size)
             .build()
             .unwrap();
-
-        let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
-        let rel = i[layout.hit_test_point((x, 0.0).into()).metrics.text_position].index;
+        let rel = i[layout.hit_test_point((x, 0.0).into()).idx].index;
 
         (rel, line)
     }
@@ -862,22 +870,22 @@ impl EditorView {
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
-        let font = ctx
+        let font = ctx.text().font_family("consolas").unwrap();
+
+        let layout = ctx
             .text()
-            .new_font_by_name(&self.font_name, self.font_size)
+            .new_text_layout(buf)
+            .font(font, self.font_size)
             .build()
             .unwrap();
 
-        let layout = ctx.text().new_text_layout(&font, &buf, None).build().unwrap();
-
-        if let Some(hit) = layout.hit_test_text_position(i[caret.relative().index].index) {
-            let x = hit.point.x;
-            if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
-                self.delta_x = -x + self.editor_width(editor) - self.font_advance;
-            }
-            if x < -self.delta_x {
-                self.delta_x = -x;
-            }
+        let hit = layout.hit_test_text_position(i[caret.relative().index].index);
+        let x = hit.point.x;
+        if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
+            self.delta_x = -x + self.editor_width(editor) - self.font_advance;
+        }
+        if x < -self.delta_x {
+            self.delta_x = -x;
         }
     }
 

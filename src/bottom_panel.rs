@@ -1,7 +1,4 @@
-use druid::{
-    widget::{Button, Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, Lens, Widget, WidgetExt,
-};
+use druid::{Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, widget::{Button, Controller, Flex, Label, TextBox, ViewSwitcher}};
 
 use crate::commands;
 use crate::widgets::{EmptyWidget, Extension};
@@ -39,7 +36,7 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut BottonPanelState, env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL) => {
-                ctx.submit_command(Command::new(commands::GIVE_FOCUS, ()), crate::editor_view::WIDGET_ID);
+                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), crate::editor_view::WIDGET_ID));
                 data.current = PANEL_CLOSED;
                 return;
             }
@@ -64,7 +61,7 @@ fn build_search_panel() -> impl Widget<SearchState> {
         .with_flex_child(
             TextBox::new()
                 .on_enter(|ctx, data: &mut String, _| {
-                    ctx.submit_command(Command::new(commands::REQUEST_NEXT_SEARCH, data.clone()), None)
+                    ctx.submit_command(Command::new(commands::REQUEST_NEXT_SEARCH, data.clone(),Target::Global))
                 })
                 .focus()
                 .lens(SearchState::s)
@@ -73,6 +70,6 @@ fn build_search_panel() -> impl Widget<SearchState> {
         )
         .with_child(
             Button::new("x")
-                .on_click(|ctx, _, _| (ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, ()), None))),
+                .on_click(|ctx, _, _| (ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (),Target::Global)))),
         )
 }

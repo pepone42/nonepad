@@ -25,16 +25,6 @@ pub struct Delegate {
     disabled: bool,
 }
 impl AppDelegate<MainWindowState> for Delegate {
-    fn command(
-        &mut self,
-        _ctx: &mut DelegateCtx,
-        _target: Target,
-        _cmd: &Command,
-        _data: &mut MainWindowState,
-        _env: &Env,
-    ) -> bool {
-        true
-    }
     fn event(
         &mut self,
         ctx: &mut druid::DelegateCtx,
@@ -46,15 +36,25 @@ impl AppDelegate<MainWindowState> for Delegate {
         if matches!(
             event,
             druid::Event::KeyDown(druid::KeyEvent {
-                key_code: druid::KeyCode::Escape,
+                key: druid::KbKey::Escape,
                 ..
             })
         ) && data.bottom_panel.is_open()
         {
-            ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, ()), None);
+            ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
             return None;
         }
         Some(event)
+    }
+    fn command(
+        &mut self,
+        _ctx: &mut DelegateCtx,
+        _target: Target,
+        _cmd: &Command,
+        _data: &mut MainWindowState,
+        _env: &Env,
+    ) -> druid::Handled {
+        druid::Handled::No
     }
     fn window_added(
         &mut self,
@@ -124,7 +124,8 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .to_string(),
             if data.editor.is_dirty() { "*" } else { "" }
         )
-    });
+    })
+    .with_text_size(12.0);
     let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(
             "{}    {}    {}    {}",
@@ -133,7 +134,8 @@ fn build_ui() -> impl Widget<MainWindowState> {
             data.editor.file.encoding.name(),
             data.editor.file.linefeed
         )
-    });
+    })
+    .with_text_size(12.0);
     let edit = EditorView::default()
         .lens(MainWindowState::editor)
         .with_id(crate::editor_view::WIDGET_ID);
@@ -163,9 +165,13 @@ fn main() -> anyhow::Result<()> {
     AppLauncher::with_window(win)
         .delegate(Delegate { disabled: false })
         .configure_env(|env, _| {
-            env.set(druid::theme::TEXT_SIZE_NORMAL, 12.0);
+            // env.set(druid::theme::TEXT_SIZE_NORMAL, 5.0);
+            // env.set(druid::theme::TEXT_SIZE_LARGE, 8.0);
             env.set(crate::editor_view::FONT_SIZE, 12.0);
-            env.set(crate::editor_view::FONT_NAME, "Consolas");
+            env.set(
+                crate::editor_view::FONT_DESCRIPTOR,
+                druid::FontDescriptor::new(druid::FontFamily::MONOSPACE),
+            );
 
             env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
             env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
