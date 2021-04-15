@@ -1,10 +1,13 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use druid::{Modifiers, piet::{RenderContext, Text, TextLayout, TextLayoutBuilder}};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor, Value,
+};
+use druid::{
+    piet::{RenderContext, Text, TextLayout, TextLayoutBuilder},
+    Modifiers,
 };
 use druid::{
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
@@ -308,7 +311,7 @@ impl Widget<EditStack> for EditorView {
                         }
                     }
                     let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Global));
+                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -316,10 +319,10 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(SysMods::Cmd, "s").matches(event) {
                     //self.save(editor, ctx);
                     if editor.filename.is_some() {
-                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, None, Target::Global));
+                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Global));
                     } else {
                         let options = FileDialogOptions::new().show_hidden();
-                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Global))
+                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
                     }
                     ctx.request_paint();
                     ctx.set_handled();
@@ -327,7 +330,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::CmdShift, "s").matches(event) {
                     let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Global));
+                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
 
                     ctx.request_paint();
                     ctx.set_handled();
@@ -342,7 +345,7 @@ impl Widget<EditStack> for EditorView {
                 }
 
                 if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
-                    if event.mods.ctrl() || event.mods.alt() ||event.mods.meta() {
+                    if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
                         return;
                     }
                     if (text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
@@ -404,16 +407,19 @@ impl Widget<EditStack> for EditorView {
                     self.put_caret_in_visible_range(ctx, editor);
                 }
             }
-            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
-                if let Some(file_info) = cmd.get_unchecked(druid::commands::SAVE_FILE) {
-                    if let Err(e) = self.save_as(editor, file_info.path()) {
-                        println!("Error writing file: {}", e);
-                    }
-                } else {
-                    if let Err(e) = self.save(editor) {
-                        println!("Error writing file: {}", e);
-                    }
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
+                let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
+                if let Err(e) = self.save_as(editor, file_info.path()) {
+                    println!("Error writing file: {}", e);
                 }
+                ctx.set_handled();
+                return;
+            }
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
+                if let Err(e) = self.save(editor) {
+                    println!("Error writing file: {}", e);
+                }
+
                 ctx.set_handled();
                 return;
             }
