@@ -319,7 +319,7 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(SysMods::Cmd, "s").matches(event) {
                     //self.save(editor, ctx);
                     if editor.filename.is_some() {
-                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Global));
+                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
                     } else {
                         let options = FileDialogOptions::new().show_hidden();
                         ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
