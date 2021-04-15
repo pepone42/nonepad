@@ -1,18 +1,15 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
+use druid::piet::{RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
-    FontDescriptor, Value,
-};
-use druid::{
-    piet::{RenderContext, Text, TextLayout, TextLayoutBuilder},
-    Modifiers,
+    FontDescriptor,
 };
 use druid::{
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    HotKey, Key, KeyCode, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
-    UpdateCtx, Widget, WidgetId,
+    HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
+    Widget, WidgetId,
 };
 
 use crate::dialog;
@@ -348,7 +345,7 @@ impl Widget<EditStack> for EditorView {
                     if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
                         return;
                     }
-                    if (text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control()) {
+                    if text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control() {
                         return;
                     }
                     editor.insert(&text);

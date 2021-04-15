@@ -1,4 +1,4 @@
-use druid::{Command, Data, Env, Event, EventCtx, KbKey, KeyCode, KeyEvent, Widget, widget::{Controller, ControllerHost}};
+use druid::{Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, widget::{Controller, ControllerHost}};
 
 pub struct OnEnter<T> {
     action: Box<dyn Fn(&mut EventCtx, &mut T, &Env)>,
