@@ -464,10 +464,7 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
 
-        // self.font_height = _env.get(FONT_HEIGHT);
-        // self.font_name = env.get(FONT_NAME).to_owned();
-
-        let font = layout_ctx.text().font_family("consolas").unwrap();
+        let font = layout_ctx.text().font_family(&self.font_name).unwrap();
 
         let layout = layout_ctx
             .text()
@@ -510,7 +507,7 @@ impl Default for EditorView {
             font_descent: 0.0,
             font_height: 0.0,
             font_size: 0.0,
-            font_name: "".to_owned(),
+            font_name: "consolas".to_owned(),
             size: Default::default(),
         }
     }
@@ -658,7 +655,7 @@ impl EditorView {
         let font = ctx
             .render_ctx
             .text()
-            .font_family("consolas")
+            .font_family(&self.font_name)
             //.new_font_by_name(&self.font_name, self.font_size)
             //.build()
             .unwrap();
@@ -831,7 +828,7 @@ impl EditorView {
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
-        let font = ctx.text().font_family("consolas").unwrap();
+        let font = ctx.text().font_family(&self.font_name).unwrap();
 
         let layout = ctx
             .text()
@@ -870,7 +867,7 @@ impl EditorView {
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
-        let font = ctx.text().font_family("consolas").unwrap();
+        let font = ctx.text().font_family(&self.font_name).unwrap();
 
         let layout = ctx
             .text()
