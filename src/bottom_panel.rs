@@ -57,9 +57,9 @@ struct SearchState {
 
 fn build_search_panel() -> impl Widget<SearchState> {
     Flex::row()
-        .with_child(Label::new("Search"))
+        .with_child(Label::new("Search").with_text_size(12.0))
         .with_flex_child(
-            TextBox::new()
+            TextBox::new().with_text_size(12.0)
                 .on_enter(|ctx, data: &mut String, _| {
                     ctx.submit_command(Command::new(commands::REQUEST_NEXT_SEARCH, data.clone(),Target::Global))
                 })
