@@ -3,7 +3,6 @@
 
 mod bottom_panel;
 mod commands;
-mod dialog;
 mod editor_view;
 mod text_buffer;
 mod widgets;
