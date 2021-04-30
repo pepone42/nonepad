@@ -1,4 +1,4 @@
-use druid::{Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, widget::{Button, Controller, Flex, Label, TextBox, ViewSwitcher}};
+use druid::{Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, widget::{Controller, Flex, Label, TextBox, ViewSwitcher}};
 
 use crate::commands;
 use crate::widgets::{EmptyWidget, Extension};
