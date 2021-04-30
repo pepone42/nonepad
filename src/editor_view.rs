@@ -11,8 +11,7 @@ use druid::{
     HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
     Widget, WidgetId,
 };
-
-use crate::dialog;
+use rfd::MessageDialog;
 use crate::text_buffer::position;
 use crate::text_buffer::{EditStack, SelectionLineRange};
 
@@ -295,16 +294,15 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "o").matches(event) {
                     if editor.is_dirty() {
-                        if let Some(result) = dialog::messagebox(
-                            "Discard unsaved change?",
-                            "Are you sure?",
-                            dialog::Icon::Question,
-                            dialog::Buttons::YesNo,
-                        ) {
-                            if result != dialog::Button::Yes {
-                                ctx.set_handled();
-                                return;
-                            }
+                        if MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Warning)
+                            .set_title("Are you sure?")
+                            .set_description("Discard unsaved change?")
+                            .set_buttons(rfd::MessageButtons::YesNo)
+                            .show()
+                        {
+                            ctx.set_handled();
+                            return;
                         }
                     }
                     let options = FileDialogOptions::new().show_hidden();
@@ -423,12 +421,12 @@ impl Widget<EditStack> for EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(e) = self.open(editor, file_info.path()) {
-                        dialog::messagebox(
-                            &format!("Error loading file {}", e),
-                            "Error",
-                            dialog::Icon::Error,
-                            dialog::Buttons::Ok,
-                        );
+                        MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Error)
+                            .set_title("Error")
+                            .set_description(&format!("Error loading file {}", e))
+                            .set_buttons(rfd::MessageButtons::Ok)
+                            .show();
                     }
                 }
             }
@@ -891,15 +889,14 @@ impl EditorView {
         P: AsRef<Path>,
     {
         if filename.as_ref().exists() {
-            if let Some(result) = dialog::messagebox(
-                "The given file allready exists, are you sure you want to overwrite it?",
-                "File Exists",
-                dialog::Icon::Question,
-                dialog::Buttons::YesNo,
-            ) {
-                if result != dialog::Button::Yes {
-                    return Ok(());
-                }
+            if MessageDialog::new()
+                .set_level(rfd::MessageLevel::Warning)
+                .set_title("File Exists")
+                .set_description("The given file allready exists, are you sure you want to overwrite it?")
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .show()
+            {
+                return Ok(());
             }
         }
 
