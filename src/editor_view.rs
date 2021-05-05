@@ -812,25 +812,27 @@ impl EditorView {
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
         let x = ((x - self.delta_x) - self.gutter_width(editor)).max(0.);
         let y = (y - self.delta_y).max(0.);
+        let line = ((y / self.font_height) as usize).min(editor.len_lines() - 1);
 
-        let mut line = (y / self.font_height) as usize;
-        if line >= editor.len_lines() {
-            line = editor.len_lines() - 1;
-        }
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
-        let font = ctx.text().font_family(&self.font_name).unwrap();
 
+        let layout = self.text_layout(ctx, buf);
+        let rel = i[layout.hit_test_point((x, 0.0).into()).idx].index;
+
+        (rel, line)
+    }
+
+    fn text_layout(&self, ctx: &mut EventCtx, buf: String) -> druid::piet::D2DTextLayout {
+        let font = ctx.text().font_family(&self.font_name).unwrap();
         let layout = ctx
             .text()
             .new_text_layout(buf)
             .font(font, self.font_size)
             .build()
             .unwrap();
-        let rel = i[layout.hit_test_point((x, 0.0).into()).idx].index;
-
-        (rel, line)
+        layout
     }
 
     fn gutter_width(&self, editor: &EditStack) -> f64 {
@@ -859,14 +861,8 @@ impl EditorView {
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
-        let font = ctx.text().font_family(&self.font_name).unwrap();
 
-        let layout = ctx
-            .text()
-            .new_text_layout(buf)
-            .font(font, self.font_size)
-            .build()
-            .unwrap();
+        let layout = self.text_layout(ctx, buf);
 
         let hit = layout.hit_test_text_position(i[caret.relative().index].index);
         let x = hit.point.x;
