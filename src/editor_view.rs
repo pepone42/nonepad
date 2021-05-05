@@ -810,15 +810,9 @@ impl EditorView {
     }
 
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
-        let mut x = (x - self.delta_x) - self.gutter_width(editor);
-        let mut y = y - self.delta_y;
+        let x = ((x - self.delta_x) - self.gutter_width(editor)).max(0.);
+        let y = (y - self.delta_y).max(0.);
 
-        if x < 0. {
-            x = 0.
-        }
-        if y < 0. {
-            y = 0.
-        }
         let mut line = (y / self.font_height) as usize;
         if line >= editor.len_lines() {
             line = editor.len_lines() - 1;
