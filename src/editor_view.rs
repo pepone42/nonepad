@@ -1,7 +1,7 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::text_buffer::position;
+use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use druid::piet::{RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
@@ -817,7 +817,7 @@ impl EditorView {
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
 
         let layout = self.text_layout(ctx, buf);
-        let rel = i[layout.hit_test_point((x, 0.0).into()).idx].index; // not working with multi code point grapheme
+        let rel = rope_utils::relative_to_column(i[layout.hit_test_point((x, 0.0).into()).idx], line.into(), &editor.buffer).index;
 
         (rel, line)
     }

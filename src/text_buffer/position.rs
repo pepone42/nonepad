@@ -313,7 +313,7 @@ impl Line {
                     }
                     out.push_str(&" ".repeat(nb_space));
                     rel_index += nb_space;
-                    byte_index += nb_space;
+                    byte_index += 1;
                 }
                 _ => {
                     out.push(c);
