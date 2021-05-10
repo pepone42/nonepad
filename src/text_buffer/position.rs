@@ -77,9 +77,9 @@ impl From<usize> for Absolute {
     }
 }
 
-impl Into<usize> for Absolute {
-    fn into(self) -> usize {
-        self.index
+impl From<Absolute> for usize {
+    fn from(src: Absolute) -> Self {
+        src.index
     }
 }
 
@@ -150,7 +150,7 @@ impl Position for Absolute {
         }
     }
     fn line(&self, buffer: &Buffer) -> Line {
-        Line::from(buffer.absolute_to_line(*self))
+        buffer.absolute_to_line(*self)
     }
     fn up(&self, buffer: &Buffer) -> Self {
         self.point(buffer).up(buffer).absolute(buffer)
@@ -171,9 +171,9 @@ impl From<usize> for Relative {
     }
 }
 
-impl Into<usize> for Relative {
-    fn into(self) -> usize {
-        self.index
+impl From<Relative> for usize {
+    fn from(src: Relative) -> Self {
+        src.index
     }
 }
 
@@ -194,9 +194,9 @@ impl From<usize> for Column {
     }
 }
 
-impl Into<usize> for Column {
-    fn into(self) -> usize {
-        self.index
+impl From<Column> for usize {
+    fn from(src: Column) -> Self {
+        src.index
     }
 }
 
@@ -217,11 +217,11 @@ impl From<usize> for Line {
     }
 }
 
-impl Into<usize> for Line {
-    fn into(self) -> usize {
-        self.index
-    }
-}
+// impl Into<usize> for Line {
+//     fn into(self) -> usize {
+//         self.index
+//     }
+// }
 
 impl Line {
     pub fn start(&self, buffer: &Buffer) -> Absolute {
@@ -230,7 +230,7 @@ impl Line {
     pub fn end(&self, buffer: &Buffer) -> Absolute {
         // TODO use self.next
         if self.index + 1 >= buffer.len_lines() {
-            Absolute::from(buffer.len())
+            buffer.len()
         } else {
             Absolute::from(prev_grapheme_boundary(
                 &buffer.slice(..),
@@ -244,7 +244,7 @@ impl Line {
     pub fn grapheme_len(&self, buffer: &Buffer) -> Column {
         let mut col = Column::from(0);
         let mut i = Relative::from(0);
-        let a = Absolute::from(buffer.line_to_absolute(self.index));
+        let a = buffer.line_to_absolute(self.index);
         while i < self.byte_len(buffer) {
             let c = buffer.char(a + i);
             match c {

@@ -13,9 +13,7 @@ pub struct Carets {
 
 impl Carets {
     pub fn new() -> Self {
-        let mut intern = Vec::new();
-        intern.push(Caret::new());
-        Self { intern }
+        Self { intern : vec![Caret::new()] }
     }
 
     pub fn merge(&mut self) {
@@ -40,8 +38,8 @@ impl Carets {
 
 impl Clone for Carets {
     fn clone(&self) -> Self {
-        let mut intern: Vec<Caret> = self.intern.iter().filter(|c| c.is_clone).map(|c| c.clone()).collect();
-        let mut first = self.intern.iter().filter(|c| !c.is_clone).nth(0).unwrap().clone();
+        let mut intern: Vec<Caret> = self.intern.iter().filter(|c| c.is_clone).cloned().collect();
+        let mut first = self.intern.iter().find(|c| !c.is_clone).unwrap().clone();
         first.is_clone = false;
         intern.push(first);
         intern.sort_unstable();
@@ -150,9 +148,9 @@ impl Caret {
 
     pub fn range(&self) -> Range<Absolute> {
         if self.selection < self.index {
-            return self.selection..self.index;
+            self.selection..self.index
         } else {
-            return self.index..self.selection;
+            self.index..self.selection
         }
     }
 

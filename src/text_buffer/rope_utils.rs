@@ -1,6 +1,9 @@
+use super::{
+    buffer::Buffer,
+    position::{Column, Line, Relative},
+};
 use ropey::RopeSlice;
 use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
-use super::{buffer::Buffer, position::{Line, Column, Relative}};
 
 /// Finds the previous grapheme boundary before the given char position.
 pub fn prev_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
@@ -79,23 +82,22 @@ const WORD_BOUNDARY_LINEFEED: [char; 2] = ['\n', '\r'];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharType {
-    LINEFEED,
-    SPACE,
-    PUCTUATION,
-    OTHER,
+    LineFeed,
+    Space,
+    Punctuation,
+    Other,
 }
 
 fn char_type(c: char) -> CharType {
     if WORD_BOUNDARY_PUCTUATION.contains(&c) {
-        return CharType::PUCTUATION;
+        CharType::Punctuation
+    } else if WORD_BOUNDARY_LINEFEED.contains(&c) {
+        CharType::LineFeed
+    } else if c.is_whitespace() {
+        CharType::Space
+    } else {
+        CharType::Other
     }
-    if WORD_BOUNDARY_LINEFEED.contains(&c) {
-        return CharType::LINEFEED;
-    }
-    if c.is_whitespace() {
-        return CharType::SPACE;
-    }
-    return CharType::OTHER;
 }
 
 fn is_boundary(a: char, b: char) -> bool {
@@ -118,13 +120,13 @@ pub fn next_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usi
         return slice.len_bytes();
     }
     let current_char = slice.char(i);
-    if fp > 1 || (fp == 1 && char_type(current_char) != CharType::OTHER) {
+    if fp > 1 || (fp == 1 && char_type(current_char) != CharType::Other) {
         return slice.char_to_byte(i);
     }
 
     i += slice.chars_at(i).take_while(|c| !is_boundary(*c, current_char)).count();
 
-    return slice.char_to_byte(i);
+    slice.char_to_byte(i)
 }
 
 pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
@@ -155,7 +157,7 @@ pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usi
     }
 
     let current_char = slice.char(i - 1);
-    if fp > 1 || (fp == 1 && char_type(current_char) != CharType::OTHER) {
+    if fp > 1 || (fp == 1 && char_type(current_char) != CharType::Other) {
         return slice.char_to_byte(i);
     }
 
@@ -168,10 +170,10 @@ pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usi
         }
     };
 
-    return slice.char_to_byte(i);
+    slice.char_to_byte(i)
 }
 
-pub(super) fn column_to_relative(col: Column, line: Line, buffer: &Buffer) -> Relative {
+pub fn column_to_relative(col: Column, line: Line, buffer: &Buffer) -> Relative {
     let mut c = 0;
     let mut i = Relative::from(0);
     let a = line.start(buffer);
@@ -196,10 +198,10 @@ pub(super) fn column_to_relative(col: Column, line: Line, buffer: &Buffer) -> Re
     i
 }
 
-pub(super) fn relative_to_column(relative: Relative, line: Line, buffer: &Buffer) -> Column {
+pub fn relative_to_column(relative: Relative, line: Line, buffer: &Buffer) -> Column {
     let mut c = Column::from(0);
     let mut i = Relative::from(0);
-    let a = line.start(buffer);// Absolute::from(rope.line_to_byte(line.index));
+    let a = line.start(buffer); // Absolute::from(rope.line_to_byte(line.index));
     while i < relative {
         let ch = buffer.char(a + i);
         match ch {

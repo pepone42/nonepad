@@ -34,7 +34,7 @@ impl EditStack {
         self.buffer.selected_text(self.file.linefeed)
     }
 
-    pub fn from_file<'a, P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = TextFileInfo::load(&path)?;
         let buffer = Buffer::from_rope(file.1,file.0.indentation.visible_len());
         Ok(Self {

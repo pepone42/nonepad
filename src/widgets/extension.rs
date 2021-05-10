@@ -1,4 +1,7 @@
-use druid::{Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, widget::{Controller, ControllerHost}};
+use druid::{
+    widget::{Controller, ControllerHost},
+    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget,
+};
 
 pub struct OnEnter<T> {
     action: Box<dyn Fn(&mut EventCtx, &mut T, &Env)>,
@@ -13,19 +16,8 @@ impl<T: Data> OnEnter<T> {
 
 impl<T: Data, W: Widget<T>> Controller<T, W> for OnEnter<T> {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
-        match event {
-            Event::KeyDown(KeyEvent {
-                key: KbKey::Enter,
-                ..
-            })
-            // | Event::KeyDown(KeyEvent {
-            //     key_code: KeyCode::Return,
-            //     ..
-            // }) 
-            => {
-                (self.action)(ctx, data, env);
-            }
-            _ => (),
+        if let Event::KeyDown(KeyEvent { key: KbKey::Enter, .. }) = event {
+            (self.action)(ctx, data, env);
         }
 
         child.event(ctx, event, data, env)

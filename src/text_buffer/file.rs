@@ -28,17 +28,17 @@ impl Default for TextFileInfo {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineFeed {
-    CR,
-    LF,
-    CRLF,
+    Cr,
+    Lf,
+    CrLf,
 }
 
 impl Display for LineFeed {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LineFeed::CR => write!(f, "CR"),
-            LineFeed::LF => write!(f, "LF"),
-            LineFeed::CRLF => write!(f, "CRLF"),
+            LineFeed::Cr => write!(f, "CR"),
+            LineFeed::Lf => write!(f, "LF"),
+            LineFeed::CrLf => write!(f, "CRLF"),
         }
     }
 }
@@ -46,7 +46,7 @@ impl Display for LineFeed {
 impl Default for LineFeed {
     fn default() -> Self {
         #[cfg(target_os = "windows")]
-        return LineFeed::CRLF;
+        return LineFeed::CrLf;
         #[cfg(not(target_os = "windows"))]
         return LineFeed::LF;
     }
@@ -91,15 +91,15 @@ impl Default for Indentation {
 impl LineFeed {
     pub fn to_str(&self) -> &'static str {
         match self {
-            LineFeed::CR => "\r",
-            LineFeed::LF => "\n",
-            LineFeed::CRLF => "\r\n",
+            LineFeed::Cr => "\r",
+            LineFeed::Lf => "\n",
+            LineFeed::CrLf => "\r\n",
         }
     }
 }
 
 impl TextFileInfo {
-    pub fn load<'a, P: AsRef<Path>>(path: P) -> Result<(TextFileInfo, Rope)> {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<(TextFileInfo, Rope)> {
         let mut file = fs::File::open(&path)?;
         let mut detector = EncodingDetector::new();
         let mut vec = Vec::new();
@@ -164,9 +164,9 @@ impl TextFileInfo {
         };
 
         if let Some(bom) = &self.bom {
-            file.write(bom)?;
+            file.write_all(bom)?;
         }
-        file.write(&encoded_output)?;
+        file.write_all(&encoded_output)?;
         Ok(())
     }
 }
@@ -198,14 +198,13 @@ fn detect_linefeed(input: &RopeSlice) -> LineFeed {
         }
     }
 
-    let linefeed = if cr > crlf && cr > lf {
-        LineFeed::CR
+    if cr > crlf && cr > lf {
+        LineFeed::Cr
     } else if lf > crlf && lf > cr {
-        LineFeed::LF
+        LineFeed::Lf
     } else {
-        LineFeed::CRLF
-    };
-    return linefeed;
+        LineFeed::CrLf
+    }
 }
 
 pub fn detect_indentation(input: &RopeSlice) -> Indentation {

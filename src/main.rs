@@ -95,7 +95,7 @@ impl MainWindowState {
         Self { ..Default::default() }
     }
 
-    fn from_file<'a, P: AsRef<Path>>(path: P) -> anyhow::Result<MainWindowState> {
+    fn from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<MainWindowState> {
         Ok(Self {
             editor: EditStack::from_file(&path)?,
             status: path

@@ -41,7 +41,7 @@ impl Buffer {
 
     pub fn from_rope(rope: Rope, tabsize: usize) -> Self {
         Self {
-            rope: rope.clone(),
+            rope,
             carets: Carets::new(),
             uuid: Uuid::new_v4(),
             tabsize,
@@ -59,11 +59,11 @@ impl Buffer {
         line.displayable_string(&self, self.tabsize, out, rel_to_byte, byte_to_rel);
     }
 
-    pub fn carets_on_line<'a>(&'a self, line: Line) -> impl Iterator<Item = &'a Caret> {
+    pub fn carets_on_line(&self, line: Line) -> impl Iterator<Item = &Caret> {
         self.carets.iter().filter(move |c| c.line() == line)
     }
 
-    pub fn selection_on_line<'a>(&'a self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {
+    pub fn selection_on_line(&self, line_idx: usize, ranges: &mut Vec<SelectionLineRange>) {
         ranges.clear();
         for r in self.carets.iter().filter_map(move |c| {
             if !c.selection_is_empty() {
@@ -334,7 +334,7 @@ impl Buffer {
 
         for i in 0..self.carets.len() {
             let b = self.clone();
-            self.carets[i].update_after_delete(range.start, (range.end - range.start).into(), &b); // TODO verify this
+            self.carets[i].update_after_delete(range.start, range.end - range.start, &b); // TODO verify this
             let b = self.clone();
             self.carets[i].update_after_insert(range.start, text.len().into(), &b);
         }
@@ -355,7 +355,7 @@ impl Buffer {
     where
         R: RangeBounds<Absolute>,
     {
-        let start = start_bound_to_num(r.start_bound()).unwrap_or(Absolute::from(0));
+        let start = start_bound_to_num(r.start_bound()).unwrap_or_else(||Absolute::from(0));
         let end = end_bound_to_num(r.end_bound()).unwrap_or_else(|| self.len());
 
         self.rope
@@ -379,7 +379,7 @@ impl Buffer {
         dbg!(start_index);
         let i = self
             .search_next_in_range(s, start_index..self.len())
-            .or(self.search_next_in_range(s, 0.into()..start_index));
+            .or_else(||self.search_next_in_range(s, 0.into()..start_index));
         if let Some(i) = i {
             self.cancel_mutli_carets();
             self.move_main_caret_to(i, false);
@@ -390,16 +390,14 @@ impl Buffer {
     pub fn main_caret(&self) -> &Caret {
         self.carets
             .iter()
-            .filter(|c| !c.is_clone)
-            .nth(0)
+            .find(|c| !c.is_clone)
             .expect("No main cursor found!")
     }
 
     pub fn main_caret_mut(&mut self) -> &mut Caret {
         self.carets
             .iter_mut()
-            .filter(|c| c.is_clone == false)
-            .nth(0)
+            .find(|c| c.is_clone)
             .expect("No main cursor found!")
     }
 

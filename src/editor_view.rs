@@ -1,6 +1,8 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
+use crate::text_buffer::position;
+use crate::text_buffer::{EditStack, SelectionLineRange};
 use druid::piet::{RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
@@ -12,8 +14,6 @@ use druid::{
     Widget, WidgetId,
 };
 use rfd::MessageDialog;
-use crate::text_buffer::position;
-use crate::text_buffer::{EditStack, SelectionLineRange};
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
 //pub const FONT_NAME: Key<druid::Value> = Key::new("nonepad.editor.font_name");
@@ -293,18 +293,18 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "o").matches(event) {
-                    if editor.is_dirty() {
-                        if MessageDialog::new()
+                    if editor.is_dirty()
+                        && MessageDialog::new()
                             .set_level(rfd::MessageLevel::Warning)
                             .set_title("Are you sure?")
                             .set_description("Discard unsaved change?")
                             .set_buttons(rfd::MessageButtons::YesNo)
                             .show()
-                        {
-                            ctx.set_handled();
-                            return;
-                        }
+                    {
+                        ctx.set_handled();
+                        return;
                     }
+
                     let options = FileDialogOptions::new().show_hidden();
                     ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
                     ctx.request_paint();
@@ -343,7 +343,7 @@ impl Widget<EditStack> for EditorView {
                     if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
                         return;
                     }
-                    if text.chars().count() == 1 && text.chars().nth(0).unwrap().is_ascii_control() {
+                    if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
                         return;
                     }
                     editor.insert(&text);
@@ -375,7 +375,6 @@ impl Widget<EditStack> for EditorView {
                 }
                 ctx.request_paint();
                 ctx.set_handled();
-                return;
             }
             Event::MouseDown(event) => {
                 if matches!(event.button, MouseButton::Left) {
@@ -408,7 +407,6 @@ impl Widget<EditStack> for EditorView {
                     println!("Error writing file: {}", e);
                 }
                 ctx.set_handled();
-                return;
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
@@ -416,7 +414,6 @@ impl Widget<EditStack> for EditorView {
                 }
 
                 ctx.set_handled();
-                return;
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
@@ -442,8 +439,8 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, env: &Env) {
-        match event {
-            LifeCycle::WidgetAdded => {
+        if let LifeCycle::WidgetAdded = event {
+            //LifeCycle::WidgetAdded => {
                 self.font_size = env.get(FONT_SIZE);
                 //self.font_name = env.get(FONT_NAME).to_owned();
                 self.bg_color = env.get(BG_COLOR);
@@ -452,8 +449,8 @@ impl Widget<EditStack> for EditorView {
                 self.bg_sel_color = env.get(BG_SEL_COLOR);
 
                 ctx.register_for_focus();
-            }
-            _ => (),
+            //}
+            //_ => (),
         }
     }
 
@@ -650,48 +647,19 @@ impl EditorView {
     }
 
     fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, _env: &Env) -> bool {
-        let font = ctx
-            .render_ctx
-            .text()
-            .font_family(&self.font_name)
-            //.new_font_by_name(&self.font_name, self.font_size)
-            //.build()
-            .unwrap();
+        let font = ctx.render_ctx.text().font_family(&self.font_name).unwrap();
 
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
-        let visible_range = self.visible_range();
-
-        // Draw line number
-        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
-
-        let line_number_char_width = format!(" {}", editor.len_lines()).len();
-
-        for line_idx in visible_range.clone() {
-            if line_idx >= editor.len_lines() {
-                break;
-            }
-            let layout = ctx
-                .render_ctx
-                .text()
-                .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
-                .font(font.clone(), self.font_size)
-                .text_color(self.fg_color.clone())
-                .build()
-                .unwrap();
-            ctx.render_ctx.draw_text(&layout, (0.0, /*self.font_baseline + */ dy));
-            dy += self.font_height;
-        }
+        self.paint_gutter(editor, ctx, &font);
 
         let mut clip_rect = ctx.size().to_rect();
-        clip_rect.x0 += self.gutter_width(editor) - 2.0;
+        clip_rect.x0 += self.gutter_width(editor);
         ctx.render_ctx.clip(clip_rect);
 
         ctx.render_ctx
             .transform(Affine::translate((self.gutter_width(editor), 0.0)));
-        ctx.render_ctx
-            .stroke(Line::new((-2.0, 0.0), (-2.0, self.size.height)), &self.fg_color, 1.0);
         ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
 
         let mut line = String::new();
@@ -703,7 +671,7 @@ impl EditorView {
         // Draw selection first
         // TODO: cache layout to reuse it when we will draw the text
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
-        for line_idx in visible_range.clone() {
+        for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let layout = ctx
@@ -777,7 +745,7 @@ impl EditorView {
         }
 
         let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
-        for line_idx in visible_range {
+        for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let layout = ctx
@@ -789,7 +757,7 @@ impl EditorView {
                 .build()
                 .unwrap();
 
-            ctx.render_ctx.draw_text(&layout, (0.0, /*self.font_baseline + */ dy));
+            ctx.render_ctx.draw_text(&layout, (0.0, dy));
 
             editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
@@ -809,8 +777,38 @@ impl EditorView {
         false
     }
 
+    fn paint_gutter(&mut self, editor: &EditStack, ctx: &mut PaintCtx, font: &druid::FontFamily) {
+        // Draw line number
+        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
+        let line_number_char_width = format!(" {}", editor.len_lines()).len();
+        for line_idx in self.visible_range() {
+            if line_idx >= editor.len_lines() {
+                break;
+            }
+            let layout = ctx
+                .render_ctx
+                .text()
+                .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
+                .font(font.clone(), self.font_size)
+                .text_color(self.fg_color.clone())
+                .build()
+                .unwrap();
+            ctx.render_ctx.draw_text(&layout, (0.0, dy));
+            dy += self.font_height;
+        }
+
+        ctx.render_ctx.stroke(
+            Line::new(
+                (self.gutter_width(editor) - 2.0, 0.0),
+                (self.gutter_width(editor) - 2.0, self.size.height),
+            ),
+            &self.fg_color,
+            1.0,
+        );
+    }
+
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
-        let x = ((x - self.delta_x) - self.gutter_width(editor) - 2.0).max(0.);
+        let x = ((x - self.delta_x) - self.gutter_width(editor)).max(0.);
         let y = (y - self.delta_y).max(0.);
         let line = ((y / self.font_height) as usize).min(editor.len_lines() - 1);
 
@@ -819,7 +817,7 @@ impl EditorView {
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
 
         let layout = self.text_layout(ctx, buf);
-        let rel = i[layout.hit_test_point((x, 0.0).into()).idx].index;
+        let rel = i[layout.hit_test_point((x, 0.0).into()).idx].index; // not working with multi code point grapheme
 
         (rel, line)
     }
@@ -878,16 +876,15 @@ impl EditorView {
     where
         P: AsRef<Path>,
     {
-        if filename.as_ref().exists() {
-            if MessageDialog::new()
+        if filename.as_ref().exists()
+            && MessageDialog::new()
                 .set_level(rfd::MessageLevel::Warning)
                 .set_title("File Exists")
                 .set_description("The given file allready exists, are you sure you want to overwrite it?")
                 .set_buttons(rfd::MessageButtons::YesNo)
                 .show()
-            {
-                return Ok(());
-            }
+        {
+            return Ok(());
         }
 
         editor.save(&filename)?;
