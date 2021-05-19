@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::piet::{RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor,
@@ -55,18 +55,56 @@ impl SelectionPath {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct MonoFontMetrics {
+    font_advance: f64,
+    font_baseline: f64,
+    font_descent: f64,
+    font_height: f64,
+
+    font_size: f64,
+}
+
+impl MonoFontMetrics {
+    pub fn new(&mut text_ctx: &mut PietText, font_name: &str) -> Self {
+        let mut metrics = MonoFontMetrics::default();
+        let font = text_ctx.font_family(font_name).unwrap();
+        let layout = text_ctx
+            .new_text_layout("8")
+            .font(font, metrics.font_size)
+            .build()
+            .unwrap();
+        metrics.font_advance = layout.size().width;
+        metrics.font_baseline = layout.line_metric(0).unwrap().baseline;
+        metrics.font_height = layout.line_metric(0).unwrap().height;
+        metrics.font_descent = metrics.font_height - metrics.font_baseline;
+        metrics
+    }
+}
+
+
+impl Default for MonoFontMetrics {
+    fn default() -> Self {
+        MonoFontMetrics {
+            font_advance: 0.0,
+            font_baseline: 0.0,
+            font_descent: 0.0,
+            font_height: 0.0,
+            font_size: 12.0,
+
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct EditorView {
     //editor: EditStack,
     delta_y: f64,
     delta_x: f64,
     page_len: usize,
-    font_advance: f64,
-    font_baseline: f64,
-    font_descent: f64,
-    font_height: f64,
+    metrics: MonoFontMetrics,
     font_name: String,
-    font_size: f64,
 
     bg_color: Color,
     fg_color: Color,
@@ -354,13 +392,13 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
-                if editor.len_lines() as f64 * self.font_height >= ctx.size().height {
+                if editor.len_lines() as f64 * self.metrics.font_height >= ctx.size().height {
                     self.delta_y -= event.wheel_delta.y;
                     if self.delta_y > 0. {
                         self.delta_y = 0.;
                     }
-                    if -self.delta_y > editor.len_lines() as f64 * self.font_height - 4. * self.font_height {
-                        self.delta_y = -((editor.len_lines() as f64) * self.font_height - 4. * self.font_height)
+                    if -self.delta_y > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height {
+                        self.delta_y = -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
                     }
                 }
                 self.delta_x -= event.wheel_delta.x;
@@ -441,14 +479,14 @@ impl Widget<EditStack> for EditorView {
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
             //LifeCycle::WidgetAdded => {
-                self.font_size = env.get(FONT_SIZE);
-                //self.font_name = env.get(FONT_NAME).to_owned();
-                self.bg_color = env.get(BG_COLOR);
-                self.fg_color = env.get(FG_COLOR);
-                self.fg_sel_color = env.get(FG_SEL_COLOR);
-                self.bg_sel_color = env.get(BG_SEL_COLOR);
+            //self.font_size = env.get(FONT_SIZE);
+            //self.font_name = env.get(FONT_NAME).to_owned();
+            self.bg_color = env.get(BG_COLOR);
+            self.fg_color = env.get(FG_COLOR);
+            self.fg_sel_color = env.get(FG_SEL_COLOR);
+            self.bg_sel_color = env.get(BG_SEL_COLOR);
 
-                ctx.register_for_focus();
+            ctx.register_for_focus();
             //}
             //_ => (),
         }
@@ -459,20 +497,21 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
 
-        let font = layout_ctx.text().font_family(&self.font_name).unwrap();
+        // let font = layout_ctx.text().font_family(&self.font_name).unwrap();
 
-        let layout = layout_ctx
-            .text()
-            .new_text_layout("8")
-            .font(font, self.font_size)
-            .build()
-            .unwrap();
-        self.font_advance = layout.size().width;
-        self.font_baseline = layout.line_metric(0).unwrap().baseline;
-        self.font_height = layout.line_metric(0).unwrap().height;
-        self.font_descent = self.font_height - self.font_baseline;
+        // let layout = layout_ctx
+        //     .text()
+        //     .new_text_layout("8")
+        //     .font(font, self.font_size)
+        //     .build()
+        //     .unwrap();
+        // self.metrics.font_advance = layout.size().width;
+        // self.font_baseline = layout.line_metric(0).unwrap().baseline;
+        // self.metrics.font_height = layout.line_metric(0).unwrap().height;
+        // self.font_descent = self.metrics.font_height - self.font_baseline;
 
-        self.page_len = (self.size.height / self.font_height).round() as usize;
+        self.metrics = MonoFontMetrics::new(layout_ctx.text(),&self.font_name);
+        self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
 
         bc.max()
     }
@@ -493,16 +532,12 @@ impl Default for EditorView {
             fg_sel_color: Color::BLACK,
             bg_sel_color: Color::WHITE,
 
+            metrics: Default::default(),
+            font_name: "consolas".to_owned(),
             delta_x: 0.0,
             delta_y: 0.0,
             page_len: 0,
-            font_advance: 0.0,
 
-            font_baseline: 0.0,
-            font_descent: 0.0,
-            font_height: 0.0,
-            font_size: 0.0,
-            font_name: "consolas".to_owned(),
             size: Default::default(),
         }
     }
@@ -510,8 +545,8 @@ impl Default for EditorView {
 
 impl EditorView {
     fn visible_range(&self) -> Range<usize> {
-        (-self.delta_y / self.font_height) as usize
-            ..((-self.delta_y + self.size.height) / self.font_height) as usize + 1
+        (-self.delta_y / self.metrics.font_height) as usize
+            ..((-self.delta_y + self.size.height) / self.metrics.font_height) as usize + 1
     }
 
     fn add_bounded_range_selection<L: TextLayout>(
@@ -527,8 +562,8 @@ impl EditorView {
         path.clear();
         path.push(PathEl::MoveTo(Point::new(s.point.x, y)));
         path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-        path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-        path.push(PathEl::LineTo(Point::new(s.point.x, self.font_height + y)));
+        path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
+        path.push(PathEl::LineTo(Point::new(s.point.x, self.metrics.font_height + y)));
         path.push(PathEl::ClosePath);
     }
 
@@ -543,12 +578,12 @@ impl EditorView {
         let e = layout.hit_test_text_position(range.end.into());
 
         path.clear();
-        path.push(PathEl::MoveTo(Point::new(s.point.x, self.font_height + y)));
+        path.push(PathEl::MoveTo(Point::new(s.point.x, self.metrics.font_height + y)));
         path.push(PathEl::LineTo(Point::new(s.point.x, y)));
-        path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+        path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
         path.push(PathEl::LineTo(Point::new(
-            e.point.x + self.font_advance,
-            self.font_height + y,
+            e.point.x + self.metrics.font_advance,
+            self.metrics.font_height + y,
         )));
         s.point.x
     }
@@ -572,15 +607,15 @@ impl EditorView {
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
                 path.push(PathEl::MoveTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., self.metrics.font_height + y)));
                 path.push(PathEl::LineTo(Point::new(0., y)));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
                 path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., self.metrics.font_height + y)));
                 path.push(PathEl::LineTo(Point::new(0., y)));
                 path.push(PathEl::ClosePath);
             }
@@ -588,8 +623,8 @@ impl EditorView {
                 path.clear();
                 path.push(PathEl::MoveTo(Point::new(0., y)));
                 path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
+                path.push(PathEl::LineTo(Point::new(0., self.metrics.font_height + y)));
                 path.push(PathEl::ClosePath);
             }
             _ => {
@@ -610,37 +645,37 @@ impl EditorView {
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
                 path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
+                    e.point.x + self.metrics.font_advance,
+                    self.metrics.font_height + y,
                 )));
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
                 // insert a point at the begining of the line
                 path[0] = PathEl::LineTo(Point::new(path.last_x, y));
                 path.insert(0, PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
+                    e.point.x + self.metrics.font_advance,
+                    self.metrics.font_height + y,
                 )));
             }
             None => {
                 // the precedent line was outside the visible range
                 path.clear();
                 path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
+                    e.point.x + self.metrics.font_advance,
+                    self.metrics.font_height + y,
                 )));
             }
             _ => {
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.font_advance,
-                    self.font_height + y,
+                    e.point.x + self.metrics.font_advance,
+                    self.metrics.font_height + y,
                 )));
             }
         }
@@ -670,7 +705,7 @@ impl EditorView {
 
         // Draw selection first
         // TODO: cache layout to reuse it when we will draw the text
-        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
+        let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
@@ -678,7 +713,7 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone()) // TODO: comment ne pas faire de clone?
-                .font(font.clone(), self.font_size)
+                .font(font.clone(), self.metrics.font_size)
                 .build()
                 .unwrap();
 
@@ -722,7 +757,7 @@ impl EditorView {
                 }
             }
 
-            dy += self.font_height;
+            dy += self.metrics.font_height;
         }
 
         // if path is unclosed, it can only be because the lastest visible line was a RangeFull
@@ -744,7 +779,7 @@ impl EditorView {
             ctx.render_ctx.stroke(&path, &brush, 0.5);
         }
 
-        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
+        let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
@@ -752,7 +787,7 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone())
-                .font(font.clone(), self.font_size)
+                .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone())
                 .build()
                 .unwrap();
@@ -763,7 +798,7 @@ impl EditorView {
                 let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
                 ctx.render_ctx.stroke(
                     Line::new(
-                        (metrics.point.x + 1.0, self.font_height + dy),
+                        (metrics.point.x + 1.0, self.metrics.font_height + dy),
                         (metrics.point.x + 1.0, dy),
                     ),
                     &self.fg_color,
@@ -771,7 +806,7 @@ impl EditorView {
                 );
             });
 
-            dy += self.font_height;
+            dy += self.metrics.font_height;
         }
 
         false
@@ -779,7 +814,7 @@ impl EditorView {
 
     fn paint_gutter(&mut self, editor: &EditStack, ctx: &mut PaintCtx, font: &druid::FontFamily) {
         // Draw line number
-        let mut dy = (self.delta_y / self.font_height).fract() * self.font_height;
+        let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         let line_number_char_width = format!(" {}", editor.len_lines()).len();
         for line_idx in self.visible_range() {
             if line_idx >= editor.len_lines() {
@@ -789,12 +824,12 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
-                .font(font.clone(), self.font_size)
+                .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone())
                 .build()
                 .unwrap();
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
-            dy += self.font_height;
+            dy += self.metrics.font_height;
         }
 
         ctx.render_ctx.stroke(
@@ -810,14 +845,19 @@ impl EditorView {
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
         let x = ((x - self.delta_x) - self.gutter_width(editor)).max(0.);
         let y = (y - self.delta_y).max(0.);
-        let line = ((y / self.font_height) as usize).min(editor.len_lines() - 1);
+        let line = ((y / self.metrics.font_height) as usize).min(editor.len_lines() - 1);
 
         let mut buf = String::new();
         let mut i = Vec::new();
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
 
         let layout = self.text_layout(ctx, buf);
-        let rel = rope_utils::relative_to_column(i[layout.hit_test_point((x, 0.0).into()).idx], line.into(), &editor.buffer).index;
+        let rel = rope_utils::relative_to_column(
+            i[layout.hit_test_point((x, 0.0).into()).idx],
+            line.into(),
+            &editor.buffer,
+        )
+        .index;
 
         (rel, line)
     }
@@ -827,7 +867,7 @@ impl EditorView {
         let layout = ctx
             .text()
             .new_text_layout(buf)
-            .font(font, self.font_size)
+            .font(font, self.metrics.font_size)
             .build()
             .unwrap();
         layout
@@ -835,8 +875,8 @@ impl EditorView {
 
     fn gutter_width(&self, editor: &EditStack) -> f64 {
         let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        let line_number_width = self.font_advance * line_number_char_width as f64;
-        line_number_width + self.font_advance + 4.0
+        let line_number_width = self.metrics.font_advance * line_number_char_width as f64;
+        line_number_width + self.metrics.font_advance + 4.0
     }
     fn editor_width(&self, editor: &EditStack) -> f64 {
         self.size.width - self.gutter_width(editor)
@@ -847,10 +887,10 @@ impl EditorView {
             return;
         }
         let caret = editor.main_caret();
-        let y = caret.line().index as f64 * self.font_height;
+        let y = caret.line().index as f64 * self.metrics.font_height;
 
-        if y > -self.delta_y + self.size.height - self.font_height {
-            self.delta_y = -y + self.size.height - self.font_height;
+        if y > -self.delta_y + self.size.height - self.metrics.font_height {
+            self.delta_y = -y + self.size.height - self.metrics.font_height;
         }
         if y < -self.delta_y {
             self.delta_y = -y;
@@ -864,8 +904,8 @@ impl EditorView {
 
         let hit = layout.hit_test_text_position(i[caret.relative().index].index);
         let x = hit.point.x;
-        if x > -self.delta_x + self.editor_width(editor) - self.font_advance {
-            self.delta_x = -x + self.editor_width(editor) - self.font_advance;
+        if x > -self.delta_x + self.editor_width(editor) - self.metrics.font_advance {
+            self.delta_x = -x + self.editor_width(editor) - self.metrics.font_advance;
         }
         if x < -self.delta_x {
             self.delta_x = -x;
@@ -904,5 +944,22 @@ impl EditorView {
     {
         editor.open(filename)?;
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct Gutter {}
+
+impl Widget<EditStack> for Gutter {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {}
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {}
+
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {}
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {}
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
+        todo!()
     }
 }
