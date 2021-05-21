@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder};
+use druid::{piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder}, platform_menus::mac::application::default};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor,
@@ -17,6 +17,7 @@ use rfd::MessageDialog;
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
 //pub const FONT_NAME: Key<druid::Value> = Key::new("nonepad.editor.font_name");
+pub const FONT_NAME: &'static str = "Consolas";
 
 pub const FONT_DESCRIPTOR: Key<FontDescriptor> = Key::new("nonepad.editor.font_descriptor");
 pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
@@ -67,7 +68,7 @@ pub struct MonoFontMetrics {
 }
 
 impl MonoFontMetrics {
-    pub fn new(&mut text_ctx: &mut PietText, font_name: &str) -> Self {
+    pub fn new(text_ctx: &mut PietText, font_name: &str) -> Self {
         let mut metrics = MonoFontMetrics::default();
         let font = text_ctx.font_family(font_name).unwrap();
         let layout = text_ctx
@@ -533,7 +534,7 @@ impl Default for EditorView {
             bg_sel_color: Color::WHITE,
 
             metrics: Default::default(),
-            font_name: "consolas".to_owned(),
+            font_name: FONT_NAME.to_string(),
             delta_x: 0.0,
             delta_y: 0.0,
             page_len: 0,
@@ -948,7 +949,19 @@ impl EditorView {
 }
 
 #[derive(Debug)]
-pub struct Gutter {}
+pub struct Gutter {
+    metrics: MonoFontMetrics,
+    font_name: String,
+}
+
+impl Default for Gutter {
+    fn default() -> Self {
+        Gutter {
+            metrics: Default::default(),
+            font_name: FONT_NAME.to_string(),
+        }
+    }
+}
 
 impl Widget<EditStack> for Gutter {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {}
@@ -957,7 +970,10 @@ impl Widget<EditStack> for Gutter {
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {}
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {}
+    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
+        self.metrics = MonoFontMetrics::new(layout_ctx.text(),&self.font_name);
+        Size::new(bc.max().width, (data.len_lines().to_string().chars().count() as f64 +1.0) * self.metrics.font_advance )
+    }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
         todo!()
