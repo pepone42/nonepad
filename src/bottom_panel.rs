@@ -36,7 +36,7 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut BottonPanelState, env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL) => {
-                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), crate::editor_view::WIDGET_ID));
+                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), crate::editor_view::EDITOR_WIDGET_ID));
                 data.current = PANEL_CLOSED;
                 return;
             }

@@ -4,12 +4,8 @@ use std::path::Path;
 use crate::{MainWindowState, commands};
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::widget::Flex;
-use druid::{Cursor, WidgetExt};
-use druid::{
-    kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
-    FontDescriptor,
-};
+use druid::widget::{Flex, Scroll};
+use druid::{FontDescriptor, WidgetExt, kurbo::{BezPath, Line, PathEl, Point, Rect, Size}};
 use druid::{
     piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder},
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
@@ -28,7 +24,8 @@ pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
 pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
 pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
 
-pub const WIDGET_ID: WidgetId = WidgetId::reserved(0xED17);
+pub const EDITOR_WIDGET_ID: WidgetId = WidgetId::reserved(0xED17);
+pub const GUTTER_WIDGET_ID: WidgetId = WidgetId::reserved(0x8077);
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -408,7 +405,7 @@ impl Widget<EditStack> for EditorView {
                     }
                 }
 
-                ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, Target::Global)); // TODO: GLOBAL?
+                ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID)); // TODO: GLOBAL?
 
                 self.delta_x -= event.wheel_delta.x;
                 if self.delta_x > 0. {
@@ -860,7 +857,7 @@ impl EditorView {
         if x < -self.delta_x {
             self.delta_x = -x;
         }
-        ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, Target::Global));
+        ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID));
         // TODO: GLOBAL?
     }
 
@@ -933,7 +930,7 @@ impl Widget<EditStack> for Gutter {
                 if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), Target::Global));
+                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), EDITOR_WIDGET_ID));
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -942,7 +939,7 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_active(true);
                 let y = (m.pos.y - self.dy).max(0.);
                 let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                ctx.submit_command(Command::new(commands::SELECT_LINE, (line, m.mods.shift()), Target::Global));
+                ctx.submit_command(Command::new(commands::SELECT_LINE, (line, m.mods.shift()), EDITOR_WIDGET_ID));
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1014,8 +1011,9 @@ impl Gutter {
 }
 
 pub fn new() -> impl Widget<EditStack> {
+
     Flex::row()
     .with_child(Gutter::default())
     .with_flex_child(EditorView::default()
-        .with_id(crate::editor_view::WIDGET_ID),1.0).must_fill_main_axis(true)
-}
+        .with_id(crate::editor_view::EDITOR_WIDGET_ID),1.0).must_fill_main_axis(true)
+    }
