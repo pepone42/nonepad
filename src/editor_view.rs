@@ -1,14 +1,15 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
+use crate::commands;
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::{piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder}, platform_menus::mac::application::default};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor,
 };
 use druid::{
+    piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder},
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
     HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
     Widget, WidgetId,
@@ -84,7 +85,6 @@ impl MonoFontMetrics {
     }
 }
 
-
 impl Default for MonoFontMetrics {
     fn default() -> Self {
         MonoFontMetrics {
@@ -93,7 +93,6 @@ impl Default for MonoFontMetrics {
             font_descent: 0.0,
             font_height: 0.0,
             font_size: 12.0,
-
         }
     }
 }
@@ -289,6 +288,7 @@ impl Widget<EditStack> for EditorView {
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
                     }
                     self.put_caret_in_visible_range(ctx, editor);
+                    // TODO: The bug is fixed.
                     // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
                     // get_format correctly close the slipboard
                     // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
@@ -398,16 +398,22 @@ impl Widget<EditStack> for EditorView {
                     if self.delta_y > 0. {
                         self.delta_y = 0.;
                     }
-                    if -self.delta_y > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height {
-                        self.delta_y = -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
+                    if -self.delta_y
+                        > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height
+                    {
+                        self.delta_y =
+                            -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
                     }
                 }
+
+                ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, Target::Global)); // TODO: GLOBAL?
+
                 self.delta_x -= event.wheel_delta.x;
                 if self.delta_x > 0. {
                     self.delta_x = 0.;
                 }
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
-                    let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
+                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     let p = editor.point(x, y);
                     editor.move_main_caret_to(p, true);
                     self.put_caret_in_visible_range(ctx, editor);
@@ -417,7 +423,7 @@ impl Widget<EditStack> for EditorView {
             }
             Event::MouseDown(event) => {
                 if matches!(event.button, MouseButton::Left) {
-                    let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
+                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     editor.cancel_mutli_carets();
                     // FIXME: Update is not called if the caret position is not modified,
                     let p = editor.point(x, y);
@@ -434,7 +440,7 @@ impl Widget<EditStack> for EditorView {
             }
             Event::MouseMove(event) => {
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
-                    let (x, y) = self.pix_to_point(event.window_pos.x, event.window_pos.y, ctx, editor);
+                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     let p = editor.point(x, y);
                     editor.move_main_caret_to(p, true);
                     self.put_caret_in_visible_range(ctx, editor);
@@ -479,17 +485,12 @@ impl Widget<EditStack> for EditorView {
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
-            //LifeCycle::WidgetAdded => {
-            //self.font_size = env.get(FONT_SIZE);
-            //self.font_name = env.get(FONT_NAME).to_owned();
             self.bg_color = env.get(BG_COLOR);
             self.fg_color = env.get(FG_COLOR);
             self.fg_sel_color = env.get(FG_SEL_COLOR);
             self.bg_sel_color = env.get(BG_SEL_COLOR);
 
             ctx.register_for_focus();
-            //}
-            //_ => (),
         }
     }
 
@@ -498,20 +499,7 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
 
-        // let font = layout_ctx.text().font_family(&self.font_name).unwrap();
-
-        // let layout = layout_ctx
-        //     .text()
-        //     .new_text_layout("8")
-        //     .font(font, self.font_size)
-        //     .build()
-        //     .unwrap();
-        // self.metrics.font_advance = layout.size().width;
-        // self.font_baseline = layout.line_metric(0).unwrap().baseline;
-        // self.metrics.font_height = layout.line_metric(0).unwrap().height;
-        // self.font_descent = self.metrics.font_height - self.font_baseline;
-
-        self.metrics = MonoFontMetrics::new(layout_ctx.text(),&self.font_name);
+        self.metrics = MonoFontMetrics::new(layout_ctx.text(), &self.font_name);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
 
         bc.max()
@@ -688,14 +676,8 @@ impl EditorView {
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
-        self.paint_gutter(editor, ctx, &font);
-
-        let mut clip_rect = ctx.size().to_rect();
-        clip_rect.x0 += self.gutter_width(editor);
+        let clip_rect = ctx.size().to_rect();
         ctx.render_ctx.clip(clip_rect);
-
-        ctx.render_ctx
-            .transform(Affine::translate((self.gutter_width(editor), 0.0)));
         ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
 
         let mut line = String::new();
@@ -708,7 +690,6 @@ impl EditorView {
         // TODO: cache layout to reuse it when we will draw the text
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
-            //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let layout = ctx
                 .render_ctx
@@ -813,38 +794,8 @@ impl EditorView {
         false
     }
 
-    fn paint_gutter(&mut self, editor: &EditStack, ctx: &mut PaintCtx, font: &druid::FontFamily) {
-        // Draw line number
-        let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
-        let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        for line_idx in self.visible_range() {
-            if line_idx >= editor.len_lines() {
-                break;
-            }
-            let layout = ctx
-                .render_ctx
-                .text()
-                .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
-                .font(font.clone(), self.metrics.font_size)
-                .text_color(self.fg_color.clone())
-                .build()
-                .unwrap();
-            ctx.render_ctx.draw_text(&layout, (0.0, dy));
-            dy += self.metrics.font_height;
-        }
-
-        ctx.render_ctx.stroke(
-            Line::new(
-                (self.gutter_width(editor) - 2.0, 0.0),
-                (self.gutter_width(editor) - 2.0, self.size.height),
-            ),
-            &self.fg_color,
-            1.0,
-        );
-    }
-
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
-        let x = ((x - self.delta_x) - self.gutter_width(editor)).max(0.);
+        let x = (x - self.delta_x).max(0.);
         let y = (y - self.delta_y).max(0.);
         let line = ((y / self.metrics.font_height) as usize).min(editor.len_lines() - 1);
 
@@ -874,15 +825,6 @@ impl EditorView {
         layout
     }
 
-    fn gutter_width(&self, editor: &EditStack) -> f64 {
-        let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        let line_number_width = self.metrics.font_advance * line_number_char_width as f64;
-        line_number_width + self.metrics.font_advance + 4.0
-    }
-    fn editor_width(&self, editor: &EditStack) -> f64 {
-        self.size.width - self.gutter_width(editor)
-    }
-
     fn put_caret_in_visible_range(&mut self, ctx: &mut EventCtx, editor: &EditStack) {
         if editor.has_many_carets() {
             return;
@@ -905,12 +847,14 @@ impl EditorView {
 
         let hit = layout.hit_test_text_position(i[caret.relative().index].index);
         let x = hit.point.x;
-        if x > -self.delta_x + self.editor_width(editor) - self.metrics.font_advance {
-            self.delta_x = -x + self.editor_width(editor) - self.metrics.font_advance;
+        if x > -self.delta_x + self.size.width - self.metrics.font_advance {
+            self.delta_x = -x + self.size.width - self.metrics.font_advance;
         }
         if x < -self.delta_x {
             self.delta_x = -x;
         }
+        ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, Target::Global));
+        // TODO: GLOBAL?
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -952,6 +896,9 @@ impl EditorView {
 pub struct Gutter {
     metrics: MonoFontMetrics,
     font_name: String,
+    page_len: usize,
+    size: Size,
+    dy: f64,
 }
 
 impl Default for Gutter {
@@ -959,23 +906,79 @@ impl Default for Gutter {
         Gutter {
             metrics: Default::default(),
             font_name: FONT_NAME.to_string(),
+            page_len: 0,
+            size: Default::default(),
+            dy: 0.0,
         }
     }
 }
 
 impl Widget<EditStack> for Gutter {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {}
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut EditStack, _env: &Env) {
+        match event {
+            Event::Command(cmd) if cmd.is(commands::SCROLL_VIEWPORT) => {
+                self.dy = *cmd.get_unchecked(commands::SCROLL_VIEWPORT);
+                ctx.request_paint();
+            }
+            _ => (),
+        }
+    }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {}
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {}
 
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {}
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 
-    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
-        self.metrics = MonoFontMetrics::new(layout_ctx.text(),&self.font_name);
-        Size::new(bc.max().width, (data.len_lines().to_string().chars().count() as f64 +1.0) * self.metrics.font_advance )
+    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
+        self.metrics = MonoFontMetrics::new(layout_ctx.text(), &self.font_name);
+        self.size = Size::new(self.width(data), bc.max().height);
+        self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
+        self.size
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
-        todo!()
+        self.paint_gutter(data, ctx, env)
+    }
+}
+
+impl Gutter {
+    fn visible_range(&self) -> Range<usize> {
+        let start = -(self.dy / self.metrics.font_height) as usize;
+        let end = start + self.page_len + 1;
+        Range { start, end }
+    }
+    fn width(&self, data: &EditStack) -> f64 {
+        (data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance
+    }
+    fn paint_gutter(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) {
+        ctx.clip(self.size.to_rect());
+        ctx.render_ctx.fill(self.size.to_rect(), &env.get(BG_COLOR));
+        // Draw line number
+        let font = ctx.text().font_family(FONT_NAME).unwrap();
+        let mut dy = (self.dy / self.metrics.font_height).fract() * self.metrics.font_height;
+        let line_number_char_width = format!(" {}", editor.len_lines()).len();
+        for line_idx in self.visible_range() {
+            if line_idx >= editor.len_lines() {
+                break;
+            }
+            let layout = ctx
+                .render_ctx
+                .text()
+                .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
+                .font(font.clone(), self.metrics.font_size)
+                .text_color(env.get(FG_COLOR))
+                .build()
+                .unwrap();
+            ctx.render_ctx.draw_text(&layout, (0.0, dy));
+            dy += self.metrics.font_height;
+        }
+
+        ctx.render_ctx.stroke(
+            Line::new(
+                (self.width(editor) - self.metrics.font_advance, 0.0),
+                (self.width(editor), self.size.height),
+            ),
+            &env.get(FG_COLOR),
+            1.0,
+        );
     }
 }
