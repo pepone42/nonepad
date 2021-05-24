@@ -1,10 +1,11 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::commands;
+use crate::{MainWindowState, commands};
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::Cursor;
+use druid::widget::Flex;
+use druid::{Cursor, WidgetExt};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor,
@@ -1010,4 +1011,11 @@ impl Gutter {
             1.0,
         );
     }
+}
+
+pub fn new() -> impl Widget<EditStack> {
+    Flex::row()
+    .with_child(Gutter::default())
+    .with_flex_child(EditorView::default()
+        .with_id(crate::editor_view::WIDGET_ID),1.0).must_fill_main_axis(true)
 }
