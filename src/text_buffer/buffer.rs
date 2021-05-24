@@ -153,7 +153,8 @@ impl Buffer {
 
     pub fn backward(&mut self, expand_selection: bool, word_boundary: bool) {
         let b = self.clone();
-        for s in &mut self.carets.iter_mut() { // TODO: Found a way to not clone, even if it's cheap
+        for s in &mut self.carets.iter_mut() {
+            // TODO: Found a way to not clone, even if it's cheap
             s.move_backward(expand_selection, word_boundary, &b);
         }
 
@@ -355,7 +356,7 @@ impl Buffer {
     where
         R: RangeBounds<Absolute>,
     {
-        let start = start_bound_to_num(r.start_bound()).unwrap_or_else(||Absolute::from(0));
+        let start = start_bound_to_num(r.start_bound()).unwrap_or_else(|| Absolute::from(0));
         let end = end_bound_to_num(r.end_bound()).unwrap_or_else(|| self.len());
 
         self.rope
@@ -379,7 +380,7 @@ impl Buffer {
         dbg!(start_index);
         let i = self
             .search_next_in_range(s, start_index..self.len())
-            .or_else(||self.search_next_in_range(s, 0.into()..start_index));
+            .or_else(|| self.search_next_in_range(s, 0.into()..start_index));
         if let Some(i) = i {
             self.cancel_mutli_carets();
             self.move_main_caret_to(i, false);
@@ -388,10 +389,7 @@ impl Buffer {
     }
 
     pub fn main_caret(&self) -> &Caret {
-        self.carets
-            .iter()
-            .find(|c| !c.is_clone)
-            .expect("No main cursor found!")
+        self.carets.iter().find(|c| !c.is_clone).expect("No main cursor found!")
     }
 
     pub fn main_caret_mut(&mut self) -> &mut Caret {
@@ -440,6 +438,22 @@ impl Buffer {
         self.cancel_selection();
         self.move_main_caret_to(Absolute::from(0), false);
         self.move_main_caret_to(self.len(), true);
+    }
+
+    pub fn select_line(&mut self, line: Line, expand_selection: bool) {
+        self.cancel_mutli_carets();
+
+        if !expand_selection {
+            self.cancel_selection();
+            self.move_main_caret_to(line.start(&self), false);
+            self.move_main_caret_to(line.end(&self), true);
+        } else {
+            if self.main_caret().start() == self.main_caret().index {
+                self.move_main_caret_to(line.start(&self), true);
+            } else {
+                self.move_main_caret_to(line.end(&self), true);
+            }
+        }
     }
 
     pub fn caret_display_info(&self) -> String {

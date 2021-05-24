@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::commands;
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
+use druid::Cursor;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor,
@@ -479,6 +480,11 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
+            Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
+                let (line, expand) = *cmd.get_unchecked(crate::commands::SELECT_LINE);
+                editor.buffer.select_line(line.into(), expand);
+                self.put_caret_in_visible_range(ctx, editor);
+            }
             _ => (),
         }
     }
@@ -914,11 +920,34 @@ impl Default for Gutter {
 }
 
 impl Widget<EditStack> for Gutter {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut EditStack, _env: &Env) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(commands::SCROLL_VIEWPORT) => {
                 self.dy = *cmd.get_unchecked(commands::SCROLL_VIEWPORT);
                 ctx.request_paint();
+                ctx.set_handled();
+            }
+            Event::MouseMove(m) => {
+                //ctx.set_cursor(&Cursor::ResizeLeftRight);
+                if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
+                    let y = (m.pos.y - self.dy).max(0.);
+                    let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
+                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), Target::Global));
+                    ctx.request_paint();
+                    ctx.set_handled();
+                }
+            }
+            Event::MouseDown(m) => {
+                ctx.set_active(true);
+                let y = (m.pos.y - self.dy).max(0.);
+                let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
+                ctx.submit_command(Command::new(commands::SELECT_LINE, (line, m.mods.shift()), Target::Global));
+                ctx.request_paint();
+                ctx.set_handled();
+            }
+            Event::MouseUp(_event) => {
+                ctx.set_active(false);
+                ctx.set_handled();
             }
             _ => (),
         }
