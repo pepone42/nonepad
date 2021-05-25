@@ -5,7 +5,6 @@ use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{commands, MainWindowState};
 use druid::widget::{Controller, Flex, IdentityWrapper, Scroll};
-use druid::Data;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     FontDescriptor, WidgetExt,
@@ -16,6 +15,7 @@ use druid::{
     HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
     Widget, WidgetId,
 };
+use druid::{Data, Vec2};
 use rfd::MessageDialog;
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
@@ -1025,7 +1025,22 @@ impl Gutter {
     }
 }
 
-struct EditorController;
+#[derive(Debug)]
+struct EditorController {
+    offset: Vec2,
+    gutter_id: WidgetId,
+    editor_id: WidgetId,
+}
+
+impl Default for EditorController {
+     fn default() -> Self {
+         EditorController {
+             gutter_id: WidgetId::next(),
+             editor_id: WidgetId::next(),
+             ..Default::default()
+         }
+     }
+}
 
 impl Controller<EditStack, Scroll<EditStack, IdentityWrapper<EditorView>>> for EditorController {
     fn event(
@@ -1044,6 +1059,10 @@ impl Controller<EditStack, Scroll<EditStack, IdentityWrapper<EditorView>>> for E
             }
             _ => (),
         }
+        if self.offset != child.offset() {
+            self.offset = child.offset();
+        }
+        
         child.event(ctx, event, data, env)
     }
 
@@ -1071,11 +1090,13 @@ impl Controller<EditStack, Scroll<EditStack, IdentityWrapper<EditorView>>> for E
 }
 
 pub fn new() -> impl Widget<EditStack> {
+    let controller_id = WidgetId::next();
+    let controller = EditorController::default();
     Flex::row()
-        .with_child(Gutter::default())
+        .with_child(Gutter::default().with_id(controller.gutter_id))
         .with_flex_child(
-            Scroll::new(EditorView::default().with_id(crate::editor_view::EDITOR_WIDGET_ID))
-.controller(EditorController),
+            Scroll::new(EditorView::default().with_id(controller.editor_id))
+                .controller(controller).with_id(controller_id),
             1.0,
         )
         .must_fill_main_axis(true)
