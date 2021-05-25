@@ -1,11 +1,15 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::{MainWindowState, commands};
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::widget::{Flex, Scroll};
-use druid::{FontDescriptor, WidgetExt, kurbo::{BezPath, Line, PathEl, Point, Rect, Size}};
+use crate::{commands, MainWindowState};
+use druid::widget::{Controller, Flex, IdentityWrapper, Scroll};
+use druid::Data;
+use druid::{
+    kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
+    FontDescriptor, WidgetExt,
+};
 use druid::{
     piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder},
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
@@ -506,12 +510,15 @@ impl Widget<EditStack> for EditorView {
         self.metrics = MonoFontMetrics::new(layout_ctx.text(), &self.font_name);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
 
-        bc.max()
+        Size::new(
+            bc.max().width,
+            self.metrics.font_height * (_data.len_lines() + self.page_len) as f64,
+        )
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
-        let clip_rect = ctx.size().to_rect();
-        ctx.clip(clip_rect);
+        let clip_rect = dbg!(ctx.size().to_rect());
+        //ctx.clip(clip_rect);
 
         self.paint_editor(data, ctx, env);
     }
@@ -680,9 +687,9 @@ impl EditorView {
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
-        let clip_rect = ctx.size().to_rect();
-        ctx.render_ctx.clip(clip_rect);
-        ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
+        // let clip_rect = ctx.size().to_rect();
+        // ctx.render_ctx.clip(clip_rect);
+        // ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
 
         let mut line = String::new();
         let mut indices = Vec::new();
@@ -858,7 +865,11 @@ impl EditorView {
             self.delta_x = -x;
         }
         ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID));
-        // TODO: GLOBAL?
+        ctx.submit_command(Command::new(
+            crate::commands::SCROLL_TO,
+            Rect::new(x, y, x, y),
+            Target::Global,
+        ));
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -939,7 +950,11 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_active(true);
                 let y = (m.pos.y - self.dy).max(0.);
                 let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                ctx.submit_command(Command::new(commands::SELECT_LINE, (line, m.mods.shift()), EDITOR_WIDGET_ID));
+                ctx.submit_command(Command::new(
+                    commands::SELECT_LINE,
+                    (line, m.mods.shift()),
+                    EDITOR_WIDGET_ID,
+                ));
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1010,10 +1025,58 @@ impl Gutter {
     }
 }
 
-pub fn new() -> impl Widget<EditStack> {
+struct EditorController;
 
-    Flex::row()
-    .with_child(Gutter::default())
-    .with_flex_child(EditorView::default()
-        .with_id(crate::editor_view::EDITOR_WIDGET_ID),1.0).must_fill_main_axis(true)
+impl Controller<EditStack, Scroll<EditStack, IdentityWrapper<EditorView>>> for EditorController {
+    fn event(
+        &mut self,
+        child: &mut Scroll<EditStack, IdentityWrapper<EditorView>>,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut EditStack,
+        env: &Env,
+    ) {
+        match event {
+            Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
+                child.scroll_to(*cmd.get_unchecked(crate::commands::SCROLL_TO));
+                ctx.is_handled();
+                //ctx.request_paint();
+            }
+            _ => (),
+        }
+        child.event(ctx, event, data, env)
     }
+
+    fn lifecycle(
+        &mut self,
+        child: &mut Scroll<EditStack, IdentityWrapper<EditorView>>,
+        ctx: &mut LifeCycleCtx,
+        event: &LifeCycle,
+        data: &EditStack,
+        env: &Env,
+    ) {
+        child.lifecycle(ctx, event, data, env)
+    }
+
+    fn update(
+        &mut self,
+        child: &mut Scroll<EditStack, IdentityWrapper<EditorView>>,
+        ctx: &mut UpdateCtx,
+        old_data: &EditStack,
+        data: &EditStack,
+        env: &Env,
+    ) {
+        child.update(ctx, old_data, data, env)
+    }
+}
+
+pub fn new() -> impl Widget<EditStack> {
+    Flex::row()
+        .with_child(Gutter::default())
+        .with_flex_child(
+            Scroll::new(EditorView::default().with_id(crate::editor_view::EDITOR_WIDGET_ID))
+.controller(EditorController),
+            1.0,
+        )
+        .must_fill_main_axis(true)
+}
