@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
+use crate::commands::SCROLL_TO;
 use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{commands, MainWindowState};
@@ -15,7 +16,7 @@ use druid::{
     HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
     Widget, WidgetId,
 };
-use druid::{Data, Vec2};
+use druid::{Data, Vec2, WindowConfig};
 use rfd::MessageDialog;
 
 pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
@@ -115,6 +116,7 @@ pub struct EditorView {
     bg_sel_color: Color,
 
     size: Size,
+    owner_id: WidgetId,
     //handle: WindowHandle,
 }
 
@@ -409,7 +411,7 @@ impl Widget<EditStack> for EditorView {
                     }
                 }
 
-                ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID)); // TODO: GLOBAL?
+                ctx.submit_command(Command::new(commands::SCROLL_TO, dbg!((Some(self.delta_x),Some(self.delta_y))), self.owner_id));
 
                 self.delta_x -= event.wheel_delta.x;
                 if self.delta_x > 0. {
@@ -480,12 +482,21 @@ impl Widget<EditStack> for EditorView {
                     editor.search_next(data);
                     self.put_caret_in_visible_range(ctx, editor);
                 }
+                ctx.set_handled();
             }
             Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
             Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
                 let (line, expand) = *cmd.get_unchecked(crate::commands::SELECT_LINE);
                 editor.buffer.select_line(line.into(), expand);
                 self.put_caret_in_visible_range(ctx, editor);
+                ctx.set_handled();
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
+                let d = dbg!(*cmd.get_unchecked(crate::commands::SCROLL_TO));
+                self.delta_x = d.0.unwrap_or(self.delta_x);
+                self.delta_y = d.1.unwrap_or(self.delta_y);
+                ctx.set_handled();
+                ctx.request_paint();
             }
             _ => (),
         }
@@ -510,22 +521,17 @@ impl Widget<EditStack> for EditorView {
         self.metrics = MonoFontMetrics::new(layout_ctx.text(), &self.font_name);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
 
-        Size::new(
-            bc.max().width,
-            self.metrics.font_height * (_data.len_lines() + self.page_len) as f64,
-        )
+        bc.max()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
-        let clip_rect = dbg!(ctx.size().to_rect());
-        //ctx.clip(clip_rect);
-
+        dbg!(self.delta_x, self.delta_y);
         self.paint_editor(data, ctx, env);
     }
 }
 
-impl Default for EditorView {
-    fn default() -> Self {
+impl EditorView {
+    pub fn new(owner_id: WidgetId) -> Self {
         EditorView {
             bg_color: Color::BLACK,
             fg_color: Color::WHITE,
@@ -539,11 +545,9 @@ impl Default for EditorView {
             page_len: 0,
 
             size: Default::default(),
+            owner_id,
         }
     }
-}
-
-impl EditorView {
     fn visible_range(&self) -> Range<usize> {
         (-self.delta_y / self.metrics.font_height) as usize
             ..((-self.delta_y + self.size.height) / self.metrics.font_height) as usize + 1
@@ -683,13 +687,13 @@ impl EditorView {
 
     fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, _env: &Env) -> bool {
         let font = ctx.render_ctx.text().font_family(&self.font_name).unwrap();
-
+        // self.size.to_rect();
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
-        // let clip_rect = ctx.size().to_rect();
-        // ctx.render_ctx.clip(clip_rect);
-        // ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
+        let clip_rect = ctx.size().to_rect();
+        ctx.render_ctx.clip(clip_rect);
+        ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
 
         let mut line = String::new();
         let mut indices = Vec::new();
@@ -864,12 +868,7 @@ impl EditorView {
         if x < -self.delta_x {
             self.delta_x = -x;
         }
-        ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID));
-        ctx.submit_command(Command::new(
-            crate::commands::SCROLL_TO,
-            Rect::new(x, y, x, y),
-            Target::Global,
-        ));
+        ctx.submit_command(Command::new(commands::SCROLL_TO, (Some(self.delta_x),Some(self.delta_y)), self.owner_id)); // TODO: GLOBAL?
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -914,25 +913,14 @@ pub struct Gutter {
     page_len: usize,
     size: Size,
     dy: f64,
-}
-
-impl Default for Gutter {
-    fn default() -> Self {
-        Gutter {
-            metrics: Default::default(),
-            font_name: FONT_NAME.to_string(),
-            page_len: 0,
-            size: Default::default(),
-            dy: 0.0,
-        }
-    }
+    owner_id: WidgetId
 }
 
 impl Widget<EditStack> for Gutter {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(commands::SCROLL_VIEWPORT) => {
-                self.dy = *cmd.get_unchecked(commands::SCROLL_VIEWPORT);
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                self.dy = dbg!(cmd.get_unchecked(commands::SCROLL_TO)).1.unwrap_or(self.dy).clamp(-self.height(&data), 0.);
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -941,7 +929,7 @@ impl Widget<EditStack> for Gutter {
                 if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), EDITOR_WIDGET_ID));
+                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), self.owner_id));
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -953,13 +941,19 @@ impl Widget<EditStack> for Gutter {
                 ctx.submit_command(Command::new(
                     commands::SELECT_LINE,
                     (line, m.mods.shift()),
-                    EDITOR_WIDGET_ID,
+                    self.owner_id,
                 ));
                 ctx.request_paint();
                 ctx.set_handled();
             }
             Event::MouseUp(_event) => {
                 ctx.set_active(false);
+                ctx.set_handled();
+            }
+            Event::Wheel(m) => {
+                self.dy -= m.wheel_delta.y;
+                ctx.submit_command(Command::new(SCROLL_TO, (None,Some(self.dy)), self.owner_id));
+                ctx.request_paint();
                 ctx.set_handled();
             }
             _ => (),
@@ -983,10 +977,24 @@ impl Widget<EditStack> for Gutter {
 }
 
 impl Gutter {
+    fn new(owner_id: WidgetId) -> Self {
+        Gutter {
+            metrics: Default::default(),
+            font_name: FONT_NAME.to_string(),
+            page_len: 0,
+            size: Default::default(),
+            dy: 0.0,
+            owner_id,
+        }
+    }
     fn visible_range(&self) -> Range<usize> {
         let start = -(self.dy / self.metrics.font_height) as usize;
         let end = start + self.page_len + 1;
         Range { start, end }
+    }
+    fn height(&self, data: &EditStack) -> f64 {
+        // Reserve 3 visibles lines
+        (data.len_lines() -3 )as f64 * self.metrics.font_height
     }
     fn width(&self, data: &EditStack) -> f64 {
         (data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance
@@ -1025,79 +1033,68 @@ impl Gutter {
     }
 }
 
-#[derive(Debug)]
-struct EditorController {
-    offset: Vec2,
+struct TextEditor {
     gutter_id: WidgetId,
     editor_id: WidgetId,
+    id: WidgetId,
+    inner: Flex<EditStack>,
 }
 
-impl Default for EditorController {
-     fn default() -> Self {
-         EditorController {
-             gutter_id: WidgetId::next(),
-             editor_id: WidgetId::next(),
-             ..Default::default()
-         }
-     }
+impl Default for TextEditor {
+    fn default() -> Self {
+        let id = WidgetId::next();
+        let gutter_id = WidgetId::next();
+        let editor_id = WidgetId::next();
+        TextEditor {
+            gutter_id,
+            editor_id,
+            id,
+            inner: Flex::row()
+                .with_child(Gutter::new(id).with_id(gutter_id))
+                .with_flex_child(EditorView::new(id).with_id(editor_id), 1.0)
+                .must_fill_main_axis(true),
+        }
+    }
 }
 
-impl Controller<EditStack, Scroll<EditStack, IdentityWrapper<EditorView>>> for EditorController {
-    fn event(
-        &mut self,
-        child: &mut Scroll<EditStack, IdentityWrapper<EditorView>>,
-        ctx: &mut EventCtx,
-        event: &Event,
-        data: &mut EditStack,
-        env: &Env,
-    ) {
+impl Widget<EditStack> for TextEditor {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
-                child.scroll_to(*cmd.get_unchecked(crate::commands::SCROLL_TO));
-                ctx.is_handled();
-                //ctx.request_paint();
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                // clamp to size
+                let d =*cmd.get_unchecked(commands::SCROLL_TO);
+                dbg!(d);
+                // let x = d.0.map(|x| x.clamp(-ctx.size().width, 0.0));
+                // let y = d.1.map(|y| y.clamp(-ctx.size().height, 0.0));
+                // dbg!(x,y);
+                ctx.submit_command(Command::new(SCROLL_TO, d, self.editor_id));
+                ctx.submit_command(Command::new(SCROLL_TO, d, self.gutter_id));
+                ctx.is_handled();                
             }
-            _ => (),
+            _ => self.inner.event(ctx, event, data, env),
         }
-        if self.offset != child.offset() {
-            self.offset = child.offset();
-        }
-        
-        child.event(ctx, event, data, env)
+        //self.inner.event(ctx, event, data, env)
     }
 
-    fn lifecycle(
-        &mut self,
-        child: &mut Scroll<EditStack, IdentityWrapper<EditorView>>,
-        ctx: &mut LifeCycleCtx,
-        event: &LifeCycle,
-        data: &EditStack,
-        env: &Env,
-    ) {
-        child.lifecycle(ctx, event, data, env)
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {
+        self.inner.lifecycle(ctx, event, data, env)
     }
 
-    fn update(
-        &mut self,
-        child: &mut Scroll<EditStack, IdentityWrapper<EditorView>>,
-        ctx: &mut UpdateCtx,
-        old_data: &EditStack,
-        data: &EditStack,
-        env: &Env,
-    ) {
-        child.update(ctx, old_data, data, env)
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {
+        self.inner.update(ctx, old_data, data, env)
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
+        self.inner.layout(ctx, bc, data, env)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
+        self.inner.paint(ctx, data, env)
     }
 }
 
 pub fn new() -> impl Widget<EditStack> {
-    let controller_id = WidgetId::next();
-    let controller = EditorController::default();
-    Flex::row()
-        .with_child(Gutter::default().with_id(controller.gutter_id))
-        .with_flex_child(
-            Scroll::new(EditorView::default().with_id(controller.editor_id))
-                .controller(controller).with_id(controller_id),
-            1.0,
-        )
-        .must_fill_main_axis(true)
+    let t = TextEditor::default();
+    let id = t.id.clone();
+    t.with_id(id)
 }
