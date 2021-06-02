@@ -1102,6 +1102,7 @@ struct ScrollBar {
     len: f64,
     range: Range<f64>,
     metrics: CommonMetrics,
+    mouse_delta: f64,
 }
 
 impl ScrollBar {
@@ -1112,6 +1113,7 @@ impl ScrollBar {
             len: 0.,
             range: Range { start: 0., end: 0. },
             metrics: Default::default(),
+            mouse_delta: 0.,
         }
     }
 
@@ -1122,6 +1124,14 @@ impl ScrollBar {
             0. // TODO
         }
     }
+
+    pub fn rect(&self) -> Rect {
+        if self.direction == ScrollBarDirection::Vertical {
+            Rect::new(0.0, self.range.start, self.metrics.font_advance, dbg!(self.range.end))
+        } else {
+            Rect::new(self.range.start, 0.0, dbg!(self.range.end), self.metrics.font_advance)
+        }
+    }
 }
 impl Widget<EditStack> for ScrollBar {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {
@@ -1129,13 +1139,37 @@ impl Widget<EditStack> for ScrollBar {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
                     //self.range
-                    let range_len = self.len.powi(2)/self.text_len(data);
+                    let range_len = self.len.powi(2) / self.text_len(data);
                     let len = self.len - range_len;
-                    let dy = dy*self.len/self.text_len(data);
-                    self.range.start = -dy*len/self.len;
+                    let dy = dy * self.len / self.text_len(data);
+                    self.range.start = -dy * len / self.len;
                     self.range.end = self.range.start + range_len;
 
                     ctx.request_paint();
+                    ctx.set_handled();
+                }
+            }
+            Event::MouseDown(m) => {
+                if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {
+                    ctx.set_active(true);
+                    self.mouse_delta = m.pos.y;
+                    ctx.set_handled();
+                }
+            }
+            Event::MouseUp(m) => {
+                ctx.set_active(false);
+                ctx.set_handled();
+            }
+            Event::MouseMove(m) => {
+                if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
+                    ctx.submit_command(Command::new(
+                        SCROLL_TO,
+                        (
+                            None,
+                            Some(self.mouse_delta-m.pos.y * self.text_len(data) / (self.len - self.len.powi(2) / self.text_len(data))),
+                        ),
+                        self.owner_id,
+                    ));
                     ctx.set_handled();
                 }
             }
@@ -1178,8 +1212,7 @@ impl Widget<EditStack> for ScrollBar {
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
         if self.direction == ScrollBarDirection::Vertical {
-            let rect = Rect::new(0.0, self.range.start, self.metrics.font_advance, dbg!(self.range.end));
-            ctx.fill(rect.to_rounded_rect(3.), &env.get(FG_COLOR));
+            ctx.fill(self.rect().to_rounded_rect(3.), &env.get(FG_COLOR));
         }
     }
 }
