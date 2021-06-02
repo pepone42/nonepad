@@ -6,6 +6,8 @@ use crate::text_buffer::{position, rope_utils};
 use crate::text_buffer::{EditStack, SelectionLineRange};
 use crate::{commands, MainWindowState};
 use druid::keyboard_types::CompositionEvent;
+use druid::kurbo::Shape;
+use druid::piet::RoundInto;
 use druid::widget::{Controller, Flex, IdentityWrapper, Scroll};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
@@ -26,7 +28,6 @@ pub const FONT_BASELINE: Key<f64> = Key::new("nonepad.editor.font_baseline");
 pub const FONT_DESCENT: Key<f64> = Key::new("nonepad.editor.font_descent");
 pub const FONT_HEIGHT: Key<f64> = Key::new("nonepad.editor.fonth_height");
 pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
-
 
 //pub const FONT_NAME: Key<druid::Value> = Key::new("nonepad.editor.font_name");
 pub const FONT_NAME: &'static str = "Consolas";
@@ -83,7 +84,7 @@ pub struct CommonMetrics {
 }
 
 impl CommonMetrics {
-    pub fn new(text_ctx: &mut PietText, font_name: &str,size: Size) -> Self {
+    pub fn new(text_ctx: &mut PietText, font_name: &str, size: Size) -> Self {
         let mut metrics = CommonMetrics::default();
         let font = text_ctx.font_family(font_name).unwrap();
         let layout = text_ctx
@@ -101,12 +102,12 @@ impl CommonMetrics {
 
     pub fn from_env(env: &Env) -> Self {
         CommonMetrics {
-            font_baseline : env.get(FONT_BASELINE),
-            font_advance : env.get(FONT_ADVANCE),
-            font_descent : env.get(FONT_DESCENT),
-            font_height : env.get(FONT_HEIGHT),
-            font_size : env.get(FONT_SIZE),
-            page_len : env.get(PAGE_LEN),
+            font_baseline: env.get(FONT_BASELINE),
+            font_advance: env.get(FONT_ADVANCE),
+            font_descent: env.get(FONT_DESCENT),
+            font_height: env.get(FONT_HEIGHT),
+            font_size: env.get(FONT_SIZE),
+            page_len: env.get(PAGE_LEN),
         }
     }
 
@@ -445,7 +446,10 @@ impl Widget<EditStack> for EditorView {
 
                 ctx.submit_command(Command::new(
                     commands::SCROLL_TO,
-                    dbg!((Some(self.delta_x - event.wheel_delta.x), Some(self.delta_y - event.wheel_delta.y))),
+                    (
+                        Some(self.delta_x - event.wheel_delta.x),
+                        Some(self.delta_y - event.wheel_delta.y),
+                    ),
                     self.owner_id,
                 ));
 
@@ -528,7 +532,7 @@ impl Widget<EditStack> for EditorView {
                 ctx.set_handled();
             }
             Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
-                let d = dbg!(*cmd.get_unchecked(crate::commands::SCROLL_TO));
+                let d = *cmd.get_unchecked(crate::commands::SCROLL_TO);
                 self.delta_x = d.0.unwrap_or(self.delta_x);
                 self.delta_y = d.1.unwrap_or(self.delta_y);
                 ctx.set_handled();
@@ -561,7 +565,6 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
-        dbg!(self.delta_x, self.delta_y);
         self.paint_editor(data, ctx, env);
     }
 }
@@ -960,10 +963,8 @@ impl Widget<EditStack> for Gutter {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
-                self.dy = dbg!(cmd.get_unchecked(commands::SCROLL_TO))
-                    .1
-                    .unwrap_or(self.dy);
-                   // .clamp(-self.height(&data), 0.);
+                self.dy = cmd.get_unchecked(commands::SCROLL_TO).1.unwrap_or(self.dy);
+                // .clamp(-self.height(&data), 0.);
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -995,7 +996,11 @@ impl Widget<EditStack> for Gutter {
             }
             Event::Wheel(m) => {
                 //self.dy -= m.wheel_delta.y;
-                ctx.submit_command(Command::new(SCROLL_TO, (None, Some(self.dy -  m.wheel_delta.y)), self.owner_id));
+                ctx.submit_command(Command::new(
+                    SCROLL_TO,
+                    (None, Some(self.dy - m.wheel_delta.y)),
+                    self.owner_id,
+                ));
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1010,8 +1015,7 @@ impl Widget<EditStack> for Gutter {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(_env);
         self.size = Size::new(self.width(data), bc.max().height);
-        
-        
+
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
         self.size
     }
@@ -1043,7 +1047,7 @@ impl Gutter {
     fn visible_height(&self) -> f64 {
         self.size.height
     }
-    
+
     fn height(&self, data: &EditStack) -> f64 {
         // Reserve 3 visibles lines
         (data.len_lines() - 3) as f64 * self.metrics.font_height
@@ -1085,7 +1089,7 @@ impl Gutter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum ScrollBarDirection {
     Horizontal,
     Vertical,
@@ -1097,6 +1101,7 @@ struct ScrollBar {
     direction: ScrollBarDirection,
     len: f64,
     range: Range<f64>,
+    metrics: CommonMetrics,
 }
 
 impl ScrollBar {
@@ -1106,33 +1111,84 @@ impl ScrollBar {
             direction,
             len: 0.,
             range: Range { start: 0., end: 0. },
+            metrics: Default::default(),
+        }
+    }
+
+    fn text_len(&self, data: &EditStack) -> f64 {
+        if self.direction == ScrollBarDirection::Vertical {
+            dbg!(data.len_lines().saturating_sub(3)) as f64 * self.metrics.font_height
+        } else {
+            0. // TODO
         }
     }
 }
-
 impl Widget<EditStack> for ScrollBar {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {
-        todo!()
+        match event {
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
+                    //self.range
+                    let range_len = self.len.powi(2)/self.text_len(data);
+                    let len = self.len - range_len;
+                    let dy = dy*self.len/self.text_len(data);
+                    self.range.start = -dy*len/self.len;
+                    self.range.end = self.range.start + range_len;
+
+                    ctx.request_paint();
+                    ctx.set_handled();
+                }
+            }
+            _ => (),
+        }
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {
-        todo!()
+        //todo!()
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {
-        todo!()
+        //todo!()
     }
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
-        bc.max()
+        self.metrics = CommonMetrics::from_env(env);
+        self.len = if self.direction == ScrollBarDirection::Vertical {
+            bc.max().height
+        } else {
+            bc.max().width
+        };
+        self.range = if self.text_len(data) < self.len {
+            Range {
+                start: 0.,
+                end: self.len,
+            }
+        } else {
+            Range {
+                start: self.range.start,
+                end: self.range.start + dbg!((dbg!(self.len) * self.len / dbg!(self.text_len(data)))),
+            }
+        };
+        if self.direction == ScrollBarDirection::Vertical {
+            Size::new(self.metrics.font_advance, self.len)
+        } else {
+            Size::new(self.len, self.metrics.font_advance)
+        }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {}
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
+        if self.direction == ScrollBarDirection::Vertical {
+            let rect = Rect::new(0.0, self.range.start, self.metrics.font_advance, dbg!(self.range.end));
+            ctx.fill(rect.to_rounded_rect(3.), &env.get(FG_COLOR));
+        }
+    }
 }
 
 struct TextEditor {
     gutter_id: WidgetId,
     editor_id: WidgetId,
+    vscroll_id: WidgetId,
+    hscroll_id: WidgetId,
     id: WidgetId,
     inner: Flex<EditStack>,
     metrics: CommonMetrics,
@@ -1149,14 +1205,19 @@ impl Default for TextEditor {
         let id = WidgetId::next();
         let gutter_id = WidgetId::next();
         let editor_id = WidgetId::next();
+        let vscroll_id = WidgetId::next();
+        let hscroll_id = WidgetId::next();
         TextEditor {
             gutter_id,
             editor_id,
+            vscroll_id,
+            hscroll_id,
             id,
             inner: Flex::row()
                 .with_child(Gutter::new(id).with_id(gutter_id))
                 .with_flex_child(EditorView::new(id).with_id(editor_id), 1.0)
-                .must_fill_main_axis(true),
+                .must_fill_main_axis(true)
+                .with_child(ScrollBar::new(id, ScrollBarDirection::Vertical).with_id(vscroll_id)),
             metrics: Default::default(),
         }
     }
@@ -1170,12 +1231,12 @@ impl Widget<EditStack> for TextEditor {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 // clamp to size
                 let d = *cmd.get_unchecked(commands::SCROLL_TO);
-                dbg!(d);
                 let x = d.0.map(|x| x.clamp(-ctx.size().width, 0.0));
                 let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
                 // dbg!(x,y);
-                ctx.submit_command(Command::new(SCROLL_TO, (x,y), self.editor_id));
-                ctx.submit_command(Command::new(SCROLL_TO, (x,y), self.gutter_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.editor_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.gutter_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.vscroll_id));
                 ctx.is_handled();
             }
             _ => self.inner.event(ctx, event, data, &new_env),
