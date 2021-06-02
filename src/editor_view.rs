@@ -430,29 +430,29 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
-                if editor.len_lines() as f64 * self.metrics.font_height >= ctx.size().height {
-                    self.delta_y -= event.wheel_delta.y;
-                    if self.delta_y > 0. {
-                        self.delta_y = 0.;
-                    }
-                    if -self.delta_y
-                        > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height
-                    {
-                        self.delta_y =
-                            -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
-                    }
-                }
+                // if editor.len_lines() as f64 * self.metrics.font_height >= ctx.size().height {
+                //     self.delta_y -= event.wheel_delta.y;
+                //     if self.delta_y > 0. {
+                //         self.delta_y = 0.;
+                //     }
+                //     if -self.delta_y
+                //         > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height
+                //     {
+                //         self.delta_y =
+                //             -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
+                //     }
+                // }
 
                 ctx.submit_command(Command::new(
                     commands::SCROLL_TO,
-                    dbg!((Some(self.delta_x), Some(self.delta_y))),
+                    dbg!((Some(self.delta_x - event.wheel_delta.x), Some(self.delta_y - event.wheel_delta.y))),
                     self.owner_id,
                 ));
 
-                self.delta_x -= event.wheel_delta.x;
-                if self.delta_x > 0. {
-                    self.delta_x = 0.;
-                }
+                // self.delta_x -= event.wheel_delta.x;
+                // if self.delta_x > 0. {
+                //     self.delta_x = 0.;
+                // }
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     let p = editor.point(x, y);
@@ -908,7 +908,7 @@ impl EditorView {
             commands::SCROLL_TO,
             (Some(self.delta_x), Some(self.delta_y)),
             self.owner_id,
-        )); // TODO: GLOBAL?
+        ));
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -962,8 +962,8 @@ impl Widget<EditStack> for Gutter {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 self.dy = dbg!(cmd.get_unchecked(commands::SCROLL_TO))
                     .1
-                    .unwrap_or(self.dy)
-                    .clamp(-self.height(&data), 0.);
+                    .unwrap_or(self.dy);
+                   // .clamp(-self.height(&data), 0.);
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -994,8 +994,8 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_handled();
             }
             Event::Wheel(m) => {
-                self.dy -= m.wheel_delta.y;
-                ctx.submit_command(Command::new(SCROLL_TO, (None, Some(self.dy)), self.owner_id));
+                //self.dy -= m.wheel_delta.y;
+                ctx.submit_command(Command::new(SCROLL_TO, (None, Some(self.dy -  m.wheel_delta.y)), self.owner_id));
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1032,17 +1032,24 @@ impl Gutter {
             owner_id,
         }
     }
-    fn visible_range(&self) -> Range<usize> {
+    fn visible_line_range(&self) -> Range<usize> {
         let start = -(self.dy / self.metrics.font_height) as usize;
         let end = start + self.page_len + 1;
         Range { start, end }
     }
+    fn visible_width(&self) -> f64 {
+        self.size.width
+    }
+    fn visible_height(&self) -> f64 {
+        self.size.height
+    }
+    
     fn height(&self, data: &EditStack) -> f64 {
         // Reserve 3 visibles lines
         (data.len_lines() - 3) as f64 * self.metrics.font_height
     }
     fn width(&self, data: &EditStack) -> f64 {
-        dbg!((data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance)
+        (data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance
     }
     fn paint_gutter(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) {
         ctx.clip(self.size.to_rect());
@@ -1051,7 +1058,7 @@ impl Gutter {
         let font = ctx.text().font_family(FONT_NAME).unwrap();
         let mut dy = (self.dy / self.metrics.font_height).fract() * self.metrics.font_height;
         let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        for line_idx in self.visible_range() {
+        for line_idx in self.visible_line_range() {
             if line_idx >= editor.len_lines() {
                 break;
             }
@@ -1131,6 +1138,12 @@ struct TextEditor {
     metrics: CommonMetrics,
 }
 
+impl TextEditor {
+    pub fn text_height(&self, data: &EditStack) -> f64 {
+        (data.len_lines() - 3) as f64 * self.metrics.font_height
+    }
+}
+
 impl Default for TextEditor {
     fn default() -> Self {
         let id = WidgetId::next();
@@ -1158,11 +1171,11 @@ impl Widget<EditStack> for TextEditor {
                 // clamp to size
                 let d = *cmd.get_unchecked(commands::SCROLL_TO);
                 dbg!(d);
-                // let x = d.0.map(|x| x.clamp(-ctx.size().width, 0.0));
-                // let y = d.1.map(|y| y.clamp(-ctx.size().height, 0.0));
+                let x = d.0.map(|x| x.clamp(-ctx.size().width, 0.0));
+                let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
                 // dbg!(x,y);
-                ctx.submit_command(Command::new(SCROLL_TO, d, self.editor_id));
-                ctx.submit_command(Command::new(SCROLL_TO, d, self.gutter_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x,y), self.editor_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x,y), self.gutter_id));
                 ctx.is_handled();
             }
             _ => self.inner.event(ctx, event, data, &new_env),
