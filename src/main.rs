@@ -14,9 +14,7 @@ use druid::{
     piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
     WidgetExt, WindowDesc,
 };
-use editor_view::Gutter;
 
-use crate::editor_view::EditorView;
 use bottom_panel::BottonPanelState;
 use text_buffer::EditStack;
 
