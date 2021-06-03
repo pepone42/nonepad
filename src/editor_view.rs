@@ -1,45 +1,39 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::commands::{NEW_METRICS, SCROLL_TO};
-use crate::text_buffer::{position, rope_utils};
-use crate::text_buffer::{EditStack, SelectionLineRange};
-use crate::{commands, MainWindowState};
-use druid::keyboard_types::CompositionEvent;
-use druid::kurbo::Shape;
-use druid::piet::RoundInto;
-use druid::widget::{Controller, Flex, IdentityWrapper, Scroll};
+use crate::commands::SCROLL_TO;
+use crate::text_buffer::{EditStack, SelectionLineRange, position, rope_utils};
+use crate::commands;
+
 use druid::{
+    piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder, TextAttribute},
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
-    FontDescriptor, WidgetExt,
-};
-use druid::{
-    piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder},
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
     HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
-    Widget, WidgetId,
+    Widget, WidgetId, WidgetExt, widget::Flex, FontWeight
 };
-use druid::{Data, Vec2, WindowConfig};
+
 use rfd::MessageDialog;
 
-pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
-pub const FONT_ADVANCE: Key<f64> = Key::new("nonepad.editor.font_advance");
-pub const FONT_BASELINE: Key<f64> = Key::new("nonepad.editor.font_baseline");
-pub const FONT_DESCENT: Key<f64> = Key::new("nonepad.editor.font_descent");
-pub const FONT_HEIGHT: Key<f64> = Key::new("nonepad.editor.fonth_height");
-pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
+mod env {
+    use druid::Key;
 
-//pub const FONT_NAME: Key<druid::Value> = Key::new("nonepad.editor.font_name");
+    pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
+    pub const FONT_ADVANCE: Key<f64> = Key::new("nonepad.editor.font_advance");
+    pub const FONT_BASELINE: Key<f64> = Key::new("nonepad.editor.font_baseline");
+    pub const FONT_DESCENT: Key<f64> = Key::new("nonepad.editor.font_descent");
+    pub const FONT_HEIGHT: Key<f64> = Key::new("nonepad.editor.fonth_height");
+    pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
+}
+
 pub const FONT_NAME: &'static str = "Consolas";
+pub const FONT_SIZE: f64 = 14.;
+pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD; 
 
-pub const FONT_DESCRIPTOR: Key<FontDescriptor> = Key::new("nonepad.editor.font_descriptor");
 pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
 pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
 pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
 pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
-
-pub const EDITOR_WIDGET_ID: WidgetId = WidgetId::reserved(0xED17);
-pub const GUTTER_WIDGET_ID: WidgetId = WidgetId::reserved(0x8077);
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -89,6 +83,7 @@ impl CommonMetrics {
         let font = text_ctx.font_family(font_name).unwrap();
         let layout = text_ctx
             .new_text_layout("8")
+            .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, metrics.font_size)
             .build()
             .unwrap();
@@ -102,22 +97,22 @@ impl CommonMetrics {
 
     pub fn from_env(env: &Env) -> Self {
         CommonMetrics {
-            font_baseline: env.get(FONT_BASELINE),
-            font_advance: env.get(FONT_ADVANCE),
-            font_descent: env.get(FONT_DESCENT),
-            font_height: env.get(FONT_HEIGHT),
-            font_size: env.get(FONT_SIZE),
-            page_len: env.get(PAGE_LEN),
+            font_baseline: env.get(env::FONT_BASELINE),
+            font_advance: env.get(env::FONT_ADVANCE),
+            font_descent: env.get(env::FONT_DESCENT),
+            font_height: env.get(env::FONT_HEIGHT),
+            font_size: env.get(env::FONT_SIZE),
+            page_len: env.get(env::PAGE_LEN),
         }
     }
 
     pub fn to_env(&self, env: &mut Env) {
-        env.set(FONT_BASELINE, self.font_baseline);
-        env.set(FONT_ADVANCE, self.font_advance);
-        env.set(FONT_DESCENT, self.font_descent);
-        env.set(FONT_HEIGHT, self.font_height);
-        env.set(FONT_SIZE, self.font_size);
-        env.set(PAGE_LEN, self.page_len);
+        env.set(env::FONT_BASELINE, self.font_baseline);
+        env.set(env::FONT_ADVANCE, self.font_advance);
+        env.set(env::FONT_DESCENT, self.font_descent);
+        env.set(env::FONT_HEIGHT, self.font_height);
+        env.set(env::FONT_SIZE, self.font_size);
+        env.set(env::PAGE_LEN, self.page_len);
     }
 }
 
@@ -128,7 +123,7 @@ impl Default for CommonMetrics {
             font_baseline: 0.0,
             font_descent: 0.0,
             font_height: 0.0,
-            font_size: 12.0,
+            font_size: FONT_SIZE,
             page_len: 0,
         }
     }
@@ -749,6 +744,7 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone()) // TODO: comment ne pas faire de clone?
+                .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .build()
                 .unwrap();
@@ -823,6 +819,7 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone())
+                .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone())
                 .build()
@@ -873,6 +870,7 @@ impl EditorView {
         let layout = ctx
             .text()
             .new_text_layout(buf)
+            .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, self.metrics.font_size)
             .build()
             .unwrap();
@@ -1070,6 +1068,7 @@ impl Gutter {
                 .render_ctx
                 .text()
                 .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
+                .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(env.get(FG_COLOR))
                 .build()
@@ -1081,7 +1080,7 @@ impl Gutter {
         ctx.render_ctx.stroke(
             Line::new(
                 (self.width(editor) - self.metrics.font_advance, 0.0),
-                (self.width(editor), self.size.height),
+                (self.width(editor) - self.metrics.font_advance, self.size.height),
             ),
             &env.get(FG_COLOR),
             1.0,
@@ -1125,7 +1124,15 @@ impl ScrollBar {
         }
     }
 
-    pub fn rect(&self) -> Rect {
+    fn shrink_len(&self, val: f64, data: &EditStack) -> f64 {
+        val * self.len / self.text_len(data)
+    }
+
+    fn grow_len(&self, val: f64, data: &EditStack) -> f64 {
+        val * self.text_len(data) / self.len 
+    }
+
+    fn rect(&self) -> Rect {
         if self.direction == ScrollBarDirection::Vertical {
             Rect::new(0.0, self.range.start, self.metrics.font_advance, dbg!(self.range.end))
         } else {
@@ -1152,7 +1159,7 @@ impl Widget<EditStack> for ScrollBar {
             Event::MouseDown(m) => {
                 if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {
                     ctx.set_active(true);
-                    self.mouse_delta = m.pos.y;
+                    self.mouse_delta = m.pos.y - self.range.start;
                     ctx.set_handled();
                 }
             }
@@ -1166,7 +1173,7 @@ impl Widget<EditStack> for ScrollBar {
                         SCROLL_TO,
                         (
                             None,
-                            Some(self.mouse_delta-m.pos.y * self.text_len(data) / (self.len - self.len.powi(2) / self.text_len(data))),
+                            Some((self.mouse_delta-m.pos.y) * self.text_len(data) / (self.len - self.len.powi(2) / self.text_len(data))),
                         ),
                         self.owner_id,
                     ));

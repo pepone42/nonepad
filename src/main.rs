@@ -164,11 +164,11 @@ fn main() -> anyhow::Result<()> {
         .configure_env(|env, _| {
             // env.set(druid::theme::TEXT_SIZE_NORMAL, 5.0);
             // env.set(druid::theme::TEXT_SIZE_LARGE, 8.0);
-            env.set(crate::editor_view::FONT_SIZE, 12.0);
-            env.set(
-                crate::editor_view::FONT_DESCRIPTOR,
-                druid::FontDescriptor::new(druid::FontFamily::MONOSPACE),
-            );
+            // env.set(crate::editor_view::FONT_SIZE, 15.0);
+            // env.set(
+            //     crate::editor_view::FONT_DESCRIPTOR,
+            //     druid::FontDescriptor::new(druid::FontFamily::MONOSPACE),
+            // );
 
             env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
             env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
