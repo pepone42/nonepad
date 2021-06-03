@@ -14,6 +14,7 @@ use druid::{
 };
 
 use rfd::MessageDialog;
+use unicode_segmentation::Graphemes;
 
 mod env {
     use druid::Key;
@@ -145,6 +146,8 @@ pub struct EditorView {
 
     size: Size,
     owner_id: WidgetId,
+
+    longest_line_len: f64,
     //handle: WindowHandle,
 }
 
@@ -580,6 +583,7 @@ impl EditorView {
 
             size: Default::default(),
             owner_id,
+            longest_line_len: 0.,
         }
     }
     fn visible_range(&self) -> Range<usize> {
@@ -827,6 +831,8 @@ impl EditorView {
 
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
 
+            self.longest_line_len = self.longest_line_len.max(layout.image_bounds().width());
+
             editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
                 ctx.render_ctx.stroke(
@@ -1048,7 +1054,7 @@ impl Gutter {
 
     fn height(&self, data: &EditStack) -> f64 {
         // Reserve 3 visibles lines
-        (data.len_lines() - 3) as f64 * self.metrics.font_height
+        (data.len_lines().saturating_sub(3)) as f64 * self.metrics.font_height
     }
     fn width(&self, data: &EditStack) -> f64 {
         (data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance
@@ -1118,7 +1124,7 @@ impl ScrollBar {
 
     fn text_len(&self, data: &EditStack) -> f64 {
         if self.direction == ScrollBarDirection::Vertical {
-            dbg!(data.len_lines().saturating_sub(3)) as f64 * self.metrics.font_height
+            data.len_lines().saturating_sub(3) as f64 * self.metrics.font_height
         } else {
             0. // TODO
         }
@@ -1132,11 +1138,19 @@ impl ScrollBar {
         val * self.text_len(data) / self.len 
     }
 
+    fn handle_len(&self, data: &EditStack) -> f64 {
+        (self.len.powi(2) / self.text_len(data)).max(self.metrics.font_height)
+    }
+
+    fn effective_len(&self, data: &EditStack) -> f64 {
+        self.len - self.handle_len(data)
+    }
+
     fn rect(&self) -> Rect {
         if self.direction == ScrollBarDirection::Vertical {
-            Rect::new(0.0, self.range.start, self.metrics.font_advance, dbg!(self.range.end))
+            Rect::new(0.0, self.range.start, self.metrics.font_advance, self.range.end)
         } else {
-            Rect::new(self.range.start, 0.0, dbg!(self.range.end), self.metrics.font_advance)
+            Rect::new(self.range.start, 0.0, self.range.end, self.metrics.font_advance)
         }
     }
 }
@@ -1146,11 +1160,10 @@ impl Widget<EditStack> for ScrollBar {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
                     //self.range
-                    let range_len = self.len.powi(2) / self.text_len(data);
-                    let len = self.len - range_len;
+                    let len = self.effective_len(data);
                     let dy = dy * self.len / self.text_len(data);
                     self.range.start = -dy * len / self.len;
-                    self.range.end = self.range.start + range_len;
+                    self.range.end = self.range.start + self.handle_len(data);
 
                     ctx.request_paint();
                     ctx.set_handled();
@@ -1173,7 +1186,7 @@ impl Widget<EditStack> for ScrollBar {
                         SCROLL_TO,
                         (
                             None,
-                            Some((self.mouse_delta-m.pos.y) * self.text_len(data) / (self.len - self.len.powi(2) / self.text_len(data))),
+                            Some((self.mouse_delta-m.pos.y) * self.text_len(data) / self.effective_len(data)),
                         ),
                         self.owner_id,
                     ));
@@ -1207,7 +1220,7 @@ impl Widget<EditStack> for ScrollBar {
         } else {
             Range {
                 start: self.range.start,
-                end: self.range.start + dbg!((dbg!(self.len) * self.len / dbg!(self.text_len(data)))),
+                end: self.range.start + self.handle_len(data),
             }
         };
         if self.direction == ScrollBarDirection::Vertical {
@@ -1236,7 +1249,7 @@ struct TextEditor {
 
 impl TextEditor {
     pub fn text_height(&self, data: &EditStack) -> f64 {
-        (data.len_lines() - 3) as f64 * self.metrics.font_height
+        (data.len_lines().saturating_sub(3)) as f64 * self.metrics.font_height
     }
 }
 
