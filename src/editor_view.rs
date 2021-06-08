@@ -5,6 +5,7 @@ use crate::commands;
 use crate::commands::SCROLL_TO;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
+use druid::kurbo::DEFAULT_ACCURACY;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -1127,6 +1128,7 @@ struct ScrollBar {
     metrics: CommonMetrics,
     mouse_delta: f64,
     is_held: bool,
+    delta: f64,
 }
 
 impl ScrollBar {
@@ -1139,6 +1141,7 @@ impl ScrollBar {
             metrics: Default::default(),
             mouse_delta: 0.,
             is_held: false,
+            delta: 0.,
         }
     }
 
@@ -1184,9 +1187,10 @@ impl Widget<EditStack> for ScrollBar {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 if self.is_vertical() {
                     if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
-                        //self.range
+                        self.delta = dy;
                         let len = self.effective_len(data);
                         let dy = dy * self.len / self.text_len(data);
+                        
                         self.range.start = -dy * len / self.len;
                         self.range.end = self.range.start + self.handle_len(data);
 
@@ -1195,7 +1199,7 @@ impl Widget<EditStack> for ScrollBar {
                     }
                 } else {
                     if let Some(dx) = cmd.get_unchecked(commands::SCROLL_TO).0 {
-                        //self.range
+                        self.delta = dx;
                         let len = self.effective_len(data);
                         let dx = dx * self.len / self.text_len(data);
                         self.range.start = -dx * len / self.len;
@@ -1266,16 +1270,11 @@ impl Widget<EditStack> for ScrollBar {
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(env);
-        let old_len = self.len;
+
         self.len = if self.is_vertical() {
             bc.max().height
         } else {
             bc.max().width
-        };
-        let coef = if old_len > 0. {
-            self.len/old_len
-        }  else {
-            0.
         };
 
         self.range = if self.text_len(data) < self.len {
@@ -1284,9 +1283,12 @@ impl Widget<EditStack> for ScrollBar {
                 end: self.len,
             }
         } else {
+
+            let start = -self.delta*(self.effective_len(data))/self.text_len(data);
+            let end = start + self.handle_len(data);
             Range {
-                start: self.range.start*coef,
-                end: self.range.start*coef + self.handle_len(data),
+                start,
+                end,
             }
         };
         if self.is_vertical() {
