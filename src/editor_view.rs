@@ -1,16 +1,17 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::commands::SCROLL_TO;
-use crate::text_buffer::{EditStack, SelectionLineRange, position, rope_utils};
 use crate::commands;
+use crate::commands::SCROLL_TO;
+use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
 use druid::{
-    piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder, TextAttribute},
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
+    piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
+    widget::Flex,
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
-    Widget, WidgetId, WidgetExt, widget::Flex, FontWeight
+    FontWeight, HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
+    UpdateCtx, Widget, WidgetExt, WidgetId,
 };
 
 use rfd::MessageDialog;
@@ -29,7 +30,7 @@ mod env {
 
 pub const FONT_NAME: &'static str = "Consolas";
 pub const FONT_SIZE: f64 = 14.;
-pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD; 
+pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 
 pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
 pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
@@ -148,6 +149,8 @@ pub struct EditorView {
     owner_id: WidgetId,
 
     longest_line_len: f64,
+
+    is_held: bool,
     //handle: WindowHandle,
 }
 
@@ -466,23 +469,27 @@ impl Widget<EditStack> for EditorView {
             }
             Event::MouseDown(event) => {
                 if matches!(event.button, MouseButton::Left) {
+                    
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     editor.cancel_mutli_carets();
                     // FIXME: Update is not called if the caret position is not modified,
                     let p = editor.point(x, y);
                     editor.move_main_caret_to(p, event.mods.shift());
                     ctx.set_active(true);
+                    self.is_held = true;
                 }
                 ctx.request_focus();
                 ctx.request_paint();
                 ctx.set_handled();
             }
             Event::MouseUp(_event) => {
+                
                 ctx.set_active(false);
                 ctx.set_handled();
+                self.is_held = false;
             }
             Event::MouseMove(event) => {
-                if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
+                if self.is_held && ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     let p = editor.point(x, y);
                     editor.move_main_caret_to(p, true);
@@ -536,6 +543,9 @@ impl Widget<EditStack> for EditorView {
                 ctx.set_handled();
                 ctx.request_paint();
             }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.is_held = false;
+            }
             _ => (),
         }
     }
@@ -584,6 +594,7 @@ impl EditorView {
             size: Default::default(),
             owner_id,
             longest_line_len: 0.,
+            is_held: false,
         }
     }
     fn visible_range(&self) -> Range<usize> {
@@ -961,6 +972,7 @@ pub struct Gutter {
     size: Size,
     dy: f64,
     owner_id: WidgetId,
+    is_held: bool,
 }
 
 impl Widget<EditStack> for Gutter {
@@ -972,9 +984,12 @@ impl Widget<EditStack> for Gutter {
                 ctx.request_paint();
                 ctx.set_handled();
             }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.is_held = false;
+            }
             Event::MouseMove(m) => {
                 //ctx.set_cursor(&Cursor::ResizeLeftRight);
-                if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
+                if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
                     ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), self.owner_id));
@@ -993,10 +1008,12 @@ impl Widget<EditStack> for Gutter {
                 ));
                 ctx.request_paint();
                 ctx.set_handled();
+                self.is_held = true;
             }
             Event::MouseUp(_event) => {
                 ctx.set_active(false);
                 ctx.set_handled();
+                self.is_held = false;
             }
             Event::Wheel(m) => {
                 //self.dy -= m.wheel_delta.y;
@@ -1038,6 +1055,7 @@ impl Gutter {
             size: Default::default(),
             dy: 0.0,
             owner_id,
+            is_held: false,
         }
     }
     fn visible_line_range(&self) -> Range<usize> {
@@ -1108,6 +1126,7 @@ struct ScrollBar {
     range: Range<f64>,
     metrics: CommonMetrics,
     mouse_delta: f64,
+    is_held: bool,
 }
 
 impl ScrollBar {
@@ -1119,14 +1138,15 @@ impl ScrollBar {
             range: Range { start: 0., end: 0. },
             metrics: Default::default(),
             mouse_delta: 0.,
+            is_held: false,
         }
     }
 
     fn text_len(&self, data: &EditStack) -> f64 {
-        if self.direction == ScrollBarDirection::Vertical {
+        if self.is_vertical() {
             data.len_lines().saturating_sub(3) as f64 * self.metrics.font_height
         } else {
-            0. // TODO
+            data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
         }
     }
 
@@ -1135,7 +1155,7 @@ impl ScrollBar {
     }
 
     fn grow_len(&self, val: f64, data: &EditStack) -> f64 {
-        val * self.text_len(data) / self.len 
+        val * self.text_len(data) / self.len
     }
 
     fn handle_len(&self, data: &EditStack) -> f64 {
@@ -1147,49 +1167,88 @@ impl ScrollBar {
     }
 
     fn rect(&self) -> Rect {
-        if self.direction == ScrollBarDirection::Vertical {
+        if self.is_vertical() {
             Rect::new(0.0, self.range.start, self.metrics.font_advance, self.range.end)
         } else {
             Rect::new(self.range.start, 0.0, self.range.end, self.metrics.font_advance)
         }
+    }
+
+    fn is_vertical(&self) -> bool {
+        self.direction == ScrollBarDirection::Vertical
     }
 }
 impl Widget<EditStack> for ScrollBar {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
-                if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
-                    //self.range
-                    let len = self.effective_len(data);
-                    let dy = dy * self.len / self.text_len(data);
-                    self.range.start = -dy * len / self.len;
-                    self.range.end = self.range.start + self.handle_len(data);
+                if self.is_vertical() {
+                    if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
+                        //self.range
+                        let len = self.effective_len(data);
+                        let dy = dy * self.len / self.text_len(data);
+                        self.range.start = -dy * len / self.len;
+                        self.range.end = self.range.start + self.handle_len(data);
 
-                    ctx.request_paint();
-                    ctx.set_handled();
+                        ctx.request_paint();
+                        ctx.set_handled();
+                    }
+                } else {
+                    if let Some(dx) = cmd.get_unchecked(commands::SCROLL_TO).0 {
+                        //self.range
+                        let len = self.effective_len(data);
+                        let dx = dx * self.len / self.text_len(data);
+                        self.range.start = -dx * len / self.len;
+                        self.range.end = self.range.start + self.handle_len(data);
+
+                        ctx.request_paint();
+                        ctx.set_handled();
+                    }
                 }
+            }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.is_held = false;
             }
             Event::MouseDown(m) => {
                 if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {
                     ctx.set_active(true);
-                    self.mouse_delta = m.pos.y - self.range.start;
+                    self.mouse_delta = if self.is_vertical() {
+                        m.pos.y - self.range.start
+                    } else {
+                        m.pos.x - self.range.start
+                    };
+                    ctx.request_paint();
                     ctx.set_handled();
+                    self.is_held = true;
                 }
             }
             Event::MouseUp(m) => {
                 ctx.set_active(false);
                 ctx.set_handled();
+                self.is_held = false;
             }
             Event::MouseMove(m) => {
-                if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
-                    ctx.submit_command(Command::new(
-                        SCROLL_TO,
-                        (
-                            None,
-                            Some((self.mouse_delta-m.pos.y) * self.text_len(data) / self.effective_len(data)),
-                        ),
-                        self.owner_id,
-                    ));
+                if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
+                    if self.is_vertical() {
+                        ctx.submit_command(Command::new(
+                            SCROLL_TO,
+                            (
+                                None,
+                                Some((self.mouse_delta - m.pos.y) * self.text_len(data) / self.effective_len(data)),
+                            ),
+                            self.owner_id,
+                        ));
+                    } else {
+                        ctx.submit_command(Command::new(
+                            SCROLL_TO,
+                            (
+                                Some((self.mouse_delta - m.pos.x) * self.text_len(data) / self.effective_len(data)),
+                                None,
+                            ),
+                            self.owner_id,
+                        ));
+                    }
+                    ctx.request_paint();
                     ctx.set_handled();
                 }
             }
@@ -1207,11 +1266,18 @@ impl Widget<EditStack> for ScrollBar {
 
     fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(env);
-        self.len = if self.direction == ScrollBarDirection::Vertical {
+        let old_len = self.len;
+        self.len = if self.is_vertical() {
             bc.max().height
         } else {
             bc.max().width
         };
+        let coef = if old_len > 0. {
+            self.len/old_len
+        }  else {
+            0.
+        };
+
         self.range = if self.text_len(data) < self.len {
             Range {
                 start: 0.,
@@ -1219,11 +1285,11 @@ impl Widget<EditStack> for ScrollBar {
             }
         } else {
             Range {
-                start: self.range.start,
-                end: self.range.start + self.handle_len(data),
+                start: self.range.start*coef,
+                end: self.range.start*coef + self.handle_len(data),
             }
         };
-        if self.direction == ScrollBarDirection::Vertical {
+        if self.is_vertical() {
             Size::new(self.metrics.font_advance, self.len)
         } else {
             Size::new(self.len, self.metrics.font_advance)
@@ -1231,9 +1297,9 @@ impl Widget<EditStack> for ScrollBar {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
-        if self.direction == ScrollBarDirection::Vertical {
+        //if self.is_vertical() {
             ctx.fill(self.rect().to_rounded_rect(3.), &env.get(FG_COLOR));
-        }
+        //}
     }
 }
 
@@ -1249,7 +1315,10 @@ struct TextEditor {
 
 impl TextEditor {
     pub fn text_height(&self, data: &EditStack) -> f64 {
-        (data.len_lines().saturating_sub(3)) as f64 * self.metrics.font_height
+        data.len_lines().saturating_sub(3) as f64 * self.metrics.font_height
+    }
+    pub fn text_width(&self, data: &EditStack) -> f64 {
+        data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
     }
 }
 
@@ -1268,7 +1337,12 @@ impl Default for TextEditor {
             id,
             inner: Flex::row()
                 .with_child(Gutter::new(id).with_id(gutter_id))
-                .with_flex_child(EditorView::new(id).with_id(editor_id), 1.0)
+                .with_flex_child(
+                    Flex::column()
+                        .with_flex_child(EditorView::new(id).with_id(editor_id), 1.0)
+                        .with_child(ScrollBar::new(id, ScrollBarDirection::Horizontal).with_id(hscroll_id)),
+                    1.0,
+                )
                 .must_fill_main_axis(true)
                 .with_child(ScrollBar::new(id, ScrollBarDirection::Vertical).with_id(vscroll_id)),
             metrics: Default::default(),
@@ -1284,12 +1358,13 @@ impl Widget<EditStack> for TextEditor {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 // clamp to size
                 let d = *cmd.get_unchecked(commands::SCROLL_TO);
-                let x = d.0.map(|x| x.clamp(-ctx.size().width, 0.0));
+                let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
                 let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
                 // dbg!(x,y);
                 ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.editor_id));
                 ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.gutter_id));
                 ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.vscroll_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.hscroll_id));
                 ctx.is_handled();
             }
             _ => self.inner.event(ctx, event, data, &new_env),
@@ -1300,6 +1375,14 @@ impl Widget<EditStack> for TextEditor {
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {
         let mut new_env = env.clone();
         self.metrics.to_env(&mut new_env);
+
+        // match event {
+        //     LifeCycle::Size(_) => {
+        //         ctx.request_paint();
+        //     }
+        //     _ => ()
+        // }
+
         self.inner.lifecycle(ctx, event, data, &new_env)
     }
 

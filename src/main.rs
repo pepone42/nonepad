@@ -42,6 +42,9 @@ impl AppDelegate<MainWindowState> for Delegate {
             ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
             return None;
         }
+        if matches!(event, druid::Event::MouseUp(_)) {
+            ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global));
+        }
         Some(event)
     }
     fn command(
