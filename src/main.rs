@@ -7,7 +7,7 @@ mod editor_view;
 mod text_buffer;
 mod widgets;
 
-#[cfg(windows)]
+
 mod seticon;
 
 use std::path::Path;
@@ -19,7 +19,7 @@ use druid::{
 };
 
 use bottom_panel::BottonPanelState;
-#[cfg(windows)]
+
 use seticon::set_icon;
 
 use text_buffer::EditStack;
@@ -65,13 +65,12 @@ impl AppDelegate<MainWindowState> for Delegate {
     }
     fn window_added(
         &mut self,
-        _id: druid::WindowId,
+        id: druid::WindowId,
         _data: &mut MainWindowState,
         _env: &Env,
         _ctx: &mut druid::DelegateCtx,
     ) {
-
-        unsafe {set_icon(1);}
+        set_icon(id);
     }
     fn window_removed(
         &mut self,

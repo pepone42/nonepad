@@ -1,51 +1,56 @@
-use std::ptr;
-use std::{thread, time};
-use winapi::shared::minwindef::BOOL;
-use winapi::shared::minwindef::DWORD;
-use winapi::shared::minwindef::FALSE;
-use winapi::shared::minwindef::TRUE;
-use winapi::um::libloaderapi::GetModuleHandleW;
-use winapi::um::processthreadsapi::GetCurrentProcessId;
-use winapi::um::winnt::LPCWSTR;
-use winapi::um::winuser::EnumWindows;
-use winapi::um::winuser::GetWindowThreadProcessId;
-use winapi::{
-    shared::minwindef::{LPARAM, WPARAM},
-    shared::windef::{HICON, HWND},
-    um::winuser::{FindWindowW, LoadIconW, SendMessageW, ICON_BIG, ICON_SMALL, MAKEINTRESOURCEW, WM_SETICON},
-};
+use druid::WindowId;
 
-pub unsafe fn set_icon(id: u16) {
-    extern "system" fn enum_windows_callback(hwnd: HWND, l_param: LPARAM) -> BOOL {
-      let mut wnd_proc_id: DWORD = 0;
-      unsafe {
-        GetWindowThreadProcessId(hwnd, &mut wnd_proc_id as *mut DWORD);
-        if GetCurrentProcessId() != wnd_proc_id {
-          return TRUE;
-        }
-        set_window_icon(l_param as u16, hwnd);
-      }
-      return FALSE;
-    }
-    let mut hwnd: HWND = ptr::null_mut();
-    EnumWindows(Some(enum_windows_callback), id as LPARAM);
-    // return if hwnd.is_null() {
-    //   None
-    // } else {
-    //   Some(hwnd)
-    // }
-  }
+#[cfg(windows)]
+mod windows {
+    use std::ffi::OsStr;
+    use std::iter::once;
+    use std::os::windows::prelude::OsStrExt;
 
-// winres set_icon or set_icon_with_id must be used in the build for this to work
-fn set_window_icon(id: u16, hwnd: HWND) {
-    // thread::spawn(move || {
+    use winapi::shared::minwindef::BOOL;
+    use winapi::shared::minwindef::DWORD;
+    use winapi::shared::minwindef::FALSE;
+    use winapi::shared::minwindef::TRUE;
+    use winapi::um::libloaderapi::GetModuleHandleW;
+    use winapi::um::processthreadsapi::GetCurrentProcessId;
+    use winapi::um::winnt::LPCWSTR;
+    use winapi::um::winuser::EnumWindows;
+    use winapi::um::winuser::GetWindowThreadProcessId;
+    use winapi::{
+        shared::minwindef::{LPARAM, WPARAM},
+        shared::windef::{HICON, HWND},
+        um::winuser::{LoadIconW, SendMessageW, ICON_BIG, ICON_SMALL, MAKEINTRESOURCEW, WM_SETICON},
+    };
 
-            let hicon = unsafe { LoadIconW(GetModuleHandleW(0 as LPCWSTR), MAKEINTRESOURCEW(id)) };
-            if hicon == 0 as HICON {
-                eprintln!("No Icon #{} in resource", id);
+    // winres set_icon or set_icon_with_id must be used in the build for this to work
+    pub unsafe fn set_windows_icon() {
+        extern "system" fn enum_windows_callback(hwnd: HWND, _l_param: LPARAM) -> BOOL {
+            let mut wnd_proc_id: DWORD = 0;
+            unsafe {
+                GetWindowThreadProcessId(hwnd, &mut wnd_proc_id as *mut DWORD);
+                if GetCurrentProcessId() != wnd_proc_id {
+                    return TRUE;
+                }
+                let icon_name: Vec<u16> = OsStr::new( "main_icon" ).encode_wide().chain( once( 0 ) ).collect();
+                let hicon = LoadIconW(GetModuleHandleW(0 as LPCWSTR), icon_name.as_ptr());// MAKEINTRESOURCEW(id));
+                if hicon == 0 as HICON {
+                    eprintln!("No Icon main_icon in resource");
+                }
+
+                SendMessageW(hwnd, WM_SETICON, ICON_SMALL as WPARAM, hicon as LPARAM);
+                SendMessageW(hwnd, WM_SETICON, ICON_BIG as WPARAM, hicon as LPARAM);
             }
+            return FALSE;
+        }
 
-            unsafe { SendMessageW(hwnd, WM_SETICON, ICON_SMALL as WPARAM, hicon as LPARAM) };
-            unsafe { SendMessageW(hwnd, WM_SETICON, ICON_BIG as WPARAM, hicon as LPARAM) };
-    //});
+        EnumWindows(Some(enum_windows_callback), 0 as LPARAM);
+
+    }
+}
+#[cfg(windows)]
+pub fn set_icon(_win_id: WindowId) {
+    unsafe {windows::set_windows_icon()}
+}
+#[cfg(not(windows))]
+pub fn set_icon(win_id: WindowId) {
+    // todo
 }
