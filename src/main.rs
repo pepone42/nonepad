@@ -7,6 +7,9 @@ mod editor_view;
 mod text_buffer;
 mod widgets;
 
+#[cfg(windows)]
+mod seticon;
+
 use std::path::Path;
 
 use druid::widget::{Flex, Label, MainAxisAlignment};
@@ -16,6 +19,9 @@ use druid::{
 };
 
 use bottom_panel::BottonPanelState;
+#[cfg(windows)]
+use seticon::set_icon;
+
 use text_buffer::EditStack;
 
 #[derive(Debug)]
@@ -64,6 +70,8 @@ impl AppDelegate<MainWindowState> for Delegate {
         _env: &Env,
         _ctx: &mut druid::DelegateCtx,
     ) {
+
+        unsafe {set_icon(1);}
     }
     fn window_removed(
         &mut self,
