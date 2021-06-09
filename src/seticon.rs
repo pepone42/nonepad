@@ -18,7 +18,7 @@ mod windows {
     use winapi::{
         shared::minwindef::{LPARAM, WPARAM},
         shared::windef::{HICON, HWND},
-        um::winuser::{LoadIconW, SendMessageW, ICON_BIG, ICON_SMALL, MAKEINTRESOURCEW, WM_SETICON},
+        um::winuser::{LoadIconW, SendMessageW, ICON_BIG, ICON_SMALL, WM_SETICON},
     };
 
     // winres set_icon or set_icon_with_id must be used in the build for this to work
@@ -39,10 +39,10 @@ mod windows {
                 SendMessageW(hwnd, WM_SETICON, ICON_SMALL as WPARAM, hicon as LPARAM);
                 SendMessageW(hwnd, WM_SETICON, ICON_BIG as WPARAM, hicon as LPARAM);
             }
-            return FALSE;
+            FALSE
         }
 
-        EnumWindows(Some(enum_windows_callback), 0 as LPARAM);
+        EnumWindows(Some(enum_windows_callback), 0);
 
     }
 }

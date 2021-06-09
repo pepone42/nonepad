@@ -5,7 +5,6 @@ use crate::commands;
 use crate::commands::SCROLL_TO;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
-use druid::kurbo::DEFAULT_ACCURACY;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -16,7 +15,6 @@ use druid::{
 };
 
 use rfd::MessageDialog;
-use unicode_segmentation::Graphemes;
 
 mod env {
     use druid::Key;
@@ -29,7 +27,7 @@ mod env {
     pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
 }
 
-pub const FONT_NAME: &'static str = "Consolas";
+pub const FONT_NAME: &str = "Consolas";
 pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 
@@ -470,7 +468,6 @@ impl Widget<EditStack> for EditorView {
             }
             Event::MouseDown(event) => {
                 if matches!(event.button, MouseButton::Left) {
-                    
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     editor.cancel_mutli_carets();
                     // FIXME: Update is not called if the caret position is not modified,
@@ -484,7 +481,6 @@ impl Widget<EditStack> for EditorView {
                 ctx.set_handled();
             }
             Event::MouseUp(_event) => {
-                
                 ctx.set_active(false);
                 ctx.set_handled();
                 self.is_held = false;
@@ -1034,7 +1030,7 @@ impl Widget<EditStack> for Gutter {
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 
-    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
+    fn layout(&mut self, _layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(_env);
         self.size = Size::new(self.width(data), bc.max().height);
 
@@ -1064,17 +1060,7 @@ impl Gutter {
         let end = start + self.page_len + 1;
         Range { start, end }
     }
-    fn visible_width(&self) -> f64 {
-        self.size.width
-    }
-    fn visible_height(&self) -> f64 {
-        self.size.height
-    }
 
-    fn height(&self, data: &EditStack) -> f64 {
-        // Reserve 3 visibles lines
-        (data.len_lines().saturating_sub(3)) as f64 * self.metrics.font_height
-    }
     fn width(&self, data: &EditStack) -> f64 {
         (data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance
     }
@@ -1153,16 +1139,8 @@ impl ScrollBar {
         }
     }
 
-    fn shrink_len(&self, val: f64, data: &EditStack) -> f64 {
-        val * self.len / self.text_len(data)
-    }
-
-    fn grow_len(&self, val: f64, data: &EditStack) -> f64 {
-        val * self.text_len(data) / self.len
-    }
-
     fn handle_len(&self, data: &EditStack) -> f64 {
-        (self.len.powi(2) / self.text_len(data)).max(self.metrics.font_height)
+        (self.len.powi(2) / (self.text_len(data) + self.len)).max(self.metrics.font_height)
     }
 
     fn effective_len(&self, data: &EditStack) -> f64 {
@@ -1182,32 +1160,37 @@ impl ScrollBar {
     }
 }
 impl Widget<EditStack> for ScrollBar {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
+        // if self.text_len(data) < 0.1 {
+        //     return;
+        // }
         match event {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                if self.text_len(data) < 0.1 {
+                    return;
+                }
                 if self.is_vertical() {
                     if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
                         self.delta = dy;
                         let len = self.effective_len(data);
                         let dy = dy * self.len / self.text_len(data);
-                        
+
                         self.range.start = -dy * len / self.len;
                         self.range.end = self.range.start + self.handle_len(data);
 
                         ctx.request_paint();
                         ctx.set_handled();
                     }
-                } else {
-                    if let Some(dx) = cmd.get_unchecked(commands::SCROLL_TO).0 {
-                        self.delta = dx;
-                        let len = self.effective_len(data);
-                        let dx = dx * self.len / self.text_len(data);
-                        self.range.start = -dx * len / self.len;
-                        self.range.end = self.range.start + self.handle_len(data);
+                } else if let Some(dx) = cmd.get_unchecked(commands::SCROLL_TO).0 {
+                    self.delta = dx;
+                    let len = self.effective_len(data);
 
-                        ctx.request_paint();
-                        ctx.set_handled();
-                    }
+                    let dx = dx * self.len / self.text_len(data);
+                    self.range.start = -dx * len / self.len;
+                    self.range.end = self.range.start + self.handle_len(data);
+
+                    ctx.request_paint();
+                    ctx.set_handled();
                 }
             }
             Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
@@ -1226,7 +1209,7 @@ impl Widget<EditStack> for ScrollBar {
                     self.is_held = true;
                 }
             }
-            Event::MouseUp(m) => {
+            Event::MouseUp(_) => {
                 ctx.set_active(false);
                 ctx.set_handled();
                 self.is_held = false;
@@ -1260,15 +1243,15 @@ impl Widget<EditStack> for ScrollBar {
         }
     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {
         //todo!()
     }
 
-    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
         //todo!()
     }
 
-    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
+    fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(env);
 
         self.len = if self.is_vertical() {
@@ -1277,20 +1260,21 @@ impl Widget<EditStack> for ScrollBar {
             bc.max().width
         };
 
-        self.range = if self.text_len(data) < self.len {
+        self.range = if self.text_len(data) < 0.1 {
             Range {
                 start: 0.,
                 end: self.len,
             }
         } else {
-
-            let start = -self.delta*(self.effective_len(data))/self.text_len(data);
+            let start = -self.delta * (self.effective_len(data)) / self.text_len(data);
             let end = start + self.handle_len(data);
-            Range {
-                start,
-                end,
-            }
+            Range { start, end }
         };
+        // let weight = if self.text_len(data) <= 0.1 {
+        //     0.
+        // } else {
+        //     self.metrics.font_advance
+        // };
         if self.is_vertical() {
             Size::new(self.metrics.font_advance, self.len)
         } else {
@@ -1298,9 +1282,9 @@ impl Widget<EditStack> for ScrollBar {
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
+    fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
         //if self.is_vertical() {
-            ctx.fill(self.rect().to_rounded_rect(3.), &env.get(FG_COLOR));
+        ctx.fill(self.rect().to_rounded_rect(3.), &env.get(FG_COLOR));
         //}
     }
 }
@@ -1378,13 +1362,6 @@ impl Widget<EditStack> for TextEditor {
         let mut new_env = env.clone();
         self.metrics.to_env(&mut new_env);
 
-        // match event {
-        //     LifeCycle::Size(_) => {
-        //         ctx.request_paint();
-        //     }
-        //     _ => ()
-        // }
-
         self.inner.lifecycle(ctx, event, data, &new_env)
     }
 
@@ -1410,6 +1387,6 @@ impl Widget<EditStack> for TextEditor {
 
 pub fn new() -> impl Widget<EditStack> {
     let t = TextEditor::default();
-    let id = t.id.clone();
+    let id = t.id;
     t.with_id(id)
 }

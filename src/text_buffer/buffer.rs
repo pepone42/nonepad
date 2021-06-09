@@ -6,7 +6,7 @@ use super::{
 };
 use druid::Data;
 use ropey::{Rope, RopeSlice};
-use std::{cell::Cell, ops::{Bound, MulAssign, Range, RangeBounds}};
+use std::{cell::Cell, ops::{Bound, Range, RangeBounds}};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -456,12 +456,10 @@ impl Buffer {
             self.cancel_selection();
             self.move_main_caret_to(line.start(&self), false);
             self.move_main_caret_to(line.end(&self), true);
+        } else if self.main_caret().start() == self.main_caret().index {
+            self.move_main_caret_to(line.start(&self), true);
         } else {
-            if self.main_caret().start() == self.main_caret().index {
-                self.move_main_caret_to(line.start(&self), true);
-            } else {
-                self.move_main_caret_to(line.end(&self), true);
-            }
+            self.move_main_caret_to(line.end(&self), true);
         }
     }
 
