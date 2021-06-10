@@ -19,6 +19,7 @@ encoding_rs = "0.8.17"
 anyhow = "1.0"
 uuid = { version = "0.8", features = ["v4"] }
 rfd = "0.3"
+miniserde = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
