@@ -24,7 +24,7 @@ pub fn build() -> impl Widget<BottonPanelState> {
     let view_switcher = ViewSwitcher::new(
         |data: &BottonPanelState, _env| data.current,
         |selector, _data, _env| match *selector {
-            PANEL_CLOSED => Box::new(EmptyWidget {}),
+            PANEL_CLOSED => Box::new(EmptyWidget::default()),
             PANEL_SEARCH => Box::new(build_search_panel().lens(BottonPanelState::search_state)),
             _ => unreachable!(),
         },

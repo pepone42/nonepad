@@ -1284,8 +1284,35 @@ impl Widget<EditStack> for ScrollBar {
 
     fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
         //if self.is_vertical() {
+        let r = ctx.size().to_rect();
+        ctx.clip(r);
+        ctx.clear(env.get(BG_COLOR));
         ctx.fill(self.rect().to_rounded_rect(3.), &env.get(FG_COLOR));
         //}
+    }
+}
+
+#[derive(Debug, Default)]
+struct ScrollBarSpacer {
+    metrics: CommonMetrics,
+}
+
+impl Widget<EditStack> for ScrollBarSpacer {
+    fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut EditStack, _env: &Env) {}
+
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {}
+
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
+
+    fn layout(&mut self, _ctx: &mut LayoutCtx, _bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
+        self.metrics = CommonMetrics::from_env(env);
+        Size::new(self.metrics.font_advance, self.metrics.font_advance)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
+        let r = ctx.size().to_rect();
+        ctx.clip(r);
+        ctx.clear(env.get(BG_COLOR));
     }
 }
 
@@ -1330,7 +1357,14 @@ impl Default for TextEditor {
                     1.0,
                 )
                 .must_fill_main_axis(true)
-                .with_child(ScrollBar::new(id, ScrollBarDirection::Vertical).with_id(vscroll_id)),
+                .with_child(
+                    Flex::column()
+                        .with_flex_child(
+                            ScrollBar::new(id, ScrollBarDirection::Vertical).with_id(vscroll_id),
+                            1.0,
+                        )
+                        .with_child(ScrollBarSpacer::default()),
+                ),
             metrics: Default::default(),
         }
     }
