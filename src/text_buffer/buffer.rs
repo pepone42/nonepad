@@ -42,13 +42,18 @@ impl Buffer {
     }
 
     pub fn from_rope(rope: Rope, tabsize: usize) -> Self {
-        Self {
+        let b = Self {
             rope,
             carets: Carets::new(),
             uuid: Uuid::new_v4(),
             tabsize,
             max_visible_line_grapheme_len: Cell::new(0),
+        };
+        for line in 0..100.min(b.len_lines()) {
+            let l = b.line(line).grapheme_len(&b).index.max(b.max_visible_line_grapheme_len.get());
+            b.max_visible_line_grapheme_len.set(l);
         }
+        b
     }
 
     /// Construct a string with tab replaced as space
