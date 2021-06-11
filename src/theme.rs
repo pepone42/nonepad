@@ -1,7 +1,5 @@
 #[rustfmt::skip]
 
-use std::collections::HashMap;
-
 use druid::{Color, Env, Key};
 use miniserde::{Deserialize, Serialize, json};
 #[allow(dead_code)]

@@ -10,7 +10,7 @@ use druid::{
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
     widget::Flex,
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    FontWeight, HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
+    FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
     UpdateCtx, Widget, WidgetExt, WidgetId,
 };
 
