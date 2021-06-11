@@ -182,10 +182,10 @@ fn main() -> anyhow::Result<()> {
             // );
             let theme = Theme::default();
             theme.to_env(env);
-            env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
-            env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
-            env.set(crate::editor_view::FG_SEL_COLOR, Color::rgb8(59, 73, 75));
-            env.set(crate::editor_view::BG_SEL_COLOR, Color::rgb8(79, 97, 100));
+            // env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
+            // env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
+            // env.set(crate::editor_view::FG_SEL_COLOR, Color::rgb8(59, 73, 75));
+            // env.set(crate::editor_view::BG_SEL_COLOR, Color::rgb8(79, 97, 100));
         })
         .launch(app_state)?;
     Ok(())
