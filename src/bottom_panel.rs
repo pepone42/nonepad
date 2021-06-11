@@ -24,7 +24,7 @@ pub fn build() -> impl Widget<BottonPanelState> {
     let view_switcher = ViewSwitcher::new(
         |data: &BottonPanelState, _env| data.current,
         |selector, _data, _env| match *selector {
-            PANEL_CLOSED => Box::new(EmptyWidget {}),
+            PANEL_CLOSED => Box::new(EmptyWidget::default()),
             PANEL_SEARCH => Box::new(build_search_panel().lens(BottonPanelState::search_state)),
             _ => unreachable!(),
         },
@@ -36,7 +36,7 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut BottonPanelState, env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL) => {
-                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), crate::editor_view::EDITOR_WIDGET_ID));
+                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
                 data.current = PANEL_CLOSED;
                 return;
             }

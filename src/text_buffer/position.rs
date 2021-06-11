@@ -242,8 +242,12 @@ impl Line {
         self.end(buffer) - self.start(buffer)
     }
     pub fn grapheme_len(&self, buffer: &Buffer) -> Column {
+
         let mut col = Column::from(0);
         let mut i = Relative::from(0);
+        if self.index >= buffer.len_lines() {
+            return col;
+        }
         let a = buffer.line_to_absolute(self.index);
         while i < self.byte_len(buffer) {
             let c = buffer.char(a + i);

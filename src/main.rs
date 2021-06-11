@@ -6,6 +6,8 @@ mod commands;
 mod editor_view;
 mod text_buffer;
 mod widgets;
+mod seticon;
+mod theme;
 
 use std::path::Path;
 
@@ -14,11 +16,13 @@ use druid::{
     piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
     WidgetExt, WindowDesc,
 };
-use editor_view::Gutter;
 
-use crate::editor_view::EditorView;
 use bottom_panel::BottonPanelState;
+
+use seticon::set_icon;
+
 use text_buffer::EditStack;
+use theme::Theme;
 
 #[derive(Debug)]
 pub struct Delegate {
@@ -44,6 +48,9 @@ impl AppDelegate<MainWindowState> for Delegate {
             ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
             return None;
         }
+        if matches!(event, druid::Event::MouseUp(_)) {
+            ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global));
+        }
         Some(event)
     }
     fn command(
@@ -58,11 +65,12 @@ impl AppDelegate<MainWindowState> for Delegate {
     }
     fn window_added(
         &mut self,
-        _id: druid::WindowId,
+        id: druid::WindowId,
         _data: &mut MainWindowState,
         _env: &Env,
         _ctx: &mut druid::DelegateCtx,
     ) {
+        set_icon(id);
     }
     fn window_removed(
         &mut self,
@@ -158,22 +166,26 @@ fn main() -> anyhow::Result<()> {
         MainWindowState::new()
     };
 
+    
+    
+
     let win = WindowDesc::new(build_ui).title(LocalizedString::new("NonePad"));
     AppLauncher::with_window(win)
         .delegate(Delegate { disabled: false })
         .configure_env(|env, _| {
             // env.set(druid::theme::TEXT_SIZE_NORMAL, 5.0);
             // env.set(druid::theme::TEXT_SIZE_LARGE, 8.0);
-            env.set(crate::editor_view::FONT_SIZE, 12.0);
-            env.set(
-                crate::editor_view::FONT_DESCRIPTOR,
-                druid::FontDescriptor::new(druid::FontFamily::MONOSPACE),
-            );
-
-            env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
-            env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
-            env.set(crate::editor_view::FG_SEL_COLOR, Color::rgb8(59, 73, 75));
-            env.set(crate::editor_view::BG_SEL_COLOR, Color::rgb8(79, 97, 100));
+            // env.set(crate::editor_view::FONT_SIZE, 15.0);
+            // env.set(
+            //     crate::editor_view::FONT_DESCRIPTOR,
+            //     druid::FontDescriptor::new(druid::FontFamily::MONOSPACE),
+            // );
+            let theme = Theme::default();
+            theme.to_env(env);
+            // env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
+            // env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));
+            // env.set(crate::editor_view::FG_SEL_COLOR, Color::rgb8(59, 73, 75));
+            // env.set(crate::editor_view::BG_SEL_COLOR, Color::rgb8(79, 97, 100));
         })
         .launch(app_state)?;
     Ok(())

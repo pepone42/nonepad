@@ -1,31 +1,40 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::{MainWindowState, commands};
-use crate::text_buffer::{position, rope_utils};
-use crate::text_buffer::{EditStack, SelectionLineRange};
-use druid::widget::{Flex, Scroll};
-use druid::{FontDescriptor, WidgetExt, kurbo::{BezPath, Line, PathEl, Point, Rect, Size}};
+use crate::commands;
+use crate::commands::SCROLL_TO;
+use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+
 use druid::{
-    piet::{PietText, RenderContext, Text, TextLayout, TextLayoutBuilder},
+    kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
+    piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
+    widget::Flex,
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx,
-    Widget, WidgetId,
+    FontWeight, HotKey, Key, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
+    UpdateCtx, Widget, WidgetExt, WidgetId,
 };
+
 use rfd::MessageDialog;
 
-pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
-//pub const FONT_NAME: Key<druid::Value> = Key::new("nonepad.editor.font_name");
-pub const FONT_NAME: &'static str = "Consolas";
+mod env {
+    use druid::Key;
 
-pub const FONT_DESCRIPTOR: Key<FontDescriptor> = Key::new("nonepad.editor.font_descriptor");
-pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
-pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
-pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
-pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
+    pub const FONT_SIZE: Key<f64> = Key::new("nonepad.editor.font_height");
+    pub const FONT_ADVANCE: Key<f64> = Key::new("nonepad.editor.font_advance");
+    pub const FONT_BASELINE: Key<f64> = Key::new("nonepad.editor.font_baseline");
+    pub const FONT_DESCENT: Key<f64> = Key::new("nonepad.editor.font_descent");
+    pub const FONT_HEIGHT: Key<f64> = Key::new("nonepad.editor.fonth_height");
+    pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
+}
 
-pub const EDITOR_WIDGET_ID: WidgetId = WidgetId::reserved(0xED17);
-pub const GUTTER_WIDGET_ID: WidgetId = WidgetId::reserved(0x8077);
+pub const FONT_NAME: &str = "Consolas";
+pub const FONT_SIZE: f64 = 14.;
+pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
+
+// pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
+// pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
+// pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
+// pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -57,22 +66,25 @@ impl SelectionPath {
     }
 }
 
-#[derive(Debug)]
-pub struct MonoFontMetrics {
+#[derive(Debug, Clone, Copy)]
+pub struct CommonMetrics {
     font_advance: f64,
     font_baseline: f64,
     font_descent: f64,
     font_height: f64,
 
     font_size: f64,
+
+    page_len: u64,
 }
 
-impl MonoFontMetrics {
-    pub fn new(text_ctx: &mut PietText, font_name: &str) -> Self {
-        let mut metrics = MonoFontMetrics::default();
+impl CommonMetrics {
+    pub fn new(text_ctx: &mut PietText, font_name: &str, size: Size) -> Self {
+        let mut metrics = CommonMetrics::default();
         let font = text_ctx.font_family(font_name).unwrap();
         let layout = text_ctx
             .new_text_layout("8")
+            .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, metrics.font_size)
             .build()
             .unwrap();
@@ -80,18 +92,40 @@ impl MonoFontMetrics {
         metrics.font_baseline = layout.line_metric(0).unwrap().baseline;
         metrics.font_height = layout.line_metric(0).unwrap().height;
         metrics.font_descent = metrics.font_height - metrics.font_baseline;
+        metrics.page_len = (size.height / metrics.font_height).round() as u64;
         metrics
+    }
+
+    pub fn from_env(env: &Env) -> Self {
+        CommonMetrics {
+            font_baseline: env.get(env::FONT_BASELINE),
+            font_advance: env.get(env::FONT_ADVANCE),
+            font_descent: env.get(env::FONT_DESCENT),
+            font_height: env.get(env::FONT_HEIGHT),
+            font_size: env.get(env::FONT_SIZE),
+            page_len: env.get(env::PAGE_LEN),
+        }
+    }
+
+    pub fn to_env(&self, env: &mut Env) {
+        env.set(env::FONT_BASELINE, self.font_baseline);
+        env.set(env::FONT_ADVANCE, self.font_advance);
+        env.set(env::FONT_DESCENT, self.font_descent);
+        env.set(env::FONT_HEIGHT, self.font_height);
+        env.set(env::FONT_SIZE, self.font_size);
+        env.set(env::PAGE_LEN, self.page_len);
     }
 }
 
-impl Default for MonoFontMetrics {
+impl Default for CommonMetrics {
     fn default() -> Self {
-        MonoFontMetrics {
+        CommonMetrics {
             font_advance: 0.0,
             font_baseline: 0.0,
             font_descent: 0.0,
             font_height: 0.0,
-            font_size: 12.0,
+            font_size: FONT_SIZE,
+            page_len: 0,
         }
     }
 }
@@ -102,7 +136,7 @@ pub struct EditorView {
     delta_y: f64,
     delta_x: f64,
     page_len: usize,
-    metrics: MonoFontMetrics,
+    metrics: CommonMetrics,
     font_name: String,
 
     bg_color: Color,
@@ -111,6 +145,11 @@ pub struct EditorView {
     bg_sel_color: Color,
 
     size: Size,
+    owner_id: WidgetId,
+
+    longest_line_len: f64,
+
+    is_held: bool,
     //handle: WindowHandle,
 }
 
@@ -392,25 +431,32 @@ impl Widget<EditStack> for EditorView {
                 }
             }
             Event::Wheel(event) => {
-                if editor.len_lines() as f64 * self.metrics.font_height >= ctx.size().height {
-                    self.delta_y -= event.wheel_delta.y;
-                    if self.delta_y > 0. {
-                        self.delta_y = 0.;
-                    }
-                    if -self.delta_y
-                        > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height
-                    {
-                        self.delta_y =
-                            -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
-                    }
-                }
+                // if editor.len_lines() as f64 * self.metrics.font_height >= ctx.size().height {
+                //     self.delta_y -= event.wheel_delta.y;
+                //     if self.delta_y > 0. {
+                //         self.delta_y = 0.;
+                //     }
+                //     if -self.delta_y
+                //         > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height
+                //     {
+                //         self.delta_y =
+                //             -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
+                //     }
+                // }
 
-                ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID)); // TODO: GLOBAL?
+                ctx.submit_command(Command::new(
+                    commands::SCROLL_TO,
+                    (
+                        Some(self.delta_x - event.wheel_delta.x),
+                        Some(self.delta_y - event.wheel_delta.y),
+                    ),
+                    self.owner_id,
+                ));
 
-                self.delta_x -= event.wheel_delta.x;
-                if self.delta_x > 0. {
-                    self.delta_x = 0.;
-                }
+                // self.delta_x -= event.wheel_delta.x;
+                // if self.delta_x > 0. {
+                //     self.delta_x = 0.;
+                // }
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     let p = editor.point(x, y);
@@ -428,6 +474,7 @@ impl Widget<EditStack> for EditorView {
                     let p = editor.point(x, y);
                     editor.move_main_caret_to(p, event.mods.shift());
                     ctx.set_active(true);
+                    self.is_held = true;
                 }
                 ctx.request_focus();
                 ctx.request_paint();
@@ -436,9 +483,10 @@ impl Widget<EditStack> for EditorView {
             Event::MouseUp(_event) => {
                 ctx.set_active(false);
                 ctx.set_handled();
+                self.is_held = false;
             }
             Event::MouseMove(event) => {
-                if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
+                if self.is_held && ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
                     let p = editor.point(x, y);
                     editor.move_main_caret_to(p, true);
@@ -476,12 +524,24 @@ impl Widget<EditStack> for EditorView {
                     editor.search_next(data);
                     self.put_caret_in_visible_range(ctx, editor);
                 }
+                ctx.set_handled();
             }
             Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
             Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
                 let (line, expand) = *cmd.get_unchecked(crate::commands::SELECT_LINE);
                 editor.buffer.select_line(line.into(), expand);
                 self.put_caret_in_visible_range(ctx, editor);
+                ctx.set_handled();
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
+                let d = *cmd.get_unchecked(crate::commands::SCROLL_TO);
+                self.delta_x = d.0.unwrap_or(self.delta_x);
+                self.delta_y = d.1.unwrap_or(self.delta_y);
+                ctx.set_handled();
+                ctx.request_paint();
+            }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.is_held = false;
             }
             _ => (),
         }
@@ -489,10 +549,10 @@ impl Widget<EditStack> for EditorView {
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
-            self.bg_color = env.get(BG_COLOR);
-            self.fg_color = env.get(FG_COLOR);
-            self.fg_sel_color = env.get(FG_SEL_COLOR);
-            self.bg_sel_color = env.get(BG_SEL_COLOR);
+            self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
+            self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
+            self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
+            self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
 
             ctx.register_for_focus();
         }
@@ -503,22 +563,19 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
 
-        self.metrics = MonoFontMetrics::new(layout_ctx.text(), &self.font_name);
+        self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, self.size);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
 
         bc.max()
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
-        let clip_rect = ctx.size().to_rect();
-        ctx.clip(clip_rect);
-
         self.paint_editor(data, ctx, env);
     }
 }
 
-impl Default for EditorView {
-    fn default() -> Self {
+impl EditorView {
+    pub fn new(owner_id: WidgetId) -> Self {
         EditorView {
             bg_color: Color::BLACK,
             fg_color: Color::WHITE,
@@ -532,11 +589,11 @@ impl Default for EditorView {
             page_len: 0,
 
             size: Default::default(),
+            owner_id,
+            longest_line_len: 0.,
+            is_held: false,
         }
     }
-}
-
-impl EditorView {
     fn visible_range(&self) -> Range<usize> {
         (-self.delta_y / self.metrics.font_height) as usize
             ..((-self.delta_y + self.size.height) / self.metrics.font_height) as usize + 1
@@ -553,10 +610,10 @@ impl EditorView {
         let e = layout.hit_test_text_position(range.end.into());
 
         path.clear();
-        path.push(PathEl::MoveTo(Point::new(s.point.x, y)));
-        path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-        path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
-        path.push(PathEl::LineTo(Point::new(s.point.x, self.metrics.font_height + y)));
+        path.push(PathEl::MoveTo(Point::new(s.point.x.ceil(), y.ceil())));
+        path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), y.ceil())));
+        path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), (self.metrics.font_height + y).ceil())));
+        path.push(PathEl::LineTo(Point::new(s.point.x.ceil(), (self.metrics.font_height + y).ceil())));
         path.push(PathEl::ClosePath);
     }
 
@@ -571,14 +628,14 @@ impl EditorView {
         let e = layout.hit_test_text_position(range.end.into());
 
         path.clear();
-        path.push(PathEl::MoveTo(Point::new(s.point.x, self.metrics.font_height + y)));
-        path.push(PathEl::LineTo(Point::new(s.point.x, y)));
-        path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
+        path.push(PathEl::MoveTo(Point::new(s.point.x.ceil(), (self.metrics.font_height + y).ceil())));
+        path.push(PathEl::LineTo(Point::new(s.point.x.ceil(), y.ceil())));
+        path.push(PathEl::LineTo(Point::new((e.point.x + self.metrics.font_advance).ceil(), y.ceil())));
         path.push(PathEl::LineTo(Point::new(
-            e.point.x + self.metrics.font_advance,
-            self.metrics.font_height + y,
+            (e.point.x + self.metrics.font_advance).ceil(),
+            (self.metrics.font_height + y).ceil(),
         )));
-        s.point.x
+        s.point.x.ceil()
     }
 
     fn add_range_to_selection<L: TextLayout>(
@@ -594,30 +651,30 @@ impl EditorView {
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
-                path.push(PathEl::LineTo(Point::new(0., y)));
+                path.push(PathEl::LineTo(Point::new(0., y.ceil())));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
-                path.push(PathEl::MoveTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.metrics.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., y)));
+                path.push(PathEl::MoveTo(Point::new(e.point.x.ceil(), y.ceil())));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), (self.metrics.font_height + y).ceil())));
+                path.push(PathEl::LineTo(Point::new(0., (self.metrics.font_height + y).ceil())));
+                path.push(PathEl::LineTo(Point::new(0., y.ceil())));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
-                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.metrics.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., y)));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), y.ceil())));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), (self.metrics.font_height + y).ceil())));
+                path.push(PathEl::LineTo(Point::new(0., (self.metrics.font_height + y).ceil())));
+                path.push(PathEl::LineTo(Point::new(0., y.ceil())));
                 path.push(PathEl::ClosePath);
             }
             None => {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x, self.metrics.font_height + y)));
-                path.push(PathEl::LineTo(Point::new(0., self.metrics.font_height + y)));
+                path.push(PathEl::MoveTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), y.ceil())));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), (self.metrics.font_height + y).ceil())));
+                path.push(PathEl::LineTo(Point::new(0., (self.metrics.font_height + y).ceil())));
                 path.push(PathEl::ClosePath);
             }
             _ => {
@@ -637,46 +694,46 @@ impl EditorView {
         match &path.last_range {
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
-                path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
+                path.push(PathEl::MoveTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new((e.point.x + self.metrics.font_advance).ceil(), y.ceil())));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.metrics.font_advance,
-                    self.metrics.font_height + y,
+                    (e.point.x + self.metrics.font_advance).ceil(),
+                    (self.metrics.font_height + y).ceil(),
                 )));
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
                 // insert a point at the begining of the line
-                path[0] = PathEl::LineTo(Point::new(path.last_x, y));
-                path.insert(0, PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
+                path[0] = PathEl::LineTo(Point::new(path.last_x.ceil(), y.ceil()));
+                path.insert(0, PathEl::MoveTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new((e.point.x + self.metrics.font_advance).ceil(), y.ceil())));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.metrics.font_advance,
-                    self.metrics.font_height + y,
+                    (e.point.x + self.metrics.font_advance).ceil(),
+                    (self.metrics.font_height + y).ceil(),
                 )));
             }
             None => {
                 // the precedent line was outside the visible range
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y)));
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
+                path.push(PathEl::MoveTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new((e.point.x + self.metrics.font_advance).ceil(), y.ceil())));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.metrics.font_advance,
-                    self.metrics.font_height + y,
+                    (e.point.x + self.metrics.font_advance).ceil(),
+                    (self.metrics.font_height + y).ceil(),
                 )));
             }
             _ => {
-                path.push(PathEl::LineTo(Point::new(e.point.x + self.metrics.font_advance, y)));
+                path.push(PathEl::LineTo(Point::new((e.point.x + self.metrics.font_advance).ceil(), y.ceil())));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x + self.metrics.font_advance,
-                    self.metrics.font_height + y,
+                    (e.point.x + self.metrics.font_advance).ceil(),
+                    (self.metrics.font_height + y).ceil(),
                 )));
             }
         }
     }
 
-    fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, _env: &Env) -> bool {
+    fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) -> bool {
         let font = ctx.render_ctx.text().font_family(&self.font_name).unwrap();
-
+        // self.size.to_rect();
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
@@ -699,6 +756,7 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone()) // TODO: comment ne pas faire de clone?
+                .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .build()
                 .unwrap();
@@ -762,7 +820,7 @@ impl EditorView {
             let brush = ctx.render_ctx.solid_brush(self.fg_sel_color.clone());
             ctx.render_ctx.fill(&path, &brush);
             let brush = ctx.render_ctx.solid_brush(self.bg_sel_color.clone());
-            ctx.render_ctx.stroke(&path, &brush, 0.5);
+            ctx.render_ctx.stroke(&path, &brush, 1.);
         }
 
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
@@ -773,12 +831,15 @@ impl EditorView {
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone())
+                .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone())
                 .build()
                 .unwrap();
 
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
+
+            self.longest_line_len = self.longest_line_len.max(layout.image_bounds().width());
 
             editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
                 let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
@@ -787,7 +848,7 @@ impl EditorView {
                         (metrics.point.x + 1.0, self.metrics.font_height + dy),
                         (metrics.point.x + 1.0, dy),
                     ),
-                    &self.fg_color,
+                    &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
                     2.0,
                 );
             });
@@ -823,6 +884,7 @@ impl EditorView {
         let layout = ctx
             .text()
             .new_text_layout(buf)
+            .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, self.metrics.font_size)
             .build()
             .unwrap();
@@ -857,8 +919,11 @@ impl EditorView {
         if x < -self.delta_x {
             self.delta_x = -x;
         }
-        ctx.submit_command(Command::new(commands::SCROLL_VIEWPORT, self.delta_y, GUTTER_WIDGET_ID));
-        // TODO: GLOBAL?
+        ctx.submit_command(Command::new(
+            commands::SCROLL_TO,
+            (Some(self.delta_x), Some(self.delta_y)),
+            self.owner_id,
+        ));
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -898,39 +963,33 @@ impl EditorView {
 
 #[derive(Debug)]
 pub struct Gutter {
-    metrics: MonoFontMetrics,
+    metrics: CommonMetrics,
     font_name: String,
     page_len: usize,
     size: Size,
     dy: f64,
-}
-
-impl Default for Gutter {
-    fn default() -> Self {
-        Gutter {
-            metrics: Default::default(),
-            font_name: FONT_NAME.to_string(),
-            page_len: 0,
-            size: Default::default(),
-            dy: 0.0,
-        }
-    }
+    owner_id: WidgetId,
+    is_held: bool,
 }
 
 impl Widget<EditStack> for Gutter {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(commands::SCROLL_VIEWPORT) => {
-                self.dy = *cmd.get_unchecked(commands::SCROLL_VIEWPORT);
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                self.dy = cmd.get_unchecked(commands::SCROLL_TO).1.unwrap_or(self.dy);
+                // .clamp(-self.height(&data), 0.);
                 ctx.request_paint();
                 ctx.set_handled();
             }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.is_held = false;
+            }
             Event::MouseMove(m) => {
                 //ctx.set_cursor(&Cursor::ResizeLeftRight);
-                if ctx.is_active() && m.buttons.contains(MouseButton::Left) {
+                if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), EDITOR_WIDGET_ID));
+                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), self.owner_id));
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -939,12 +998,28 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_active(true);
                 let y = (m.pos.y - self.dy).max(0.);
                 let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                ctx.submit_command(Command::new(commands::SELECT_LINE, (line, m.mods.shift()), EDITOR_WIDGET_ID));
+                ctx.submit_command(Command::new(
+                    commands::SELECT_LINE,
+                    (line, m.mods.shift()),
+                    self.owner_id,
+                ));
                 ctx.request_paint();
                 ctx.set_handled();
+                self.is_held = true;
             }
             Event::MouseUp(_event) => {
                 ctx.set_active(false);
+                ctx.set_handled();
+                self.is_held = false;
+            }
+            Event::Wheel(m) => {
+                //self.dy -= m.wheel_delta.y;
+                ctx.submit_command(Command::new(
+                    SCROLL_TO,
+                    (None, Some(self.dy - m.wheel_delta.y)),
+                    self.owner_id,
+                ));
+                ctx.request_paint();
                 ctx.set_handled();
             }
             _ => (),
@@ -955,9 +1030,10 @@ impl Widget<EditStack> for Gutter {
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 
-    fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
-        self.metrics = MonoFontMetrics::new(layout_ctx.text(), &self.font_name);
+    fn layout(&mut self, _layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
+        self.metrics = CommonMetrics::from_env(_env);
         self.size = Size::new(self.width(data), bc.max().height);
+
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
         self.size
     }
@@ -968,22 +1044,34 @@ impl Widget<EditStack> for Gutter {
 }
 
 impl Gutter {
-    fn visible_range(&self) -> Range<usize> {
+    fn new(owner_id: WidgetId) -> Self {
+        Gutter {
+            metrics: Default::default(),
+            font_name: FONT_NAME.to_string(),
+            page_len: 0,
+            size: Default::default(),
+            dy: 0.0,
+            owner_id,
+            is_held: false,
+        }
+    }
+    fn visible_line_range(&self) -> Range<usize> {
         let start = -(self.dy / self.metrics.font_height) as usize;
         let end = start + self.page_len + 1;
         Range { start, end }
     }
+
     fn width(&self, data: &EditStack) -> f64 {
         (data.len_lines().to_string().chars().count() as f64 + 3.0) * self.metrics.font_advance
     }
     fn paint_gutter(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) {
         ctx.clip(self.size.to_rect());
-        ctx.render_ctx.fill(self.size.to_rect(), &env.get(BG_COLOR));
+        ctx.render_ctx.fill(self.size.to_rect(), &env.get(crate::theme::EDITOR_BACKGROUND));
         // Draw line number
         let font = ctx.text().font_family(FONT_NAME).unwrap();
         let mut dy = (self.dy / self.metrics.font_height).fract() * self.metrics.font_height;
         let line_number_char_width = format!(" {}", editor.len_lines()).len();
-        for line_idx in self.visible_range() {
+        for line_idx in self.visible_line_range() {
             if line_idx >= editor.len_lines() {
                 break;
             }
@@ -991,8 +1079,9 @@ impl Gutter {
                 .render_ctx
                 .text()
                 .new_text_layout(format!("{:1$}", line_idx, line_number_char_width))
+                .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
-                .text_color(env.get(FG_COLOR))
+                .text_color(env.get(crate::theme::EDITOR_LINE_NUMBER_FOREGROUND))
                 .build()
                 .unwrap();
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
@@ -1001,19 +1090,352 @@ impl Gutter {
 
         ctx.render_ctx.stroke(
             Line::new(
-                (self.width(editor) - self.metrics.font_advance, 0.0),
-                (self.width(editor), self.size.height),
+                ((self.width(editor) - self.metrics.font_advance).ceil(), 0.0),
+                ((self.width(editor) - self.metrics.font_advance).ceil(), self.size.height),
             ),
-            &env.get(FG_COLOR),
+            &env.get(crate::theme::EDITOR_LINE_NUMBER_FOREGROUND),
             1.0,
         );
     }
 }
 
-pub fn new() -> impl Widget<EditStack> {
+#[derive(Debug, PartialEq, Eq)]
+enum ScrollBarDirection {
+    Horizontal,
+    Vertical,
+}
 
-    Flex::row()
-    .with_child(Gutter::default())
-    .with_flex_child(EditorView::default()
-        .with_id(crate::editor_view::EDITOR_WIDGET_ID),1.0).must_fill_main_axis(true)
+#[derive(Debug)]
+struct ScrollBar {
+    owner_id: WidgetId,
+    direction: ScrollBarDirection,
+    len: f64,
+    range: Range<f64>,
+    metrics: CommonMetrics,
+    mouse_delta: f64,
+    is_held: bool,
+    is_hovered: bool,
+    delta: f64,
+}
+
+impl ScrollBar {
+    fn new(owner_id: WidgetId, direction: ScrollBarDirection) -> Self {
+        Self {
+            owner_id,
+            direction,
+            len: 0.,
+            range: Range { start: 0., end: 0. },
+            metrics: Default::default(),
+            mouse_delta: 0.,
+            is_held: false,
+            is_hovered: false,
+            delta: 0.,
+        }
     }
+
+    fn text_len(&self, data: &EditStack) -> f64 {
+        if self.is_vertical() {
+            data.len_lines().saturating_sub(3) as f64 * self.metrics.font_height
+        } else {
+            data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
+        }
+    }
+
+    fn handle_len(&self, data: &EditStack) -> f64 {
+        (self.len.powi(2) / (self.text_len(data) + self.len)).max(self.metrics.font_height)
+    }
+
+    fn effective_len(&self, data: &EditStack) -> f64 {
+        self.len - self.handle_len(data)
+    }
+
+    fn rect(&self) -> Rect {
+        if self.is_vertical() {
+            Rect::new(0.0, self.range.start, self.metrics.font_advance+2.0, self.range.end)
+        } else {
+            Rect::new(self.range.start, 0.0, self.range.end, self.metrics.font_advance+2.0)
+        }
+    }
+
+    fn is_vertical(&self) -> bool {
+        self.direction == ScrollBarDirection::Vertical
+    }
+}
+impl Widget<EditStack> for ScrollBar {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
+        // if self.text_len(data) < 0.1 {
+        //     return;
+        // }
+        match event {
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                if self.text_len(data) < 0.1 {
+                    return;
+                }
+                if self.is_vertical() {
+                    if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
+                        self.delta = dy;
+                        let len = self.effective_len(data);
+                        let dy = dy * self.len / self.text_len(data);
+
+                        self.range.start = -dy * len / self.len;
+                        self.range.end = self.range.start + self.handle_len(data);
+
+                        ctx.request_paint();
+                        ctx.set_handled();
+                    }
+                } else if let Some(dx) = cmd.get_unchecked(commands::SCROLL_TO).0 {
+                    self.delta = dx;
+                    let len = self.effective_len(data);
+
+                    let dx = dx * self.len / self.text_len(data);
+                    self.range.start = -dx * len / self.len;
+                    self.range.end = self.range.start + self.handle_len(data);
+
+                    ctx.request_paint();
+                    ctx.set_handled();
+                }
+            }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.is_held = false;
+                self.is_hovered = false;
+            }
+            Event::MouseDown(m) => {
+                if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {
+                    ctx.set_active(true);
+                    self.mouse_delta = if self.is_vertical() {
+                        m.pos.y - self.range.start
+                    } else {
+                        m.pos.x - self.range.start
+                    };
+                    ctx.request_paint();
+                    ctx.set_handled();
+                    self.is_held = true;
+                }
+            }
+            Event::MouseUp(_) => {
+                ctx.set_active(false);
+                ctx.set_handled();
+                self.is_held = false;
+            }
+            Event::MouseMove(m) => {
+                if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {
+                    self.is_hovered = true;
+                } else {
+                    self.is_hovered = false;
+                }
+                if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
+                    if self.is_vertical() {
+                        ctx.submit_command(Command::new(
+                            SCROLL_TO,
+                            (
+                                None,
+                                Some((self.mouse_delta - m.pos.y) * self.text_len(data) / self.effective_len(data)),
+                            ),
+                            self.owner_id,
+                        ));
+                    } else {
+                        ctx.submit_command(Command::new(
+                            SCROLL_TO,
+                            (
+                                Some((self.mouse_delta - m.pos.x) * self.text_len(data) / self.effective_len(data)),
+                                None,
+                            ),
+                            self.owner_id,
+                        ));
+                    }
+
+                    ctx.set_handled();
+                }
+                ctx.request_paint();
+            }
+            _ => (),
+        }
+    }
+
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {
+        //todo!()
+    }
+
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {
+        //todo!()
+    }
+
+    fn layout(&mut self, _ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
+        self.metrics = CommonMetrics::from_env(env);
+
+        self.len = if self.is_vertical() {
+            bc.max().height
+        } else {
+            bc.max().width
+        };
+
+        self.range = if self.text_len(data) < 0.1 {
+            Range {
+                start: 0.,
+                end: self.len,
+            }
+        } else {
+            let start = -self.delta * (self.effective_len(data)) / self.text_len(data);
+            let end = start + self.handle_len(data);
+            Range { start, end }
+        };
+        // let weight = if self.text_len(data) <= 0.1 {
+        //     0.
+        // } else {
+        //     self.metrics.font_advance
+        // };
+        if self.is_vertical() {
+            Size::new(self.metrics.font_advance+2.0, self.len)
+        } else {
+            Size::new(self.len, self.metrics.font_advance+2.0)
+        }
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
+        //if self.is_vertical() {
+        let r = ctx.size().to_rect();
+        ctx.clip(r);
+        ctx.clear(env.get(crate::theme::EDITOR_BACKGROUND));
+        if self.is_held {
+            ctx.fill(self.rect().inflate(-1.0,-1.0).to_rounded_rect(3.), &env.get(crate::theme::SCROLLBAR_SLIDER_ACTIVE_BACKGROUND));
+        } else if self.is_hovered {
+            ctx.fill(self.rect().inflate(-1.0,-1.0).to_rounded_rect(3.), &env.get(crate::theme::SCROLLBAR_SLIDER_HOVER_BACKGROUND));
+        } else {
+            ctx.fill(self.rect().inflate(-1.0,-1.0).to_rounded_rect(3.), &env.get(crate::theme::SCROLLBAR_SLIDER_BACKGROUND));
+        }
+        //}
+    }
+}
+
+#[derive(Debug, Default)]
+struct ScrollBarSpacer {
+    metrics: CommonMetrics,
+}
+
+impl Widget<EditStack> for ScrollBarSpacer {
+    fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut EditStack, _env: &Env) {}
+
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {}
+
+    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
+
+    fn layout(&mut self, _ctx: &mut LayoutCtx, _bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
+        self.metrics = CommonMetrics::from_env(env);
+        Size::new(self.metrics.font_advance+2.0, self.metrics.font_advance+2.0)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
+        let r = ctx.size().to_rect();
+        ctx.clip(r);
+        ctx.clear(env.get(crate::theme::EDITOR_BACKGROUND));
+    }
+}
+
+struct TextEditor {
+    gutter_id: WidgetId,
+    editor_id: WidgetId,
+    vscroll_id: WidgetId,
+    hscroll_id: WidgetId,
+    id: WidgetId,
+    inner: Flex<EditStack>,
+    metrics: CommonMetrics,
+}
+
+impl TextEditor {
+    pub fn text_height(&self, data: &EditStack) -> f64 {
+        data.len_lines().saturating_sub(3) as f64 * self.metrics.font_height
+    }
+    pub fn text_width(&self, data: &EditStack) -> f64 {
+        data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
+    }
+}
+
+impl Default for TextEditor {
+    fn default() -> Self {
+        let id = WidgetId::next();
+        let gutter_id = WidgetId::next();
+        let editor_id = WidgetId::next();
+        let vscroll_id = WidgetId::next();
+        let hscroll_id = WidgetId::next();
+        TextEditor {
+            gutter_id,
+            editor_id,
+            vscroll_id,
+            hscroll_id,
+            id,
+            inner: Flex::row()
+                .with_child(Gutter::new(id).with_id(gutter_id))
+                .with_flex_child(
+                    Flex::column()
+                        .with_flex_child(EditorView::new(id).with_id(editor_id), 1.0)
+                        .with_child(ScrollBar::new(id, ScrollBarDirection::Horizontal).with_id(hscroll_id)),
+                    1.0,
+                )
+                .must_fill_main_axis(true)
+                .with_child(
+                    Flex::column()
+                        .with_flex_child(
+                            ScrollBar::new(id, ScrollBarDirection::Vertical).with_id(vscroll_id),
+                            1.0,
+                        )
+                        .with_child(ScrollBarSpacer::default()),
+                ),
+            metrics: Default::default(),
+        }
+    }
+}
+
+impl Widget<EditStack> for TextEditor {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, env: &Env) {
+        let mut new_env = env.clone();
+        self.metrics.to_env(&mut new_env);
+        match event {
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                // clamp to size
+                let d = *cmd.get_unchecked(commands::SCROLL_TO);
+                let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
+                let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
+                // dbg!(x,y);
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.editor_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.gutter_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.vscroll_id));
+                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.hscroll_id));
+                ctx.is_handled();
+            }
+            _ => self.inner.event(ctx, event, data, &new_env),
+        }
+        //self.inner.event(ctx, event, data, env)
+    }
+
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, data: &EditStack, env: &Env) {
+        let mut new_env = env.clone();
+        self.metrics.to_env(&mut new_env);
+
+        self.inner.lifecycle(ctx, event, data, &new_env)
+    }
+
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, env: &Env) {
+        let mut new_env = env.clone();
+        self.metrics.to_env(&mut new_env);
+        self.inner.update(ctx, old_data, data, &new_env)
+    }
+
+    fn layout(&mut self, ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, env: &Env) -> Size {
+        self.metrics = CommonMetrics::new(ctx.text(), FONT_NAME, bc.max());
+        let mut new_env = env.clone();
+        self.metrics.to_env(&mut new_env);
+        self.inner.layout(ctx, bc, data, &new_env)
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
+        let mut new_env = env.clone();
+        self.metrics.to_env(&mut new_env);
+        self.inner.paint(ctx, data, &new_env)
+    }
+}
+
+pub fn new() -> impl Widget<EditStack> {
+    let t = TextEditor::default();
+    let id = t.id;
+    t.with_id(id)
+}

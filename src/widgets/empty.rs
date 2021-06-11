@@ -1,6 +1,9 @@
-use druid::Widget;
+use druid::{Size, Widget};
 
-pub struct EmptyWidget;
+#[derive(Debug,Default)]
+pub struct EmptyWidget {
+    size: Size,
+}
 
 impl<T> Widget<T> for EmptyWidget {
     fn event(&mut self, _ctx: &mut druid::EventCtx, _event: &druid::Event, _data: &mut T, _env: &druid::Env) {}
@@ -13,7 +16,7 @@ impl<T> Widget<T> for EmptyWidget {
         _data: &T,
         _env: &druid::Env,
     ) -> druid::Size {
-        druid::Size::ZERO
+        self.size
     }
     fn paint(&mut self, _ctx: &mut druid::PaintCtx, _data: &T, _env: &druid::Env) {}
 }

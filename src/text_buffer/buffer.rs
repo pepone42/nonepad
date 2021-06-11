@@ -6,7 +6,7 @@ use super::{
 };
 use druid::Data;
 use ropey::{Rope, RopeSlice};
-use std::ops::{Bound, Range, RangeBounds};
+use std::{cell::Cell, ops::{Bound, Range, RangeBounds}};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -15,6 +15,7 @@ pub struct Buffer {
     carets: Carets,
     pub(super) tabsize: usize,
     uuid: Uuid,
+    max_visible_line_grapheme_len: Cell<usize>,
 }
 
 impl Data for Buffer {
@@ -36,16 +37,23 @@ impl Buffer {
             carets: Carets::new(),
             uuid: Uuid::new_v4(),
             tabsize,
+            max_visible_line_grapheme_len: Cell::new(0),
         }
     }
 
     pub fn from_rope(rope: Rope, tabsize: usize) -> Self {
-        Self {
+        let b = Self {
             rope,
             carets: Carets::new(),
             uuid: Uuid::new_v4(),
             tabsize,
+            max_visible_line_grapheme_len: Cell::new(0),
+        };
+        for line in 0..100.min(b.len_lines()) {
+            let l = b.line(line).grapheme_len(&b).index.max(b.max_visible_line_grapheme_len.get());
+            b.max_visible_line_grapheme_len.set(l);
         }
+        b
     }
 
     /// Construct a string with tab replaced as space
@@ -57,6 +65,12 @@ impl Buffer {
         byte_to_rel: &mut Vec<Relative>,
     ) {
         line.displayable_string(&self, self.tabsize, out, rel_to_byte, byte_to_rel);
+        let l = line.grapheme_len(self).index.max(self.max_visible_line_grapheme_len.get());
+        self.max_visible_line_grapheme_len.set(l);
+    }
+
+    pub fn max_visible_line_grapheme_len(&self) -> usize {
+        self.max_visible_line_grapheme_len.get()
     }
 
     pub fn carets_on_line(&self, line: Line) -> impl Iterator<Item = &Caret> {
@@ -447,12 +461,10 @@ impl Buffer {
             self.cancel_selection();
             self.move_main_caret_to(line.start(&self), false);
             self.move_main_caret_to(line.end(&self), true);
+        } else if self.main_caret().start() == self.main_caret().index {
+            self.move_main_caret_to(line.start(&self), true);
         } else {
-            if self.main_caret().start() == self.main_caret().index {
-                self.move_main_caret_to(line.start(&self), true);
-            } else {
-                self.move_main_caret_to(line.end(&self), true);
-            }
+            self.move_main_caret_to(line.end(&self), true);
         }
     }
 
