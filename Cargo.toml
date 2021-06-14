@@ -11,7 +11,7 @@ build = "build.rs"
 winres = "0.1"
 
 [dependencies]
-druid = "0.7"
+druid = { git = "https://github.com/linebender/druid" }
 ropey = "1.2"
 unicode-segmentation = "1.6.0"
 chardetng = "0.1.3"

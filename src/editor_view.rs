@@ -130,7 +130,7 @@ impl Default for CommonMetrics {
     }
 }
 #[derive(Debug, PartialEq, Eq)]
-enum  HeldState {
+enum HeldState {
     None,
     Grapheme,
     Word,
@@ -487,11 +487,11 @@ impl Widget<EditStack> for EditorView {
                     let p = editor.point(x, y);
                     match event.count {
                         1 => {
-                            editor.move_main_caret_to(p, event.mods.shift(),false);
+                            editor.move_main_caret_to(p, event.mods.shift(), false);
                             self.held_state = HeldState::Grapheme;
                         }
                         2 => {
-                            editor.move_main_caret_to(p, event.mods.shift(),true);
+                            editor.move_main_caret_to(p, event.mods.shift(), true);
                             self.held_state = HeldState::Word;
                         }
                         3 => {
@@ -505,7 +505,6 @@ impl Widget<EditStack> for EditorView {
                         _ => (),
                     }
                     ctx.set_active(true);
-                    
                 }
                 ctx.request_focus();
                 ctx.request_paint();
@@ -523,12 +522,26 @@ impl Widget<EditStack> for EditorView {
                     match self.held_state {
                         HeldState::Grapheme => editor.move_main_caret_to(p, true, false),
                         HeldState::Word => editor.move_main_caret_to(p, true, true),
-                        HeldState::Line => editor.select_line(p.line,true),
+                        HeldState::Line => editor.select_line(p.line, true),
                         HeldState::None => unreachable!(),
                     }
                     self.put_caret_in_visible_range(ctx, editor);
                 }
             }
+            Event::WindowCloseRequested => {
+                if editor.is_dirty() {
+                    if !MessageDialog::new()
+                        .set_level(rfd::MessageLevel::Warning)
+                        .set_description("The currently opened editor is not saved. Do you really want to quit?")
+                        .set_title("Not saved")
+                        .set_buttons(rfd::MessageButtons::OkCancle)
+                        .show()
+                    {
+                        ctx.set_handled();
+                    }
+                }
+            }
+
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
                 if let Err(e) = self.save_as(editor, file_info.path()) {
@@ -1368,7 +1381,7 @@ impl Widget<EditStack> for ScrollBar {
         //if self.is_vertical() {
         let r = ctx.size().to_rect();
         ctx.clip(r);
-        ctx.clear(env.get(crate::theme::EDITOR_BACKGROUND));
+        ctx.fill(r, &env.get(crate::theme::EDITOR_BACKGROUND));
         if self.is_held {
             ctx.fill(
                 self.rect().inflate(-1.0, -1.0).to_rounded_rect(3.),
@@ -1409,7 +1422,7 @@ impl Widget<EditStack> for ScrollBarSpacer {
     fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
         let r = ctx.size().to_rect();
         ctx.clip(r);
-        ctx.clear(env.get(crate::theme::EDITOR_BACKGROUND));
+        ctx.fill(r, &env.get(crate::theme::EDITOR_BACKGROUND));
     }
 }
 
@@ -1484,6 +1497,7 @@ impl Widget<EditStack> for TextEditor {
                 ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.hscroll_id));
                 ctx.is_handled();
             }
+
             _ => self.inner.event(ctx, event, data, &new_env),
         }
         //self.inner.event(ctx, event, data, env)
