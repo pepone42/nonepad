@@ -6,7 +6,10 @@ use super::{
 };
 use druid::Data;
 use ropey::{Rope, RopeSlice};
-use std::{cell::Cell, ops::{Bound, Range, RangeBounds}};
+use std::{
+    cell::Cell,
+    ops::{Bound, Range, RangeBounds},
+};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -50,7 +53,11 @@ impl Buffer {
             max_visible_line_grapheme_len: Cell::new(0),
         };
         for line in 0..100.min(b.len_lines()) {
-            let l = b.line(line).grapheme_len(&b).index.max(b.max_visible_line_grapheme_len.get());
+            let l = b
+                .line(line)
+                .grapheme_len(&b)
+                .index
+                .max(b.max_visible_line_grapheme_len.get());
             b.max_visible_line_grapheme_len.set(l);
         }
         b
@@ -65,7 +72,10 @@ impl Buffer {
         byte_to_rel: &mut Vec<Relative>,
     ) {
         line.displayable_string(&self, self.tabsize, out, rel_to_byte, byte_to_rel);
-        let l = line.grapheme_len(self).index.max(self.max_visible_line_grapheme_len.get());
+        let l = line
+            .grapheme_len(self)
+            .index
+            .max(self.max_visible_line_grapheme_len.get());
         self.max_visible_line_grapheme_len.set(l);
     }
 
@@ -155,6 +165,13 @@ impl Buffer {
         L: Into<Line>,
     {
         self.rope.line_to_byte(line.into().index).into()
+    }
+
+    pub fn next_word_boundary<P: Position>(&self, p: P) -> Absolute {
+        Absolute::from(rope_utils::next_word_boundary(&self.slice(..), p.absolute(&self)))
+    }
+    pub fn prev_word_boundary<P: Position>(&self, p: P) -> Absolute {
+        Absolute::from(rope_utils::prev_word_boundary(&self.slice(..), p.absolute(&self)))
     }
 
     pub fn char<P>(&self, pos: P) -> char
@@ -397,8 +414,8 @@ impl Buffer {
             .or_else(|| self.search_next_in_range(s, 0.into()..start_index));
         if let Some(i) = i {
             self.cancel_mutli_carets();
-            self.move_main_caret_to(i, false);
-            self.move_main_caret_to(i + s.len(), true);
+            self.move_main_caret_to(i, false, false);
+            self.move_main_caret_to(i + s.len(), true, false);
         }
     }
 
@@ -413,14 +430,29 @@ impl Buffer {
             .expect("No main cursor found!")
     }
 
-    pub fn move_main_caret_to<P>(&mut self, pos: P, expand_selection: bool)
+    pub fn move_main_caret_to<P>(&mut self, pos: P, expand_selection: bool, word_boundary: bool)
     where
         P: Position,
     {
         let p = self.position_to_absolute(pos);
         self.cancel_mutli_carets();
         let b = self.clone();
-        self.carets[0].set_index(p, !expand_selection, true, &b)
+        if word_boundary {
+            let start = self.prev_word_boundary(p);
+            let end = self.next_word_boundary(p);
+            if expand_selection {
+                if self.carets[0].index == self.carets[0].start() {
+                    self.carets[0].set_index(start, !expand_selection, true, &b);
+                } else {
+                    self.carets[0].set_index(end, !expand_selection, true, &b);
+                }
+            } else {
+                self.carets[0].set_index(start, true, true, &b);
+                self.carets[0].set_index(end, false, true, &b);
+            }
+        } else {
+            self.carets[0].set_index(p, !expand_selection, true, &b);
+        }
     }
 
     pub fn selected_text(&self, line_feed: LineFeed) -> String {
@@ -450,8 +482,8 @@ impl Buffer {
     pub fn select_all(&mut self) {
         self.cancel_mutli_carets();
         self.cancel_selection();
-        self.move_main_caret_to(Absolute::from(0), false);
-        self.move_main_caret_to(self.len(), true);
+        self.move_main_caret_to(Absolute::from(0), false, false);
+        self.move_main_caret_to(self.len(), true, false);
     }
 
     pub fn select_line(&mut self, line: Line, expand_selection: bool) {
@@ -459,12 +491,12 @@ impl Buffer {
 
         if !expand_selection {
             self.cancel_selection();
-            self.move_main_caret_to(line.start(&self), false);
-            self.move_main_caret_to(line.end(&self), true);
+            self.move_main_caret_to(line.start(&self), false, false);
+            self.move_main_caret_to(line.end(&self), true, false);
         } else if self.main_caret().start() == self.main_caret().index {
-            self.move_main_caret_to(line.start(&self), true);
+            self.move_main_caret_to(line.start(&self), true, false);
         } else {
-            self.move_main_caret_to(line.end(&self), true);
+            self.move_main_caret_to(line.end(&self), true, false);
         }
     }
 
