@@ -170,7 +170,7 @@ fn main() -> anyhow::Result<()> {
     
     
 
-    let win = WindowDesc::new(build_ui).title(LocalizedString::new("NonePad"));
+    let win = WindowDesc::new(build_ui()).title(LocalizedString::new("NonePad"));
     AppLauncher::with_window(win)
         .delegate(Delegate { disabled: false })
         .configure_env(|env, _| {
