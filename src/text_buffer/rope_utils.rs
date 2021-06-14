@@ -173,6 +173,28 @@ pub fn prev_word_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usi
     slice.char_to_byte(i)
 }
 
+pub fn word_start<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let mut i: usize = slice.byte_to_char(byte_idx.into());
+    let current_char = slice.char(i);
+    i += slice.chars_at(i).take_while(|c| !is_boundary(*c, current_char)).count();
+    slice.char_to_byte(i)
+}
+
+pub fn word_end<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let mut i: usize = slice.byte_to_char(byte_idx.into());
+    let current_char = slice.char(i);
+    let mut iter = slice.chars_at(i);
+    let mut count = 0;
+    i -= loop {
+        match iter.prev() {
+            Some(c) if !is_boundary(c, current_char) => count += 1,
+            _ => break count,
+        }
+    };
+    slice.char_to_byte(i)
+}
+
+
 pub fn column_to_relative(col: Column, line: Line, buffer: &Buffer) -> Relative {
     let mut c = 0;
     let mut i = Relative::from(0);

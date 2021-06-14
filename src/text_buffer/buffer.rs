@@ -167,11 +167,11 @@ impl Buffer {
         self.rope.line_to_byte(line.into().index).into()
     }
 
-    pub fn next_word_boundary<P: Position>(&self, p: P) -> Absolute {
-        Absolute::from(rope_utils::next_word_boundary(&self.slice(..), p.absolute(&self)))
+    pub fn word_start<P: Position>(&self, p: P) -> Absolute {
+        Absolute::from(rope_utils::word_start(&self.slice(..), p.absolute(&self)))
     }
-    pub fn prev_word_boundary<P: Position>(&self, p: P) -> Absolute {
-        Absolute::from(rope_utils::prev_word_boundary(&self.slice(..), p.absolute(&self)))
+    pub fn word_end<P: Position>(&self, p: P) -> Absolute {
+        Absolute::from(rope_utils::word_end(&self.slice(..), p.absolute(&self)))
     }
 
     pub fn char<P>(&self, pos: P) -> char
@@ -438,8 +438,8 @@ impl Buffer {
         self.cancel_mutli_carets();
         let b = self.clone();
         if word_boundary {
-            let start = self.prev_word_boundary(p);
-            let end = self.next_word_boundary(p);
+            let start = self.word_end(p);
+            let end = self.word_start(p);
             if expand_selection {
                 if self.carets[0].index == self.carets[0].start() {
                     self.carets[0].set_index(start, !expand_selection, true, &b);
