@@ -9,6 +9,7 @@ mod widgets;
 mod seticon;
 mod theme;
 
+use std::ffi::OsStr;
 use std::path::Path;
 
 use druid::widget::{Flex, Label, MainAxisAlignment};
@@ -127,7 +128,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .clone()
                 .unwrap_or_default()
                 .file_name()
-                .unwrap_or_default()
+                .unwrap_or(OsStr::new("[Untilted]"))
                 .to_string_lossy()
                 .to_string(),
             if data.editor.is_dirty() { "*" } else { "" }
