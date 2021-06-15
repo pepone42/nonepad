@@ -13,7 +13,9 @@ pub struct Carets {
 
 impl Carets {
     pub fn new() -> Self {
-        Self { intern : vec![Caret::new()] }
+        Self {
+            intern: vec![Caret::new()],
+        }
     }
 
     pub fn merge(&mut self) {
@@ -66,6 +68,7 @@ pub struct Caret {
     point: Point,
     sticky_col: Column,
     pub is_clone: bool,
+    pub(super) generation: usize,
 }
 
 impl Clone for Caret {
@@ -76,6 +79,7 @@ impl Clone for Caret {
             point: self.point,
             sticky_col: self.sticky_col,
             is_clone: true,
+            generation: self.generation + 1,
         }
     }
 }
@@ -100,6 +104,7 @@ impl Caret {
             point: Default::default(),
             sticky_col: Default::default(),
             is_clone: false,
+            generation: 0,
         }
     }
     fn from_point(p: Point, buffer: &Buffer) -> Self {
@@ -109,6 +114,7 @@ impl Caret {
             point: p,
             sticky_col: p.col,
             is_clone: false,
+            generation: 0,
         }
     }
 
@@ -121,6 +127,7 @@ impl Caret {
                 sticky_col: cstart.sticky_col,
                 selection: cend.end(),
                 is_clone: cstart.is_clone && cend.is_clone,
+                generation: cstart.generation.max(cend.generation),
             }
         } else {
             let (cstart, cend) = if c1.end() < c2.end() { (c1, c2) } else { (c2, c1) };
@@ -130,6 +137,7 @@ impl Caret {
                 sticky_col: cend.sticky_col,
                 selection: cstart.start(),
                 is_clone: cstart.is_clone && cend.is_clone,
+                generation: cstart.generation.max(cend.generation),
             }
         }
     }
@@ -190,13 +198,7 @@ impl Caret {
         self.point.col
     }
 
-    pub fn set_index(
-        &mut self,
-        index: Absolute,
-        reset_selection: bool,
-        reset_sticky_col: bool,
-        buffer: &Buffer
-    ) {
+    pub fn set_index(&mut self, index: Absolute, reset_selection: bool, reset_sticky_col: bool, buffer: &Buffer) {
         self.index = index;
         if reset_selection {
             self.selection = index;
@@ -239,6 +241,7 @@ impl Caret {
         if self.line().next(buffer).is_some() {
             let mut c = Caret::from_point(self.point.down(buffer), buffer);
             c.is_clone = true;
+            c.generation = self.generation + 1;
             Some(c)
         } else {
             None
@@ -249,10 +252,20 @@ impl Caret {
         if self.line().prev().is_some() {
             let mut c = Caret::from_point(self.point.up(buffer), buffer);
             c.is_clone = true;
+            c.generation = self.generation + 1;
             Some(c)
         } else {
             None
         }
+    }
+
+    pub fn duplicate_to(&self, start: Absolute, end: Absolute, buffer: &Buffer) -> Self {
+        let mut c = Caret::new();
+        c.set_index(start, true, true, buffer);
+        c.set_index(end, false, true, buffer);
+        c.is_clone = true;
+        c.generation = self.generation + 1;
+        c
     }
 
     pub fn move_end(&mut self, expand_selection: bool, buffer: &Buffer) {

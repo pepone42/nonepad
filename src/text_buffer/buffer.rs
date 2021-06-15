@@ -397,7 +397,8 @@ impl Buffer {
     fn search_next_in_range(&self, s: &str, r: Range<Absolute>) -> Option<Absolute> {
         let mut index = r.start;
         let slice = self.slice(r);
-        slice.lines().find_map(|l| match l.to_string().find(s) {
+        let s = s.to_lowercase();
+        slice.lines().find_map(|l| match l.to_string().to_lowercase().find(&s) {
             Some(i) => Some(index + i),
             None => {
                 index += l.len_bytes();
@@ -408,7 +409,7 @@ impl Buffer {
 
     pub fn search_next(&mut self, s: &str) {
         let start_index = self.main_caret().index;
-        dbg!(start_index);
+
         let i = self
             .search_next_in_range(s, start_index..self.len())
             .or_else(|| self.search_next_in_range(s, 0.into()..start_index));
@@ -419,8 +420,29 @@ impl Buffer {
         }
     }
 
+    pub fn duplicate_cursor_from_str(&mut self, s: &str) {
+        let start_index = self.last_caret().index;
+        let i = self
+            .search_next_in_range(s, start_index..self.len())
+            .or_else(|| self.search_next_in_range(s, 0.into()..start_index));
+        if let Some(i) = i {
+            if self.carets.iter().find(|c| c.start() == i).is_none() {
+                self.carets.sort_unstable();
+                let c = self.last_caret().duplicate_to(i, i + s.len(), &self);
+                self.carets.push(c);
+            }
+        }
+    }
+
     pub fn main_caret(&self) -> &Caret {
         self.carets.iter().find(|c| !c.is_clone).expect("No main cursor found!")
+    }
+
+    pub fn last_caret(&self) -> &Caret {
+        self.carets
+            .iter()
+            .max_by_key(|c| c.generation)
+            .expect("No cursor found!")
     }
 
     pub fn main_caret_mut(&mut self) -> &mut Caret {
@@ -469,6 +491,19 @@ impl Buffer {
             if multi {
                 s.push_str(&line_feed.to_str())
             }
+        }
+        s
+    }
+
+    pub fn main_cursor_selected_text(&self) -> String {
+        let mut s = String::new();
+        let c = self.main_caret();
+        for chuck in self
+            .rope
+            .slice(self.rope.byte_to_char(c.start().index)..self.rope.byte_to_char(c.end().index))
+            .chunks()
+        {
+            s.push_str(chuck)
         }
         s
     }

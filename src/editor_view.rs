@@ -428,6 +428,15 @@ impl Widget<EditStack> for EditorView {
                     ctx.set_handled();
                     return;
                 }
+                if HotKey::new(SysMods::Cmd, "d").matches(event) {
+                    // if editor.has_many_carets() {
+                    //     duplicate_cursor_from_str()
+                    // } else {
+
+                    // }
+                    editor.buffer.duplicate_cursor_from_str(&editor.main_cursor_selected_text());
+                    // self.put_caret_in_visible_range(ctx, editor); 
+                }
 
                 if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
                     if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
