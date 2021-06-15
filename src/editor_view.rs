@@ -61,7 +61,7 @@ impl SelectionPath {
         Self {
             elem: Vec::new(),
             last_range: None,
-            last_x: 0.,
+            last_x: 0.5,
         }
     }
 }
@@ -668,15 +668,15 @@ impl EditorView {
         let e = layout.hit_test_text_position(range.end.into());
 
         path.clear();
-        path.push(PathEl::MoveTo(Point::new(s.point.x.ceil(), y.ceil())));
-        path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), y.ceil())));
+        path.push(PathEl::MoveTo(Point::new(s.point.x.ceil()+0.5, y.ceil()+0.5)));
+        path.push(PathEl::LineTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
         path.push(PathEl::LineTo(Point::new(
-            e.point.x.ceil(),
-            (self.metrics.font_height + y).ceil(),
+            e.point.x.ceil()+0.5,
+            (self.metrics.font_height + y).ceil()+0.5,
         )));
         path.push(PathEl::LineTo(Point::new(
-            s.point.x.ceil(),
-            (self.metrics.font_height + y).ceil(),
+            s.point.x.ceil()+0.5,
+            (self.metrics.font_height + y).ceil()+0.5,
         )));
         path.push(PathEl::ClosePath);
     }
@@ -693,19 +693,19 @@ impl EditorView {
 
         path.clear();
         path.push(PathEl::MoveTo(Point::new(
-            s.point.x.ceil(),
-            (self.metrics.font_height + y).ceil(),
+            s.point.x.ceil()+0.5,
+            (self.metrics.font_height + y).ceil()+0.5,
         )));
-        path.push(PathEl::LineTo(Point::new(s.point.x.ceil(), y.ceil())));
+        path.push(PathEl::LineTo(Point::new(s.point.x.ceil()+0.5, y.ceil()+0.5)));
         path.push(PathEl::LineTo(Point::new(
-            (e.point.x + self.metrics.font_advance).ceil(),
-            y.ceil(),
+            (e.point.x + self.metrics.font_advance).ceil()+0.5,
+            y.ceil()+0.5,
         )));
         path.push(PathEl::LineTo(Point::new(
-            (e.point.x + self.metrics.font_advance).ceil(),
-            (self.metrics.font_height + y).ceil(),
+            (e.point.x + self.metrics.font_advance).ceil()+0.5,
+            (self.metrics.font_height + y).ceil()+0.5,
         )));
-        s.point.x.ceil()
+        s.point.x//.ceil()+0.5
     }
 
     fn add_range_to_selection<L: TextLayout>(
@@ -721,39 +721,39 @@ impl EditorView {
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
-                path.push(PathEl::LineTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new(0.5, y.ceil()+0.5)));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
-                path.push(PathEl::MoveTo(Point::new(e.point.x.ceil(), y.ceil())));
+                path.push(PathEl::MoveTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x.ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    e.point.x.ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
-                path.push(PathEl::LineTo(Point::new(0., (self.metrics.font_height + y).ceil())));
-                path.push(PathEl::LineTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new(0.5, (self.metrics.font_height + y).ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(0.5, y.ceil()+0.5)));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
-                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), y.ceil())));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x.ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    e.point.x.ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
-                path.push(PathEl::LineTo(Point::new(0., (self.metrics.font_height + y).ceil())));
-                path.push(PathEl::LineTo(Point::new(0., y.ceil())));
+                path.push(PathEl::LineTo(Point::new(0.5, (self.metrics.font_height + y).ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(0.5, y.ceil()+0.5)));
                 path.push(PathEl::ClosePath);
             }
             None => {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y.ceil())));
-                path.push(PathEl::LineTo(Point::new(e.point.x.ceil(), y.ceil())));
+                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x.ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    e.point.x.ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
-                path.push(PathEl::LineTo(Point::new(0., (self.metrics.font_height + y).ceil())));
+                path.push(PathEl::LineTo(Point::new(0.5, (self.metrics.font_height + y).ceil()+0.5)));
                 path.push(PathEl::ClosePath);
             }
             _ => {
@@ -773,50 +773,50 @@ impl EditorView {
         match &path.last_range {
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
-                path.push(PathEl::MoveTo(Point::new(0., y.ceil())));
+                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    y.ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    y.ceil()+0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
                 // insert a point at the begining of the line
-                path[0] = PathEl::LineTo(Point::new(path.last_x.ceil(), y.ceil()));
-                path.insert(0, PathEl::MoveTo(Point::new(0., y.ceil())));
+                path[0] = PathEl::LineTo(Point::new(path.last_x.ceil()+0.5, y.ceil()+0.5));
+                path.insert(0, PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    y.ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    y.ceil()+0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
             }
             None => {
                 // the precedent line was outside the visible range
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0., y.ceil())));
+                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    y.ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    y.ceil()+0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
             }
             _ => {
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    y.ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    y.ceil()+0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil(),
-                    (self.metrics.font_height + y).ceil(),
+                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
+                    (self.metrics.font_height + y).ceil()+0.5,
                 )));
             }
         }
@@ -900,7 +900,7 @@ impl EditorView {
         match current_path.last() {
             Some(PathEl::ClosePath) => (),
             _ => {
-                current_path.push(PathEl::LineTo(Point::new(0., dy)));
+                current_path.push(PathEl::LineTo(Point::new(0.5, dy.ceil()+0.5)));
                 current_path.push(PathEl::ClosePath);
                 selection_path.push(std::mem::take(&mut current_path));
             }
@@ -936,8 +936,8 @@ impl EditorView {
                 let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
                 ctx.render_ctx.stroke(
                     Line::new(
-                        (metrics.point.x + 1.0, self.metrics.font_height + dy),
-                        (metrics.point.x + 1.0, dy),
+                        (metrics.point.x.ceil() + 1.5, (self.metrics.font_height + dy).ceil()+0.5),
+                        (metrics.point.x.ceil() + 1.5, dy.ceil()+0.5),
                     ),
                     &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
                     2.0,
@@ -1182,9 +1182,9 @@ impl Gutter {
 
         ctx.render_ctx.stroke(
             Line::new(
-                ((self.width(editor) - self.metrics.font_advance).ceil(), 0.0),
+                ((self.width(editor) - self.metrics.font_advance).ceil()+0.5, 0.),
                 (
-                    (self.width(editor) - self.metrics.font_advance).ceil(),
+                    (self.width(editor) - self.metrics.font_advance).ceil()+0.5,
                     self.size.height,
                 ),
             ),
