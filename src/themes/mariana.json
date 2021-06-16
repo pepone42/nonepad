@@ -79,7 +79,7 @@
         "editorWarning.foreground": "#FAB763",
         "editorInfo.foreground": "#A3CE9E",
         "editorWarning.border": "#00000000",
-        "editorCursor.foreground": "#ffffffdd",
+        "editorCursor.foreground": "#f9AE58",
         "editorIndentGuide.background": "#d0f4ff14",
         "editorLineNumber.foreground": "#d0f4ff30",
         "editorWhitespace.foreground": "#d0f4ff30",

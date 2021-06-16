@@ -936,8 +936,8 @@ impl EditorView {
                 let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
                 ctx.render_ctx.stroke(
                     Line::new(
-                        (metrics.point.x.ceil() + 1.5, (self.metrics.font_height + dy).ceil()+0.5),
-                        (metrics.point.x.ceil() + 1.5, dy.ceil()+0.5),
+                        (metrics.point.x.ceil(), (self.metrics.font_height + dy).ceil()),
+                        (metrics.point.x.ceil(), dy.ceil()),
                     ),
                     &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
                     2.0,
