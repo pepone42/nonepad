@@ -1,4 +1,4 @@
-use druid::{Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, widget::{Controller, Flex, Label, TextBox, ViewSwitcher}};
+use druid::{Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, widget::{Controller, Flex, Label, TextBox, ViewSwitcher}};
 
 use crate::commands;
 use crate::widgets::{EmptyWidget, Extension};
@@ -6,7 +6,8 @@ use crate::widgets::{EmptyWidget, Extension};
 pub const PANEL_CLOSED: usize = 0x0;
 pub const PANEL_SEARCH: usize = 0x1;
 
-pub struct BottomPanel;
+pub struct BottomPanel {
+}
 
 #[derive(Debug, Clone, Data, Lens, Default)]
 pub struct BottonPanelState {
@@ -29,7 +30,8 @@ pub fn build() -> impl Widget<BottonPanelState> {
             _ => unreachable!(),
         },
     );
-    view_switcher.controller(BottomPanel {})
+    let panel_id = WidgetId::next();
+    view_switcher.with_id(panel_id).controller(BottomPanel {})
 }
 
 impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPanel {
@@ -42,6 +44,10 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
             }
             Event::Command(cmd) if cmd.is(commands::SHOW_SEARCH_PANEL) => {
                 data.current = PANEL_SEARCH;
+                let id = child.id().unwrap();
+                let input = cmd.get_unchecked(commands::SHOW_SEARCH_PANEL).clone();
+                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
+                ctx.submit_command(Command::new(commands::SEND_DATA, input, id));
                 return;
             }
             _ => (),
@@ -64,6 +70,9 @@ fn build_search_panel() -> impl Widget<SearchState> {
                     ctx.submit_command(Command::new(commands::REQUEST_NEXT_SEARCH, data.clone(),Target::Global))
                 })
                 .focus()
+                .send_data(|_ctx, state: &mut String,data:&String , _| {
+                    state.clone_from(data);
+                })
                 .lens(SearchState::s)
                 .expand_width(),
             1.0,

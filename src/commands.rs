@@ -1,6 +1,7 @@
 use druid::Selector;
 
-pub const SHOW_SEARCH_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.show_search");
+pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
+pub const SEND_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
 pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");

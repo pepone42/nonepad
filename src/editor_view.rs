@@ -422,7 +422,7 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
-                    ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, (), Target::Global));
+                    ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, editor.main_cursor_selected_text(), Target::Global));
 
                     ctx.request_paint();
                     ctx.set_handled();

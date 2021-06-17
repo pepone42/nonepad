@@ -24,6 +24,30 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for OnEnter<T> {
     }
 }
 
+pub struct SendData<T> {
+    action: Box<dyn Fn(&mut EventCtx, &mut T, &String, &Env)>,
+}
+impl<T: Data> SendData<T> {
+    pub fn new(action: impl Fn(&mut EventCtx, &mut T, &String, &Env) + 'static) -> Self {
+        SendData {
+            action: Box::new(action),
+        }
+    }
+}
+
+impl<T: Data, W: Widget<T>> Controller<T, W> for SendData<T> {
+    fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, state: &mut T, env: &Env) {
+        match event {
+            Event::Command(cmd) if cmd.is(crate::commands::SEND_DATA) => {
+                let data = cmd.get_unchecked(crate::commands::SEND_DATA);
+                (self.action)(ctx, state, data, env);
+            }
+            _ => (),
+        }
+        child.event(ctx, event, state, env)
+    }
+}
+
 pub struct TakeFocus;
 impl TakeFocus {
     pub fn new() -> Self {
@@ -59,6 +83,12 @@ pub trait Extension<T: Data>: Widget<T> + Sized + 'static {
     }
     fn focus(self) -> ControllerHost<Self, TakeFocus> {
         ControllerHost::new(self, TakeFocus::new())
+    }
+    fn send_data(
+        self,
+        f: impl Fn(&mut EventCtx, &mut T, &String, &Env) + 'static,
+    ) -> ControllerHost<Self, SendData<T>> {
+        ControllerHost::new(self, SendData::new(f))
     }
 }
 
