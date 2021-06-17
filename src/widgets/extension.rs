@@ -84,7 +84,7 @@ pub trait Extension<T: Data>: Widget<T> + Sized + 'static {
     fn focus(self) -> ControllerHost<Self, TakeFocus> {
         ControllerHost::new(self, TakeFocus::new())
     }
-    fn send_data(
+    fn on_data_received(
         self,
         f: impl Fn(&mut EventCtx, &mut T, &String, &Env) + 'static,
     ) -> ControllerHost<Self, SendData<T>> {

@@ -70,7 +70,7 @@ fn build_search_panel() -> impl Widget<SearchState> {
                     ctx.submit_command(Command::new(commands::REQUEST_NEXT_SEARCH, data.clone(),Target::Global))
                 })
                 .focus()
-                .send_data(|_ctx, state: &mut String,data:&String , _| {
+                .on_data_received(|_ctx, state: &mut String,data:&String , _| {
                     state.clone_from(data);
                 })
                 .lens(SearchState::s)
