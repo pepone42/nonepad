@@ -6,337 +6,337 @@ use miniserde::{Deserialize, Serialize, json};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Colors {
     #[serde(rename = "focusBorder")]
-    focus_border : String,
+    pub focus_border : String,
     #[serde(rename = "foreground")]
-    foreground : String,
+    pub foreground : String,
     #[serde(rename = "selection.background")]
-    selection_background : String,
+    pub selection_background : String,
     #[serde(rename = "widget.shadow")]
-    widget_shadow : String,
+    pub widget_shadow : String,
     #[serde(rename = "textLink.activeForeground")]
-    text_link_active_foreground : String,
+    pub text_link_active_foreground : String,
     #[serde(rename = "textLink.foreground")]
-    text_link_foreground : String,
+    pub text_link_foreground : String,
     #[serde(rename = "textPreformat.foreground")]
-    text_preformat_foreground : String,
+    pub text_preformat_foreground : String,
     #[serde(rename = "button.background")]
-    button_background : String,
+    pub button_background : String,
     #[serde(rename = "button.foreground")]
-    button_foreground : String,
+    pub button_foreground : String,
     #[serde(rename = "button.hoverBackground")]
-    button_hover_background : String,
+    pub button_hover_background : String,
     #[serde(rename = "dropdown.background")]
-    dropdown_background : String,
+    pub dropdown_background : String,
     #[serde(rename = "dropdown.listBackground")]
-    dropdown_list_background : String,
+    pub dropdown_list_background : String,
     #[serde(rename = "input.background")]
-    input_background : String,
+    pub input_background : String,
     #[serde(rename = "input.border")]
-    input_border : String,
+    pub input_border : String,
     #[serde(rename = "input.foreground")]
-    input_foreground : String,
+    pub input_foreground : String,
     #[serde(rename = "input.placeholderForeground")]
-    input_placeholder_foreground : String,
+    pub input_placeholder_foreground : String,
     #[serde(rename = "scrollbar.shadow")]
-    scrollbar_shadow : String,
+    pub scrollbar_shadow : String,
     #[serde(rename = "scrollbarSlider.activeBackground")]
-    scrollbar_slider_active_background : String,
+    pub scrollbar_slider_active_background : String,
     #[serde(rename = "scrollbarSlider.background")]
-    scrollbar_slider_background : String,
+    pub scrollbar_slider_background : String,
     #[serde(rename = "scrollbarSlider.hoverBackground")]
-    scrollbar_slider_hover_background : String,
+    pub scrollbar_slider_hover_background : String,
     #[serde(rename = "badge.foreground")]
-    badge_foreground : String,
+    pub badge_foreground : String,
     #[serde(rename = "badge.background")]
-    badge_background : String,
+    pub badge_background : String,
     #[serde(rename = "progressBar.background")]
-    progress_bar_background : String,
+    pub progress_bar_background : String,
     #[serde(rename = "list.activeSelectionBackground")]
-    list_active_selection_background : String,
+    pub list_active_selection_background : String,
     #[serde(rename = "list.activeSelectionForeground")]
-    list_active_selection_foreground : String,
+    pub list_active_selection_foreground : String,
     #[serde(rename = "list.inactiveSelectionBackground")]
-    list_inactive_selection_background : String,
+    pub list_inactive_selection_background : String,
     #[serde(rename = "list.inactiveSelectionForeground")]
-    list_inactive_selection_foreground : String,
+    pub list_inactive_selection_foreground : String,
     #[serde(rename = "list.hoverForeground")]
-    list_hover_foreground : String,
+    pub list_hover_foreground : String,
     #[serde(rename = "list.focusForeground")]
-    list_focus_foreground : String,
+    pub list_focus_foreground : String,
     #[serde(rename = "list.focusBackground")]
-    list_focus_background : String,
+    pub list_focus_background : String,
     #[serde(rename = "list.hoverBackground")]
-    list_hover_background : String,
+    pub list_hover_background : String,
     #[serde(rename = "list.dropBackground")]
-    list_drop_background : String,
+    pub list_drop_background : String,
     #[serde(rename = "list.highlightForeground")]
-    list_highlight_foreground : String,
+    pub list_highlight_foreground : String,
     #[serde(rename = "list.errorForeground")]
-    list_error_foreground : String,
+    pub list_error_foreground : String,
     #[serde(rename = "list.warningForeground")]
-    list_warning_foreground : String,
+    pub list_warning_foreground : String,
     #[serde(rename = "activityBar.background")]
-    activity_bar_background : String,
+    pub activity_bar_background : String,
     #[serde(rename = "activityBar.dropBackground")]
-    activity_bar_drop_background : String,
+    pub activity_bar_drop_background : String,
     #[serde(rename = "activityBar.foreground")]
-    activity_bar_foreground : String,
+    pub activity_bar_foreground : String,
     #[serde(rename = "activityBarBadge.background")]
-    activity_bar_badge_background : String,
+    pub activity_bar_badge_background : String,
     #[serde(rename = "activityBarBadge.foreground")]
-    activity_bar_badge_foreground : String,
+    pub activity_bar_badge_foreground : String,
     #[serde(rename = "sideBar.background")]
-    side_bar_background : String,
+    pub side_bar_background : String,
     #[serde(rename = "sideBar.foreground")]
-    side_bar_foreground : String,
+    pub side_bar_foreground : String,
     #[serde(rename = "sideBarSectionHeader.background")]
-    side_bar_section_header_background : String,
+    pub side_bar_section_header_background : String,
     #[serde(rename = "sideBarSectionHeader.foreground")]
-    side_bar_section_header_foreground : String,
+    pub side_bar_section_header_foreground : String,
     #[serde(rename = "sideBarTitle.foreground")]
-    side_bar_title_foreground : String,
+    pub side_bar_title_foreground : String,
     #[serde(rename = "editorGroup.border")]
-    editor_group_border : String,
+    pub editor_group_border : String,
     #[serde(rename = "editorGroup.dropBackground")]
-    editor_group_drop_background : String,
+    pub editor_group_drop_background : String,
     #[serde(rename = "editorGroupHeader.noTabsBackground")]
-    editor_group_header_no_tabs_background : String,
+    pub editor_group_header_no_tabs_background : String,
     #[serde(rename = "editorGroupHeader.tabsBackground")]
-    editor_group_header_tabs_background : String,
+    pub editor_group_header_tabs_background : String,
     #[serde(rename = "tab.activeBackground")]
-    tab_active_background : String,
+    pub tab_active_background : String,
     #[serde(rename = "tab.activeForeground")]
-    tab_active_foreground : String,
+    pub tab_active_foreground : String,
     #[serde(rename = "tab.border")]
-    tab_border : String,
+    pub tab_border : String,
     #[serde(rename = "tab.activeBorder")]
-    tab_active_border : String,
+    pub tab_active_border : String,
     #[serde(rename = "tab.unfocusedActiveBorder")]
-    tab_unfocused_active_border : String,
+    pub tab_unfocused_active_border : String,
     #[serde(rename = "tab.inactiveBackground")]
-    tab_inactive_background : String,
+    pub tab_inactive_background : String,
     #[serde(rename = "tab.inactiveForeground")]
-    tab_inactive_foreground : String,
+    pub tab_inactive_foreground : String,
     #[serde(rename = "tab.unfocusedActiveForeground")]
-    tab_unfocused_active_foreground : String,
+    pub tab_unfocused_active_foreground : String,
     #[serde(rename = "tab.unfocusedInactiveForeground")]
-    tab_unfocused_inactive_foreground : String,
+    pub tab_unfocused_inactive_foreground : String,
     #[serde(rename = "editor.background")]
-    editor_background : String,
+    pub editor_background : String,
     #[serde(rename = "editor.foreground")]
-    editor_foreground : String,
+    pub editor_foreground : String,
     #[serde(rename = "editor.hoverHighlightBackground")]
-    editor_hover_highlight_background : String,
+    pub editor_hover_highlight_background : String,
     #[serde(rename = "editor.findMatchBackground")]
-    editor_find_match_background : String,
+    pub editor_find_match_background : String,
     #[serde(rename = "editor.findMatchHighlightBackground")]
-    editor_find_match_highlight_background : String,
+    pub editor_find_match_highlight_background : String,
     #[serde(rename = "editor.findRangeHighlightBackground")]
-    editor_find_range_highlight_background : String,
+    pub editor_find_range_highlight_background : String,
     #[serde(rename = "editor.lineHighlightBackground")]
-    editor_line_highlight_background : String,
+    pub editor_line_highlight_background : String,
     #[serde(rename = "editor.lineHighlightBorder")]
-    editor_line_highlight_border : String,
+    pub editor_line_highlight_border : String,
     #[serde(rename = "editor.inactiveSelectionBackground")]
-    editor_inactive_selection_background : String,
+    pub editor_inactive_selection_background : String,
     #[serde(rename = "editor.selectionBackground")]
-    editor_selection_background : String,
+    pub editor_selection_background : String,
     #[serde(rename = "editor.selectionHighlightBackground")]
-    editor_selection_highlight_background : String,
+    pub editor_selection_highlight_background : String,
     #[serde(rename = "editor.rangeHighlightBackground")]
-    editor_range_highlight_background : String,
+    pub editor_range_highlight_background : String,
     #[serde(rename = "editor.wordHighlightBackground")]
-    editor_word_highlight_background : String,
+    pub editor_word_highlight_background : String,
     #[serde(rename = "editor.wordHighlightStrongBackground")]
-    editor_word_highlight_strong_background : String,
+    pub editor_word_highlight_strong_background : String,
     #[serde(rename = "editorError.foreground")]
-    editor_error_foreground : String,
+    pub editor_error_foreground : String,
     #[serde(rename = "editorError.border")]
-    editor_error_border : String,
+    pub editor_error_border : String,
     #[serde(rename = "editorWarning.foreground")]
-    editor_warning_foreground : String,
+    pub editor_warning_foreground : String,
     #[serde(rename = "editorInfo.foreground")]
-    editor_info_foreground : String,
+    pub editor_info_foreground : String,
     #[serde(rename = "editorWarning.border")]
-    editor_warning_border : String,
+    pub editor_warning_border : String,
     #[serde(rename = "editorCursor.foreground")]
-    editor_cursor_foreground : String,
+    pub editor_cursor_foreground : String,
     #[serde(rename = "editorIndentGuide.background")]
-    editor_indent_guide_background : String,
+    pub editor_indent_guide_background : String,
     #[serde(rename = "editorLineNumber.foreground")]
-    editor_line_number_foreground : String,
+    pub editor_line_number_foreground : String,
     #[serde(rename = "editorWhitespace.foreground")]
-    editor_whitespace_foreground : String,
+    pub editor_whitespace_foreground : String,
     #[serde(rename = "editorOverviewRuler.border")]
-    editor_overview_ruler_border : String,
+    pub editor_overview_ruler_border : String,
     #[serde(rename = "editorOverviewRuler.currentContentForeground")]
-    editor_overview_ruler_current_content_foreground : String,
+    pub editor_overview_ruler_current_content_foreground : String,
     #[serde(rename = "editorOverviewRuler.incomingContentForeground")]
-    editor_overview_ruler_incoming_content_foreground : String,
+    pub editor_overview_ruler_incoming_content_foreground : String,
     #[serde(rename = "editorOverviewRuler.findMatchForeground")]
-    editor_overview_ruler_find_match_foreground : String,
+    pub editor_overview_ruler_find_match_foreground : String,
     #[serde(rename = "editorOverviewRuler.rangeHighlightForeground")]
-    editor_overview_ruler_range_highlight_foreground : String,
+    pub editor_overview_ruler_range_highlight_foreground : String,
     #[serde(rename = "editorOverviewRuler.selectionHighlightForeground")]
-    editor_overview_ruler_selection_highlight_foreground : String,
+    pub editor_overview_ruler_selection_highlight_foreground : String,
     #[serde(rename = "editorOverviewRuler.wordHighlightForeground")]
-    editor_overview_ruler_word_highlight_foreground : String,
+    pub editor_overview_ruler_word_highlight_foreground : String,
     #[serde(rename = "editorOverviewRuler.wordHighlightStrongForeground")]
-    editor_overview_ruler_word_highlight_strong_foreground : String,
+    pub editor_overview_ruler_word_highlight_strong_foreground : String,
     #[serde(rename = "editorOverviewRuler.modifiedForeground")]
-    editor_overview_ruler_modified_foregrund : String,
+    pub editor_overview_ruler_modified_foregrund : String,
     #[serde(rename = "editorOverviewRuler.addedForeground")]
-    editor_overview_ruler_added_foreground : String,
+    pub editor_overview_ruler_added_foreground : String,
     #[serde(rename = "editorOverviewRuler.deletedForeground")]
-    editor_overview_ruler_deleted_foreground : String,
+    pub editor_overview_ruler_deleted_foreground : String,
     #[serde(rename = "editorOverviewRuler.errorForeground")]
-    editor_overview_ruler_error_foreground : String,
+    pub editor_overview_ruler_error_foreground : String,
     #[serde(rename = "editorOverviewRuler.warningForeground")]
-    editor_overview_ruler_warning_foreground : String,
+    pub editor_overview_ruler_warning_foreground : String,
     #[serde(rename = "editorOverviewRuler.infoForeground")]
-    editor_overview_ruler_info_foreground : String,
+    pub editor_overview_ruler_info_foreground : String,
     #[serde(rename = "editorOverviewRuler.bracketMatchForeground")]
-    editor_overview_ruler_bracket_match_foreground : String,
+    pub editor_overview_ruler_bracket_match_foreground : String,
     #[serde(rename = "editorGutter.modifiedBackground")]
-    editor_gutter_modified_background : String,
+    pub editor_gutter_modified_background : String,
     #[serde(rename = "editorGutter.addedBackground")]
-    editor_gutter_added_background : String,
+    pub editor_gutter_added_background : String,
     #[serde(rename = "editorGutter.deletedBackground")]
-    editor_gutter_deleted_background : String,
+    pub editor_gutter_deleted_background : String,
     #[serde(rename = "diffEditor.insertedTextBackground")]
-    diff_editor_inserted_text_background : String,
+    pub diff_editor_inserted_text_background : String,
     #[serde(rename = "diffEditor.removedTextBackground")]
-    diff_editor_removed_text_background : String,
+    pub diff_editor_removed_text_background : String,
     #[serde(rename = "editorWidget.background")]
-    editor_widget_background : String,
+    pub editor_widget_background : String,
     #[serde(rename = "editorWidget.border")]
-    editor_widget_border : String,
+    pub editor_widget_border : String,
     #[serde(rename = "editorSuggestWidget.background")]
-    editor_suggest_widget_background : String,
+    pub editor_suggest_widget_background : String,
     #[serde(rename = "peekView.border")]
-    peek_view_border : String,
+    pub peek_view_border : String,
     #[serde(rename = "peekViewEditor.matchHighlightBackground")]
-    peek_view_editor_match_highlight_background : String,
+    pub peek_view_editor_match_highlight_background : String,
     #[serde(rename = "peekViewEditorGutter.background")]
-    peek_view_editor_gutter_background : String,
+    pub peek_view_editor_gutter_background : String,
     #[serde(rename = "peekViewEditor.background")]
-    peek_view_editor_background : String,
+    pub peek_view_editor_background : String,
     #[serde(rename = "peekViewResult.background")]
-    peek_view_result_background : String,
+    pub peek_view_result_background : String,
     #[serde(rename = "peekViewTitle.background")]
-    peek_view_title_background : String,
+    pub peek_view_title_background : String,
     #[serde(rename = "merge.currentHeaderBackground")]
-    merge_current_header_background : String,
+    pub merge_current_header_background : String,
     #[serde(rename = "merge.currentContentBackground")]
-    merge_current_content_background : String,
+    pub merge_current_content_background : String,
     #[serde(rename = "merge.incomingHeaderBackground")]
-    merge_incoming_header_background : String,
+    pub merge_incoming_header_background : String,
     #[serde(rename = "merge.incomingContentBackground")]
-    merge_incoming_content_background : String,
+    pub merge_incoming_content_background : String,
     #[serde(rename = "panel.background")]
-    panel_background : String,
+    pub panel_background : String,
     #[serde(rename = "panel.border")]
-    panel_border : String,
+    pub panel_border : String,
     #[serde(rename = "panelTitle.activeBorder")]
-    panel_title_active_border : String,
+    pub panel_title_active_border : String,
     #[serde(rename = "statusBar.background")]
-    status_bar_background : String,
+    pub status_bar_background : String,
     #[serde(rename = "statusBar.debuggingBackground")]
-    status_bar_debugging_background : String,
+    pub status_bar_debugging_background : String,
     #[serde(rename = "statusBar.debuggingForeground")]
-    status_bar_debugging_foreground : String,
+    pub status_bar_debugging_foreground : String,
     #[serde(rename = "statusBar.noFolderForeground")]
-    status_bar_no_folder_foreground : String,
+    pub status_bar_no_folder_foreground : String,
     #[serde(rename = "statusBar.noFolderBackground")]
-    status_bar_no_folder_background : String,
+    pub status_bar_no_folder_background : String,
     #[serde(rename = "statusBar.foreground")]
-    status_bar_foreground : String,
+    pub status_bar_foreground : String,
     #[serde(rename = "statusBarItem.activeBackground")]
-    status_bar_item_active_background : String,
+    pub status_bar_item_active_background : String,
     #[serde(rename = "statusBarItem.hoverBackground")]
-    status_bar_item_hover_background : String,
+    pub status_bar_item_hover_background : String,
     #[serde(rename = "statusBarItem.prominentBackground")]
-    status_bar_item_prominent_background : String,
+    pub status_bar_item_prominent_background : String,
     #[serde(rename = "statusBarItem.prominentHoverBackground")]
-    status_bar_item_prominent_hover_background : String,
+    pub status_bar_item_prominent_hover_background : String,
     #[serde(rename = "statusBar.border")]
-    status_bar_border : String,
+    pub status_bar_border : String,
     #[serde(rename = "titleBar.activeBackground")]
-    title_bar_active_background : String,
+    pub title_bar_active_background : String,
     #[serde(rename = "titleBar.activeForeground")]
-    title_bar_active_foreground : String,
+    pub title_bar_active_foreground : String,
     #[serde(rename = "titleBar.inactiveBackground")]
-    title_bar_inactive_background : String,
+    pub title_bar_inactive_background : String,
     #[serde(rename = "titleBar.inactiveForeground")]
-    title_bar_inactive_foreground : String,
+    pub title_bar_inactive_foreground : String,
     #[serde(rename = "notificationCenterHeader.foreground")]
-    notification_center_header_foreground : String,
+    pub notification_center_header_foreground : String,
     #[serde(rename = "notificationCenterHeader.background")]
-    notification_center_header_background : String,
+    pub notification_center_header_background : String,
     #[serde(rename = "extensionButton.prominentForeground")]
-    extension_button_prominent_foreground : String,
+    pub extension_button_prominent_foreground : String,
     #[serde(rename = "extensionButton.prominentBackground")]
-    extension_button_prominent_background : String,
+    pub extension_button_prominent_background : String,
     #[serde(rename = "extensionButton.prominentHoverBackground")]
-    extension_button_prominent_hover_background : String,
+    pub extension_button_prominent_hover_background : String,
     #[serde(rename = "pickerGroup.border")]
-    picker_group_border : String,
+    pub picker_group_border : String,
     #[serde(rename = "pickerGroup.foreground")]
-    picker_group_foreground : String,
+    pub picker_group_foreground : String,
     #[serde(rename = "terminal.ansiBrightBlack")]
-    terminal_ansi_bright_black : String,
+    pub terminal_ansi_bright_black : String,
     #[serde(rename = "terminal.ansiBlack")]
-    terminal_ansi_black : String,
+    pub terminal_ansi_black : String,
     #[serde(rename = "terminal.ansiBlue")]
-    terminal_ansi_blue : String,
+    pub terminal_ansi_blue : String,
     #[serde(rename = "terminal.ansiBrightBlue")]
-    terminal_ansi_bright_blue : String,
+    pub terminal_ansi_bright_blue : String,
     #[serde(rename = "terminal.ansiBrightCyan")]
-    terminal_ansi_bright_cyan : String,
+    pub terminal_ansi_bright_cyan : String,
     #[serde(rename = "terminal.ansiCyan")]
-    terminal_ansi_cyan : String,
+    pub terminal_ansi_cyan : String,
     #[serde(rename = "terminal.ansiBrightMagenta")]
-    terminal_ansi_bright_magenta : String,
+    pub terminal_ansi_bright_magenta : String,
     #[serde(rename = "terminal.ansiMagenta")]
-    terminal_ansi_magenta : String,
+    pub terminal_ansi_magenta : String,
     #[serde(rename = "terminal.ansiBrightRed")]
-    terminal_ansi_bright_red : String,
+    pub terminal_ansi_bright_red : String,
     #[serde(rename = "terminal.ansiRed")]
-    terminal_ansi_red : String,
+    pub terminal_ansi_red : String,
     #[serde(rename = "terminal.ansiYellow")]
-    terminal_ansi_yellow : String,
+    pub terminal_ansi_yellow : String,
     #[serde(rename = "terminal.ansiBrightYellow")]
-    terminal_ansi_bright_yellow : String,
+    pub terminal_ansi_bright_yellow : String,
     #[serde(rename = "terminal.ansiBrightGreen")]
-    terminal_ansi_bright_green : String,
+    pub terminal_ansi_bright_green : String,
     #[serde(rename = "terminal.ansiGreen")]
-    terminal_ansi_green : String,
+    pub terminal_ansi_green : String,
     #[serde(rename = "terminal.ansiWhite")]
-    terminal_ansi_white : String,
+    pub terminal_ansi_white : String,
     #[serde(rename = "terminal.selectionBackground")]
-    terminal_selection_background : String,
+    pub terminal_selection_background : String,
     #[serde(rename = "terminalCursor.background")]
-    terminal_cursor_background : String,
+    pub terminal_cursor_background : String,
     #[serde(rename = "terminalCursor.foreground")]
-    terminal_cursor_foreground : String,
+    pub terminal_cursor_foreground : String,
     #[serde(rename = "gitDecoration.modifiedResourceForeground")]
-    git_decoration_modified_resource_foreground : String,
+    pub git_decoration_modified_resource_foreground : String,
     #[serde(rename = "gitDecoration.deletedResourceForeground")]
-    git_decoration_deleted_resource_foreground : String,
+    pub git_decoration_deleted_resource_foreground : String,
     #[serde(rename = "gitDecoration.untrackedResourceForeground")]
-    git_decoration_untracked_resource_foreground : String,
+    pub git_decoration_untracked_resource_foreground : String,
     #[serde(rename = "gitDecoration.conflictingResourceForeground")]
-    git_decoration_conflicting_resource_foreground : String,
+    pub git_decoration_conflicting_resource_foreground : String,
     #[serde(rename = "gitDecoration.submoduleResourceForeground")]
-    git_decoration_submodule_resource_foreground : String,
+    pub git_decoration_submodule_resource_foreground : String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Theme {
     name : String,
     #[serde(rename = "type")]
-    theme_type : String,
-    colors: Colors,
+    pub theme_type : String,
+    pub colors: Colors,
 }
 
 impl Default for Theme {

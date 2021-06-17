@@ -12,6 +12,8 @@ mod theme;
 use std::ffi::OsStr;
 use std::path::Path;
 
+use druid::RenderContext;
+use druid::widget::Painter;
 use druid::widget::{Flex, Label, MainAxisAlignment};
 use druid::{
     piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
@@ -120,6 +122,16 @@ impl MainWindowState {
 }
 
 fn build_ui() -> impl Widget<MainWindowState> {
+
+    let panel_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
+        let bounds = ctx.size().to_rect();
+            ctx.fill(bounds, &env.get(crate::theme::PANEL_BACKGROUND));
+    });
+    let editor_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
+        let bounds = ctx.size().to_rect();
+            ctx.fill(bounds, &env.get(crate::theme::EDITOR_BACKGROUND));
+    });
+
     let label_left = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(
             "{}{}",
@@ -135,6 +147,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
         )
     })
     .with_text_size(12.0);
+
     let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(
             "{}    {}    {}    {}",
@@ -145,7 +158,8 @@ fn build_ui() -> impl Widget<MainWindowState> {
         )
     })
     .with_text_size(12.0);
-    let edit = editor_view::new().lens(MainWindowState::editor);
+
+    let edit = editor_view::new().lens(MainWindowState::editor).background(editor_background_painter);
     Flex::column()
         .with_flex_child(edit.padding(2.0), 1.0)
         .must_fill_main_axis(true)
@@ -155,9 +169,12 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .with_child(label_left.padding(2.0))
                 .with_flex_spacer(1.0)
                 .with_child(label_right.padding(2.0))
-                .border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
+                .padding(1.0)
+                .background(panel_background_painter)
+                //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
         )
         .main_axis_alignment(MainAxisAlignment::Center)
+        
 }
 
 fn main() -> anyhow::Result<()> {
@@ -181,7 +198,11 @@ fn main() -> anyhow::Result<()> {
             //     crate::editor_view::FONT_DESCRIPTOR,
             //     druid::FontDescriptor::new(druid::FontFamily::MONOSPACE),
             // );
+
             let theme = Theme::default();
+            env.set(druid::theme::WINDOW_BACKGROUND_COLOR, Color::from_hex_str(&theme.colors.editor_background).unwrap());
+            env.set(druid::theme::BORDER_DARK, Color::from_hex_str(&theme.colors.panel_border).unwrap());
+
             theme.to_env(env);
             // env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
             // env.set(crate::editor_view::FG_COLOR, Color::rgb8(241, 242, 243));

@@ -828,7 +828,7 @@ impl EditorView {
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
-        let clip_rect = ctx.size().to_rect();
+        let clip_rect = ctx.size().to_rect().inset((1.,0.,0.,0.));
         ctx.render_ctx.clip(clip_rect);
         ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
 
