@@ -159,7 +159,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
     })
     .with_text_size(12.0);
 
-    let edit = editor_view::new().lens(MainWindowState::editor).background(editor_background_painter);
+    let edit = editor_view::new().lens(MainWindowState::editor);
     Flex::column()
         .with_flex_child(edit.padding(2.0), 1.0)
         .must_fill_main_axis(true)
@@ -170,8 +170,8 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .with_flex_spacer(1.0)
                 .with_child(label_right.padding(2.0))
                 .padding(1.0)
-                .background(panel_background_painter)
-                //.border(Color::rgb8(0x3a, 0x3a, 0x3a), 1.0),
+                .background(Color::rgb8(0x1d,0x1e,0x22)) // using a Painter cause a redraw every frame
+
         )
         .main_axis_alignment(MainAxisAlignment::Center)
         
