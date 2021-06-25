@@ -328,30 +328,33 @@ impl Buffer {
 
     pub fn tab(&mut self, indentation: Indentation) {
         for i in 0..self.carets.len() {
-            if let Some(line_range) = self.carets[i].selected_lines_range(&self) {
-                // TODO: Find a better way to iterate over line of a selection
-                for line_idx in line_range.start().index..line_range.end().index + 1 {
-                    let line_start: Absolute = self.rope.line_to_byte(line_idx).into();
-                    let r = line_start..line_start;
+            match self.carets[i].selected_lines_range(&self) {
+                Some(line_range) if line_range.start() != line_range.end() => {
+                    // TODO: Find a better way to iterate over line of a selection
+                    for line_idx in line_range.start().index..line_range.end().index + 1 {
+                        let line_start: Absolute = self.rope.line_to_byte(line_idx).into();
+                        let r = line_start..line_start;
+                        let text = match indentation {
+                            Indentation::Space(n) => " ".repeat(n).to_owned(),
+                            Indentation::Tab(_) => "\t".to_owned(),
+                        };
+                        self.edit(&r, &text);
+                    }
+                }
+                _ => {
+                    let r = self.carets[i].range();
                     let text = match indentation {
-                        Indentation::Space(n) => " ".repeat(n).to_owned(),
+                        Indentation::Space(n) => {
+                            let start: usize = self.carets[i].col().into();
+                            let nb_space = n - start % n;
+                            " ".repeat(nb_space).to_owned()
+                        }
                         Indentation::Tab(_) => "\t".to_owned(),
                     };
                     self.edit(&r, &text);
+                    let b = self.clone();
+                    self.carets[i].set_index(r.start + Relative::from(text.len()), true, true, &b);
                 }
-            } else {
-                let r = self.carets[i].range();
-                let text = match indentation {
-                    Indentation::Space(n) => {
-                        let start: usize = self.carets[i].col().into();
-                        let nb_space = n - start % n;
-                        " ".repeat(nb_space).to_owned()
-                    }
-                    Indentation::Tab(_) => "\t".to_owned(),
-                };
-                self.edit(&r, &text);
-                let b = self.clone();
-                self.carets[i].set_index(r.start + Relative::from(text.len()), true, true, &b);
             }
         }
         self.carets.merge();
