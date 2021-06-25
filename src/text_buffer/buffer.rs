@@ -256,12 +256,12 @@ impl Buffer {
         self.carets.merge();
     }
 
-    pub fn insert(&mut self, text: &str) {
+    pub fn insert(&mut self, text: &str, expand_selection: bool) {
         for i in 0..self.carets.len() {
             let r = self.carets[i].range();
             self.edit(&r, text);
             let b = self.clone();
-            self.carets[i].set_index(r.start + text.len(), true, true, &b);
+            self.carets[i].set_index(r.start + text.len(), !expand_selection, true, &b);
         }
         self.carets.merge();
     }

@@ -1,10 +1,10 @@
 use std::io::Result;
-use std::ops::{Deref, Range, RangeFrom, RangeTo, DerefMut};
+use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
 use std::path::{Path, PathBuf};
 
-use druid::Data;
 use super::buffer::Buffer;
 use super::file::TextFileInfo;
+use druid::Data;
 
 #[derive(Debug, Clone, Default)]
 pub struct EditStack {
@@ -25,6 +25,8 @@ impl Data for EditStack {
     }
 }
 
+const AUTO_INSERT_CHARS: &[&str] = &["{}", "\"\"", "<>", "()", "[]"];
+
 impl EditStack {
     pub fn new() -> Self {
         Default::default()
@@ -40,7 +42,7 @@ impl EditStack {
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = TextFileInfo::load(&path)?;
-        let buffer = Buffer::from_rope(file.1,file.0.indentation.visible_len());
+        let buffer = Buffer::from_rope(file.1, file.0.indentation.visible_len());
         Ok(Self {
             buffer,
             undo_stack: Vec::new(),
@@ -102,14 +104,34 @@ impl EditStack {
 
     pub fn insert(&mut self, text: &str) {
         let mut buf = self.buffer.clone();
-        buf.insert(text);
+
+        if text.chars().count() == 1 {
+            if let Some(c) = AUTO_INSERT_CHARS
+                .iter()
+                .find(|c| text.chars().next().unwrap() == c.chars().next().unwrap())
+            {
+                if buf.have_selection() {
+                    let inner_text = buf.selected_text(self.file.linefeed);
+                    buf.insert(c, false);
+                    buf.backward(false, false);
+                    buf.insert(&inner_text, true);
+                } else {
+                    buf.insert(c, false);
+                    buf.backward(false, false);
+                }
+            } else {
+                buf.insert(text, false);
+            }
+        } else {
+            buf.insert(text, false);
+        }
 
         self.push_edit(buf);
     }
 
     pub fn backspace(&mut self) {
         let mut buf = self.buffer.clone();
-        
+
         // TODO check if old buf is same that new with the Data trait
         if buf.backspace() {
             self.push_edit(buf);
@@ -118,7 +140,7 @@ impl EditStack {
 
     pub fn delete(&mut self) {
         let mut buf = self.buffer.clone();
-        
+
         if buf.delete() {
             self.push_edit(buf);
         }
