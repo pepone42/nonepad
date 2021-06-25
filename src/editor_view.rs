@@ -30,6 +30,8 @@ mod env {
 pub const FONT_NAME: &str = "Consolas";
 pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
+pub const EDITOR_LEFT_PADDING: f64 = 2.;
+pub const SCROLLBAR_X_PADDING: f64 = 2.;
 
 // pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
 // pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
@@ -830,7 +832,7 @@ impl EditorView {
 
         let clip_rect = ctx.size().to_rect().inset((1.,0.,0.,0.));
         ctx.render_ctx.clip(clip_rect);
-        ctx.render_ctx.transform(Affine::translate((self.delta_x, 0.0)));
+        ctx.render_ctx.transform(Affine::translate((self.delta_x+EDITOR_LEFT_PADDING, 0.0)));
 
         let mut line = String::new();
         let mut indices = Vec::new();
@@ -951,7 +953,7 @@ impl EditorView {
     }
 
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
-        let x = (x - self.delta_x).max(0.);
+        let x = (x - self.delta_x -EDITOR_LEFT_PADDING).max(0.);
         let y = (y - self.delta_y).max(0.);
         let line = ((y / self.metrics.font_height) as usize).min(editor.len_lines() - 1);
 
@@ -1004,8 +1006,8 @@ impl EditorView {
 
         let hit = layout.hit_test_text_position(i[caret.relative().index].index);
         let x = hit.point.x;
-        if x > -self.delta_x + self.size.width - self.metrics.font_advance {
-            self.delta_x = -x + self.size.width - self.metrics.font_advance;
+        if x > -self.delta_x + self.size.width - self.metrics.font_advance -EDITOR_LEFT_PADDING {
+            self.delta_x = -x + self.size.width - self.metrics.font_advance -EDITOR_LEFT_PADDING;
         }
         if x < -self.delta_x {
             self.delta_x = -x;
@@ -1246,9 +1248,9 @@ impl ScrollBar {
 
     fn rect(&self) -> Rect {
         if self.is_vertical() {
-            Rect::new(0.0, self.range.start, self.metrics.font_advance + 2.0, self.range.end)
+            Rect::new(0.0, self.range.start, self.metrics.font_advance + SCROLLBAR_X_PADDING, self.range.end)
         } else {
-            Rect::new(self.range.start, 0.0, self.range.end, self.metrics.font_advance + 2.0)
+            Rect::new(self.range.start, 0.0, self.range.end, self.metrics.font_advance + SCROLLBAR_X_PADDING)
         }
     }
 
@@ -1380,9 +1382,9 @@ impl Widget<EditStack> for ScrollBar {
         //     self.metrics.font_advance
         // };
         if self.is_vertical() {
-            Size::new(self.metrics.font_advance + 2.0, self.len)
+            Size::new(self.metrics.font_advance + SCROLLBAR_X_PADDING, self.len)
         } else {
-            Size::new(self.len, self.metrics.font_advance + 2.0)
+            Size::new(self.len, self.metrics.font_advance + SCROLLBAR_X_PADDING)
         }
     }
 
@@ -1425,7 +1427,7 @@ impl Widget<EditStack> for ScrollBarSpacer {
 
     fn layout(&mut self, _ctx: &mut LayoutCtx, _bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(env);
-        Size::new(self.metrics.font_advance + 2.0, self.metrics.font_advance + 2.0)
+        Size::new(self.metrics.font_advance + SCROLLBAR_X_PADDING, self.metrics.font_advance + SCROLLBAR_X_PADDING)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {
