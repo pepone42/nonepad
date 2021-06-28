@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::Result;
 use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
 use std::path::{Path, PathBuf};
@@ -5,6 +6,7 @@ use std::path::{Path, PathBuf};
 use super::buffer::Buffer;
 use super::file::TextFileInfo;
 use druid::Data;
+use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Default)]
 pub struct EditStack {
@@ -25,7 +27,16 @@ impl Data for EditStack {
     }
 }
 
-const AUTO_INSERT_CHARS: &[&str] = &["{}", "\"\"", "<>", "()", "[]"];
+static AUTO_INSERT_CHARMAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
+    let mut m = HashMap::new();
+    m.insert("{", "{}");
+    m.insert("(", "()");
+    m.insert("<", "<>");
+    m.insert("[", "[]");
+    m.insert("\"", "\"\"");
+    m
+});
+
 
 impl EditStack {
     pub fn new() -> Self {
@@ -105,25 +116,20 @@ impl EditStack {
     pub fn insert(&mut self, text: &str) {
         let mut buf = self.buffer.clone();
 
-        if text.chars().count() == 1 {
-            if let Some(c) = AUTO_INSERT_CHARS
-                .iter()
-                .find(|c| text.chars().next().unwrap() == c.chars().next().unwrap())
-            {
-                if buf.have_selection() {
-                    let inner_text = buf.selected_text(self.file.linefeed);
-                    buf.insert(c, false);
-                    buf.backward(false, false);
-                    buf.insert(&inner_text, true);
-                } else {
-                    buf.insert(c, false);
-                    buf.backward(false, false);
-                }
-            } else {
+        match text {
+            linefeed if linefeed == self.file.linefeed.to_str() => {
+                buf.insert(text, false);
+                buf.indent(self.file.indentation);
+            }
+            s if AUTO_INSERT_CHARMAP.get(s).is_some()  => {
+                let inner_text = buf.selected_text(self.file.linefeed);
+                buf.insert(AUTO_INSERT_CHARMAP[text], false);
+                buf.backward(false, false);
+                buf.insert(&inner_text, true);
+            }
+            _ => {
                 buf.insert(text, false);
             }
-        } else {
-            buf.insert(text, false);
         }
 
         self.push_edit(buf);

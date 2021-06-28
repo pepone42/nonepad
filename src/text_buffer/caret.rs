@@ -275,6 +275,12 @@ impl Caret {
 
     pub fn move_home(&mut self, expand_selection: bool, buffer: &Buffer) {
         let index = self.line().start(buffer);
+        let index2 = self.line().absolute_indentation(buffer);
+        let index = if self.index>index2 || self.index == index {
+            index2
+        } else {
+            index
+        };
         self.set_index(index, !expand_selection, true, buffer);
     }
 

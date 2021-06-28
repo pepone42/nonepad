@@ -1,8 +1,9 @@
+use super::buffer::Buffer;
 use super::rope_utils::{next_grapheme_boundary, prev_grapheme_boundary};
 use druid::Data;
+use winapi::um::wingdi::AbortDoc;
 use std::ops::Add;
 use std::ops::{AddAssign, Sub, SubAssign};
-use super::buffer::Buffer;
 
 pub trait Position {
     fn absolute(&self, buffer: &Buffer) -> Absolute;
@@ -141,7 +142,7 @@ impl Position for Absolute {
         *self
     }
     fn point(&self, buffer: &Buffer) -> Point {
-        let line = self.line(buffer);// buffer.absolute_to_line(*self);
+        let line = self.line(buffer); // buffer.absolute_to_line(*self);
         let relative = *self - line.start(buffer);
         Point {
             line,
@@ -238,11 +239,11 @@ impl Line {
             ))
         }
     }
+
     pub fn byte_len(&self, buffer: &Buffer) -> Relative {
         self.end(buffer) - self.start(buffer)
     }
     pub fn grapheme_len(&self, buffer: &Buffer) -> Column {
-
         let mut col = Column::from(0);
         let mut i = Relative::from(0);
         if self.index >= buffer.len_lines() {
@@ -333,6 +334,45 @@ impl Line {
         rel_to_byte.push(rel_index.into());
         byte_to_rel.push(byte_index.into());
     }
+
+    pub fn absolute_indentation(&self, buffer: &Buffer) -> Absolute {
+        let a = buffer.line_to_absolute(self.index);
+        
+        a + buffer.slice(a..).chars().take_while(|c| matches!(c,' ' | '\t')).count()
+    }
+
+    pub fn relative_indentation(&self, buffer: &Buffer) -> Relative {
+        let a = buffer.line_to_absolute(self.index);
+        buffer.slice(a..).chars().take_while(|c| matches!(c,' ' | '\t')).count().into()
+    }
+
+    pub fn indentation(&self, buffer: &Buffer) -> Column {
+        let mut col = Column::from(0);
+        let mut i = Relative::from(0);
+        if self.index >= buffer.len_lines() {
+            return col;
+        }
+        let a = buffer.line_to_absolute(self.index);
+        while i < self.byte_len(buffer) {
+            let c = buffer.char(a + i);
+            match c {
+                ' ' => {
+                    col += 1;
+                    i += 1;
+                }
+                '\t' => {
+                    let nb_space: usize = buffer.tabsize - col.index % buffer.tabsize;
+                    col += nb_space;
+                    i += 1;
+                }
+                _ => {
+                    return col;
+                }
+            }
+        }
+        col
+    }
+
     pub fn iter<'r>(&self, buffer: &'r Buffer) -> LineIterator<'r> {
         LineIterator { buffer, line: *self }
     }

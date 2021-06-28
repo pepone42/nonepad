@@ -360,6 +360,32 @@ impl Buffer {
         self.carets.merge();
     }
 
+    pub fn indent(&mut self, indentation: Indentation) {
+        if self.have_selection() {
+            return;
+        }
+        for i in 0..self.carets.len() {
+            match self.carets[i].index.line(&self).index {
+                0 => (),
+                max if max == self.len_lines() => (),
+                l => {
+                    let l = Line::from(l);
+                    let indent = l.prev().unwrap().indentation(&self);
+                    let text = match indentation {
+                        Indentation::Space(_) => {
+                            " ".repeat(indent.into()).to_owned()
+                        }
+                        Indentation::Tab(_) => "\t".to_owned(), // TODO
+                    };
+                    self.edit(&Range{start: l.start(&self),end: l.start(&self)}, &text );
+                    let b = self.clone();
+                    self.carets[i].set_index(l.start(&b) + Relative::from(text.len()), true, true, &b);
+                }
+
+            }
+        }
+    }
+
     pub fn edit(&mut self, range: &Range<Absolute>, text: &str) {
         let insert_index = self.rope.byte_to_char(range.start.into());
         let end_index = self.rope.byte_to_char(range.end.into());
