@@ -74,6 +74,11 @@ pub fn next_grapheme_boundary<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) ->
     }
 }
 
+pub fn next_graphem_len<U: Into<usize>>(slice: &RopeSlice, byte_idx: U) -> usize {
+    let i = byte_idx.into();
+    next_grapheme_boundary(slice,i) - i
+}
+
 const WORD_BOUNDARY_PUCTUATION: [char; 31] = [
     '`', '~', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '=', '+', '[', '{', ']', '}', '\\', '|', ';', ':',
     '\'', '"', ',', '.', '<', '>', '/', '?',

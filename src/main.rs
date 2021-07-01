@@ -1,5 +1,5 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
-#![windows_subsystem = "windows"]
+#![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod bottom_panel;
 mod commands;
@@ -12,8 +12,6 @@ mod theme;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use druid::RenderContext;
-use druid::widget::Painter;
 use druid::widget::{Flex, Label, MainAxisAlignment};
 use druid::{
     piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
@@ -123,14 +121,14 @@ impl MainWindowState {
 
 fn build_ui() -> impl Widget<MainWindowState> {
 
-    let panel_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
-        let bounds = ctx.size().to_rect();
-            ctx.fill(bounds, &env.get(crate::theme::PANEL_BACKGROUND));
-    });
-    let editor_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
-        let bounds = ctx.size().to_rect();
-            ctx.fill(bounds, &env.get(crate::theme::EDITOR_BACKGROUND));
-    });
+    // let panel_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
+    //     let bounds = ctx.size().to_rect();
+    //         ctx.fill(bounds, &env.get(crate::theme::PANEL_BACKGROUND));
+    // });
+    // let editor_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
+    //     let bounds = ctx.size().to_rect();
+    //         ctx.fill(bounds, &env.get(crate::theme::EDITOR_BACKGROUND));
+    // });
 
     let label_left = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(

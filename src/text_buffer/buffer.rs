@@ -375,7 +375,7 @@ impl Buffer {
                         Indentation::Space(_) => {
                             " ".repeat(indent.into()).to_owned()
                         }
-                        Indentation::Tab(_) => "\t".to_owned(), // TODO
+                        Indentation::Tab(_) =>  "\t".repeat(indent.index / indentation.visible_len()).to_owned(),
                     };
                     self.edit(&Range{start: l.start(&self),end: l.start(&self)}, &text );
                     let b = self.clone();

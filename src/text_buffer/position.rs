@@ -1,5 +1,5 @@
 use super::buffer::Buffer;
-use super::rope_utils::{next_grapheme_boundary, prev_grapheme_boundary};
+use super::rope_utils::{next_graphem_len, prev_grapheme_boundary};
 use druid::Data;
 use std::ops::Add;
 use std::ops::{AddAssign, Sub, SubAssign};
@@ -183,6 +183,18 @@ impl AddAssign<usize> for Relative {
     }
 }
 
+impl PartialEq<usize> for Relative {
+    fn eq(&self, other: &usize) -> bool {
+        self.index == *other
+    }
+}
+
+impl PartialOrd<usize> for Relative {
+    fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
+        self.index.partial_cmp(other)
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Data)]
 pub struct Column {
     pub index: usize,
@@ -242,31 +254,31 @@ impl Line {
     pub fn byte_len(&self, buffer: &Buffer) -> Relative {
         self.end(buffer) - self.start(buffer)
     }
+
     pub fn grapheme_len(&self, buffer: &Buffer) -> Column {
         let mut col = Column::from(0);
-        let mut i = Relative::from(0);
         if self.index >= buffer.len_lines() {
             return col;
         }
-        let a = buffer.line_to_absolute(self.index);
-        while i < self.byte_len(buffer) {
-            let c = buffer.char(a + i);
-            match c {
-                ' ' => {
-                    col += 1;
-                    i += 1;
-                }
-                '\t' => {
+
+        let slice = buffer.line_slice(*self);
+        let mut it = slice.bytes().enumerate().peekable();
+        'outer: loop {
+            let l = match it.peek() {
+                None => break 'outer,
+                Some((_, b'\t')) => {
                     let nb_space: usize = buffer.tabsize - col.index % buffer.tabsize;
                     col += nb_space;
-                    i += 1;
+                    1
                 }
-                _ => {
-                    i = next_grapheme_boundary(&buffer.line_slice(*self), i).into();
+                Some((i, _)) => {
                     col += 1;
+                    next_graphem_len(&slice, *i)
                 }
-            }
+            };
+            it.nth(l-1);
         }
+
         col
     }
     pub fn prev(&self) -> Option<Self> {
@@ -336,39 +348,50 @@ impl Line {
 
     pub fn absolute_indentation(&self, buffer: &Buffer) -> Absolute {
         let a = buffer.line_to_absolute(self.index);
-        
-        a + buffer.slice(a..).chars().take_while(|c| matches!(c,' ' | '\t')).count()
+
+        a + buffer
+            .slice(a..)
+            .bytes()
+            .take_while(|c| matches!(c, b' ' | b'\t'))
+            .count()
     }
 
     pub fn relative_indentation(&self, buffer: &Buffer) -> Relative {
         let a = buffer.line_to_absolute(self.index);
-        buffer.slice(a..).chars().take_while(|c| matches!(c,' ' | '\t')).count().into()
+        buffer
+            .slice(a..)
+            .bytes()
+            .take_while(|c| matches!(c, b' ' | b'\t'))
+            .count()
+            .into()
     }
 
     pub fn indentation(&self, buffer: &Buffer) -> Column {
         let mut col = Column::from(0);
-        let mut i = Relative::from(0);
         if self.index >= buffer.len_lines() {
             return col;
         }
-        let a = buffer.line_to_absolute(self.index);
-        while i < self.byte_len(buffer) {
-            let c = buffer.char(a + i);
-            match c {
-                ' ' => {
-                    col += 1;
-                    i += 1;
+        let slice = buffer.line_slice(*self);
+        let mut it = slice.bytes().enumerate().peekable();
+        'outer: loop {
+            let l = match it.peek() {
+                None => break 'outer,
+                Some((_,b' ')) => {
+                    col+=1;
+                    1
                 }
-                '\t' => {
+                Some((_, b'\t')) => {
                     let nb_space: usize = buffer.tabsize - col.index % buffer.tabsize;
                     col += nb_space;
-                    i += 1;
+                    1
                 }
-                _ => {
+                Some((_, _)) => {
                     return col;
                 }
-            }
+            };
+            it.nth(l-1);
         }
+
         col
     }
 
@@ -408,5 +431,17 @@ impl Sub<&Line> for &Line {
     type Output = Line;
     fn sub(self, rhs: &Line) -> Self::Output {
         Line::from(self.index - rhs.index)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::text_buffer::{buffer::Buffer, position::Column};
+
+    #[test]
+    fn grapheme_len() {
+        let mut input = Buffer::new(4);
+        input.insert("Hello 😊︎ 😐︎ ☹︎ example", false);
+        assert_eq!(input.line(0).grapheme_len(&input), Column::from(19));
     }
 }
