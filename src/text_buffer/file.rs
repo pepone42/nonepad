@@ -124,15 +124,23 @@ impl TextFileInfo {
         let mut vec = Vec::new();
         file.read_to_end(&mut vec)?;
 
+        
+
         detector.feed(&vec, true);
         let encoding = Encoding::for_bom(&vec);
+        
+        
 
         match encoding {
             None => {
                 let encoding = detector.guess(None, true);
+                
                 let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
+
+                crate::syntax::stats(buffer.to_string(), syntax);
+
                 Ok((
                     TextFileInfo {
                         encoding,
@@ -153,6 +161,9 @@ impl TextFileInfo {
                 let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
+
+                crate::syntax::stats(buffer.to_string(), syntax);
+                
                 Ok((
                     TextFileInfo {
                         encoding,
