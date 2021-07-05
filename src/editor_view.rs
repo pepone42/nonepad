@@ -169,6 +169,7 @@ pub struct EditorView {
 }
 
 impl Widget<EditStack> for EditorView {
+    
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
         match event {
             Event::WindowConnected => {

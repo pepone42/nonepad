@@ -8,6 +8,7 @@ mod text_buffer;
 mod widgets;
 mod seticon;
 mod theme;
+mod syntax;
 
 use std::ffi::OsStr;
 use std::path::Path;

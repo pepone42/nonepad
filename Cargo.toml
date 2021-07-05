@@ -21,6 +21,7 @@ uuid = { version = "0.8", features = ["v4"] }
 rfd = "0.3"
 miniserde = "0.1"
 once_cell = "1.8"
+syntect = "4.5"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
