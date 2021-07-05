@@ -1,5 +1,5 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
-#![cfg_attr(not(test), windows_subsystem = "windows")]
+//#![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod bottom_panel;
 mod commands;
@@ -149,11 +149,12 @@ fn build_ui() -> impl Widget<MainWindowState> {
 
     let label_right = Label::new(|data: &MainWindowState, _env: &Env| {
         format!(
-            "{}    {}    {}    {}",
+            "{}    {}    {}    {}    {}",
             data.editor.caret_display_info(),
             data.editor.file.indentation,
             data.editor.file.encoding.name(),
-            data.editor.file.linefeed
+            data.editor.file.linefeed,
+            data.editor.file.syntax.name
         )
     })
     .with_text_size(12.0);
