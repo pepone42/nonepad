@@ -413,6 +413,16 @@ impl Default for Theme {
             let theme_item = ThemeItem { scope, style };
             t.style.scopes.push(theme_item)
         }
+        t.style.settings.foreground = {
+            let c = druid::piet::Color::from_hex_str(&t.colors.foreground).unwrap().as_rgba8();
+            Some(syntect::highlighting::Color {
+                r: c.0,
+                g: c.1,
+                b: c.2,
+                a: c.3,
+            })
+        };
+         
         t
     }
 }

@@ -1,4 +1,4 @@
-mod buffer;
+pub mod buffer;
 mod caret;
 mod edit_stack;
 mod file;
