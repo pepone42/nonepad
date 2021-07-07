@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::commands;
 use crate::commands::SCROLL_TO;
+use crate::syntax::StateCache;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
 use druid::{
@@ -165,6 +166,7 @@ pub struct EditorView {
     longest_line_len: f64,
 
     held_state: HeldState,
+    highlight_cache: StateCache,
     //handle: WindowHandle,
 }
 
@@ -653,6 +655,7 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
+            highlight_cache: StateCache::new(),
         }
     }
     fn visible_range(&self) -> Range<usize> {
@@ -919,6 +922,9 @@ impl EditorView {
 
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
+            if line_idx<editor.len_lines() {
+                let highlight = self.highlight_cache.get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx);
+            }
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let layout = ctx
