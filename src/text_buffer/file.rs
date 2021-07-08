@@ -139,7 +139,7 @@ impl TextFileInfo {
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
 
-                crate::syntax::stats(buffer.to_string(), syntax);
+                //crate::syntax::stats(buffer.to_string(), syntax);
 
                 Ok((
                     TextFileInfo {
@@ -162,8 +162,8 @@ impl TextFileInfo {
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
 
-                crate::syntax::stats(buffer.to_string(), syntax);
-                
+                //crate::syntax::stats(buffer.to_string(), syntax);
+
                 Ok((
                     TextFileInfo {
                         encoding,
