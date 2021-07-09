@@ -294,6 +294,7 @@ impl Widget<EditStack> for EditorView {
                         ..
                     } => {
                         editor.tab();
+                        self.highlight_cache.invalidate(0);
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
@@ -381,6 +382,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "z").matches(event) {
                     editor.undo();
+                    self.highlight_cache.invalidate(0);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -388,6 +390,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "y").matches(event) {
                     editor.redo();
+                    self.highlight_cache.invalidate(0);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;

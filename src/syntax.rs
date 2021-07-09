@@ -1,21 +1,11 @@
 use once_cell::sync::Lazy;
-use std::{
-    collections::HashMap,
-    ops::{Bound, Range, RangeBounds},
-    str::FromStr,
-};
+use std::ops::Range;
 use syntect::{
-    easy::{self, ScopeRegionIterator},
-    highlighting::{HighlightIterator, HighlightState, Highlighter, RangedHighlightIterator, Style, Theme, ThemeSet},
-    parsing::{ParseState, Scope, ScopeStack, ScopeStackOp, SyntaxReference, SyntaxSet, SCOPE_REPO},
-    util,
+    highlighting::{HighlightState, Highlighter, RangedHighlightIterator, Style},
+    parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet},
 };
 
-use crate::{
-    text_buffer::buffer::Buffer,
-    text_buffer::{position::Line, EditStack},
-    theme::{self, THEME},
-};
+use crate::{text_buffer::buffer::Buffer, theme::THEME};
 
 pub static SYNTAXSET: Lazy<SyntaxSet> = Lazy::new(|| SyntaxSet::load_defaults_newlines());
 
@@ -48,20 +38,17 @@ impl StateCache {
                 HighlightState::new(&self.highlighter, ScopeStack::new()),
             )
         });
-        dbg!(start<<4, &states.1.path);
 
         for i in start << 4..(end << 4).min(buffer.len_lines()) {
-            if i & 0xF == 0 {
-                self.states.push(states.clone());
-            }
-            dbg!(i, &states.1.path);
             let str = buffer.line(i).to_string(&buffer);
             let ops = states.0.parse_line(&str, &SYNTAXSET);
             let h: Vec<(Style, Range<usize>)> =
                 RangedHighlightIterator::new(&mut states.1, &ops, &str, &self.highlighter)
                     .map(|h| (h.0, h.2))
                     .collect();
-            
+            if i & 0xF == 0xF {
+                self.states.push(states.clone());
+            }
 
             self.highlighted_line.push(h);
         }
@@ -88,44 +75,5 @@ impl StateCache {
             self.update_range(syntax, buffer, line, line + 10);
             &self.highlighted_line[line]
         }
-    }
-}
-
-pub fn stats(input: String, syntax: &SyntaxReference) {
-    let mut scope_stack = ScopeStack::new();
-    let mut state = ParseState::new(syntax);
-    //let highlighter = Highlighter::new(&THEME.style);
-
-    //let theme = &ThemeSet::load_defaults().themes["base16-ocean.dark"];
-    let theme = &THEME.style;
-    //dbg!(serde_json::to_string(&THEME.style));
-    let highlighter = Highlighter::new(theme);
-    let mut highlight_state = HighlightState::new(&highlighter, scope_stack);
-    for line in input.lines() {
-        let ops = state.parse_line(&line, &SYNTAXSET);
-
-        // for s in  RangedHighlightIterator::new(&mut highlight_state,&ops[..],line,&highlighter) {
-        //     //dbg!(s);
-
-        // }
-
-        println!(
-            "{}",
-            util::as_24_bit_terminal_escaped(
-                &HighlightIterator::new(&mut highlight_state, &ops[..], line, &highlighter)
-                    .collect::<Vec<(syntect::highlighting::Style, &str)>>(),
-                false
-            )
-        );
-
-        // let ops = state.parse_line(&line, &SYNTAXSET);
-        // for (s, op) in ScopeRegionIterator::new(&ops, line) {
-        //     scope_stack.apply(op);
-
-        //     if !scope_stack.is_empty() && scope_stack.does_match(ScopeStack::from_str("punctuation.definition.comment").unwrap().as_slice()).is_some() {
-        //         dbg!(s);
-        //         scope_stack.debug_print(&SCOPE_REPO.lock().unwrap());
-        //     }
-        // }
     }
 }

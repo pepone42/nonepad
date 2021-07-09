@@ -1,12 +1,11 @@
-use std::{fmt, marker::PhantomData, str::FromStr};
 use once_cell::sync::Lazy;
+use std::{fmt, marker::PhantomData, str::FromStr};
 
-use druid::FontStyle;
 #[rustfmt::skip]
 
 use druid::{Color, Env, Key};
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-use syntect::highlighting::{ScopeSelector, ScopeSelectors, Style, StyleModifier, ThemeItem, ThemeSettings};
+use serde::{de, Deserialize, Deserializer, Serialize};
+use syntect::highlighting::{ScopeSelector, ScopeSelectors, StyleModifier, ThemeItem, ThemeSettings};
 
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Debug)]
@@ -375,23 +374,25 @@ impl Default for Theme {
             scopes: Vec::new(),
         };
         for token in &t.token_colors {
-            let scope = ScopeSelectors{ selectors: token.scope.iter().map(|s| ScopeSelector::from_str(s).unwrap()).collect::<Vec<ScopeSelector>>() };
+            let scope = ScopeSelectors {
+                selectors: token
+                    .scope
+                    .iter()
+                    .map(|s| ScopeSelector::from_str(s).unwrap())
+                    .collect::<Vec<ScopeSelector>>(),
+            };
             //let scope = ScopeSelectors::from_str(&token.scope.join(" ")).unwrap();
-            let foreground = token
-                .settings
-                .foreground.clone()
-                .map(|c| {
-                    let c = druid::piet::Color::from_hex_str(&c).unwrap().as_rgba8();
-                    syntect::highlighting::Color {
-                        r: c.0,
-                        g: c.1,
-                        b: c.2,
-                        a: c.3,
-                    }
+            let foreground = token.settings.foreground.clone().map(|c| {
+                let c = druid::piet::Color::from_hex_str(&c).unwrap().as_rgba8();
+                syntect::highlighting::Color {
+                    r: c.0,
+                    g: c.1,
+                    b: c.2,
+                    a: c.3,
                 }
-                );
-                //.unwrap_or_else(|| druid::piet::Color::from_hex_str(&t.colors.editor_foreground).unwrap())
-                //let bgcol = druid::piet::Color::from_hex_str(&t.colors.editor_background).unwrap().as_rgba8();
+            });
+            //.unwrap_or_else(|| druid::piet::Color::from_hex_str(&t.colors.editor_foreground).unwrap())
+            //let bgcol = druid::piet::Color::from_hex_str(&t.colors.editor_background).unwrap().as_rgba8();
             let mut font_style = syntect::highlighting::FontStyle::empty(); //= syntect::highlighting::FontStyle::Regular;
 
             if let Some(fs) = token.settings.font_style.clone() {
@@ -414,7 +415,9 @@ impl Default for Theme {
             t.style.scopes.push(theme_item)
         }
         t.style.settings.foreground = {
-            let c = druid::piet::Color::from_hex_str(&t.colors.foreground).unwrap().as_rgba8();
+            let c = druid::piet::Color::from_hex_str(&t.colors.foreground)
+                .unwrap()
+                .as_rgba8();
             Some(syntect::highlighting::Color {
                 r: c.0,
                 g: c.1,
@@ -422,14 +425,12 @@ impl Default for Theme {
                 a: c.3,
             })
         };
-         
+
         t
     }
 }
 
-pub static THEME: Lazy<Theme> = Lazy::new(|| {
-    Theme::default()
-});
+pub static THEME: Lazy<Theme> = Lazy::new(|| Theme::default());
 
 fn string_or_seq_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
