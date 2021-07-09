@@ -1,5 +1,5 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
-//#![cfg_attr(not(test), windows_subsystem = "windows")]
+#![cfg_attr(feature = "noconsole", windows_subsystem = "windows")]
 
 mod bottom_panel;
 mod commands;
