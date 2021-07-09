@@ -77,8 +77,4 @@ fn build_search_panel() -> impl Widget<SearchState> {
                 .expand_width(),
             1.0,
         )
-        // .with_child(
-        //     Button::new("x")
-        //         .on_click(|ctx, _, _| (ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (),Target::Global)))),
-        // )
 }
