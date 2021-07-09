@@ -3,8 +3,10 @@ use std::path::Path;
 
 use crate::commands;
 use crate::commands::SCROLL_TO;
+use crate::syntax::StateCache;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
+use druid::FontStyle;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -165,6 +167,7 @@ pub struct EditorView {
     longest_line_len: f64,
 
     held_state: HeldState,
+    highlight_cache: StateCache,
     //handle: WindowHandle,
 }
 
@@ -290,7 +293,9 @@ impl Widget<EditStack> for EditorView {
                         key: druid::keyboard_types::Key::Tab,
                         ..
                     } => {
+                        self.invalidate_highlight_cache(editor);
                         editor.tab();
+
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
@@ -308,14 +313,18 @@ impl Widget<EditStack> for EditorView {
                 }
 
                 if HotKey::new(None, druid::keyboard_types::Key::Backspace).matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.backspace();
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(None, druid::keyboard_types::Key::Delete).matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.delete();
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -324,7 +333,9 @@ impl Widget<EditStack> for EditorView {
 
                 if HotKey::new(None, druid::keyboard_types::Key::Enter).matches(event) {
                     // || HotKey::new(None, druid::keyboard_types::Key::Return).matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.insert(editor.file.linefeed.to_str());
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -338,6 +349,7 @@ impl Widget<EditStack> for EditorView {
                         let data = clipboard
                             .get_format(format)
                             .expect("I promise not to unwrap in production");
+                        self.invalidate_highlight_cache(editor);
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
                     }
                     self.put_caret_in_visible_range(ctx, editor);
@@ -360,7 +372,9 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "x").matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
+                    self.invalidate_highlight_cache(editor);
                     editor.delete();
+
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -372,14 +386,18 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "z").matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.undo();
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "y").matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.redo();
+
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -424,7 +442,11 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
-                    ctx.submit_command(Command::new(crate::commands::SHOW_SEARCH_PANEL, editor.main_cursor_selected_text(), Target::Global));
+                    ctx.submit_command(Command::new(
+                        crate::commands::SHOW_SEARCH_PANEL,
+                        editor.main_cursor_selected_text(),
+                        Target::Global,
+                    ));
 
                     ctx.request_paint();
                     ctx.set_handled();
@@ -436,8 +458,10 @@ impl Widget<EditStack> for EditorView {
                     // } else {
 
                     // }
-                    editor.buffer.duplicate_cursor_from_str(&editor.main_cursor_selected_text());
-                    // self.put_caret_in_visible_range(ctx, editor); 
+                    editor
+                        .buffer
+                        .duplicate_cursor_from_str(&editor.main_cursor_selected_text());
+                    // self.put_caret_in_visible_range(ctx, editor);
                 }
 
                 if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
@@ -447,7 +471,9 @@ impl Widget<EditStack> for EditorView {
                     if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
                         return;
                     }
+                    self.invalidate_highlight_cache(editor);
                     editor.insert(&text);
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -652,6 +678,7 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
+            highlight_cache: StateCache::new(),
         }
     }
     fn visible_range(&self) -> Range<usize> {
@@ -670,15 +697,15 @@ impl EditorView {
         let e = layout.hit_test_text_position(range.end.into());
 
         path.clear();
-        path.push(PathEl::MoveTo(Point::new(s.point.x.ceil()+0.5, y.ceil()+0.5)));
-        path.push(PathEl::LineTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
+        path.push(PathEl::MoveTo(Point::new(s.point.x.ceil() + 0.5, y.ceil() + 0.5)));
+        path.push(PathEl::LineTo(Point::new(e.point.x.ceil() + 0.5, y.ceil() + 0.5)));
         path.push(PathEl::LineTo(Point::new(
-            e.point.x.ceil()+0.5,
-            (self.metrics.font_height + y).ceil()+0.5,
+            e.point.x.ceil() + 0.5,
+            (self.metrics.font_height + y).ceil() + 0.5,
         )));
         path.push(PathEl::LineTo(Point::new(
-            s.point.x.ceil()+0.5,
-            (self.metrics.font_height + y).ceil()+0.5,
+            s.point.x.ceil() + 0.5,
+            (self.metrics.font_height + y).ceil() + 0.5,
         )));
         path.push(PathEl::ClosePath);
     }
@@ -695,19 +722,19 @@ impl EditorView {
 
         path.clear();
         path.push(PathEl::MoveTo(Point::new(
-            s.point.x.ceil()+0.5,
-            (self.metrics.font_height + y).ceil()+0.5,
+            s.point.x.ceil() + 0.5,
+            (self.metrics.font_height + y).ceil() + 0.5,
         )));
-        path.push(PathEl::LineTo(Point::new(s.point.x.ceil()+0.5, y.ceil()+0.5)));
+        path.push(PathEl::LineTo(Point::new(s.point.x.ceil() + 0.5, y.ceil() + 0.5)));
         path.push(PathEl::LineTo(Point::new(
-            (e.point.x + self.metrics.font_advance).ceil()+0.5,
-            y.ceil()+0.5,
+            (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+            y.ceil() + 0.5,
         )));
         path.push(PathEl::LineTo(Point::new(
-            (e.point.x + self.metrics.font_advance).ceil()+0.5,
-            (self.metrics.font_height + y).ceil()+0.5,
+            (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+            (self.metrics.font_height + y).ceil() + 0.5,
         )));
-        s.point.x//.ceil()+0.5
+        s.point.x //.ceil()+0.5
     }
 
     fn add_range_to_selection<L: TextLayout>(
@@ -723,39 +750,48 @@ impl EditorView {
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
-                path.push(PathEl::LineTo(Point::new(0.5, y.ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
-                path.push(PathEl::MoveTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
+                path.push(PathEl::MoveTo(Point::new(e.point.x.ceil() + 0.5, y.ceil() + 0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x.ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    e.point.x.ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
-                path.push(PathEl::LineTo(Point::new(0.5, (self.metrics.font_height + y).ceil()+0.5)));
-                path.push(PathEl::LineTo(Point::new(0.5, y.ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(
+                    0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
+                )));
+                path.push(PathEl::LineTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::ClosePath);
             }
             Some(SelectionLineRange::RangeFrom(_)) | Some(SelectionLineRange::RangeFull) => {
-                path.push(PathEl::LineTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil() + 0.5, y.ceil() + 0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x.ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    e.point.x.ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
-                path.push(PathEl::LineTo(Point::new(0.5, (self.metrics.font_height + y).ceil()+0.5)));
-                path.push(PathEl::LineTo(Point::new(0.5, y.ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(
+                    0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
+                )));
+                path.push(PathEl::LineTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::ClosePath);
             }
             None => {
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
-                path.push(PathEl::LineTo(Point::new(e.point.x.ceil()+0.5, y.ceil()+0.5)));
+                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil() + 0.5)));
+                path.push(PathEl::LineTo(Point::new(e.point.x.ceil() + 0.5, y.ceil() + 0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    e.point.x.ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    e.point.x.ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
-                path.push(PathEl::LineTo(Point::new(0.5, (self.metrics.font_height + y).ceil()+0.5)));
+                path.push(PathEl::LineTo(Point::new(
+                    0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
+                )));
                 path.push(PathEl::ClosePath);
             }
             _ => {
@@ -775,50 +811,50 @@ impl EditorView {
         match &path.last_range {
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x > e.point.x => {
                 path.push(PathEl::ClosePath);
-                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
+                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    y.ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    y.ceil() + 0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
             }
             Some(SelectionLineRange::RangeFrom(_)) if path.last_x <= e.point.x => {
                 // insert a point at the begining of the line
-                path[0] = PathEl::LineTo(Point::new(path.last_x.ceil()+0.5, y.ceil()+0.5));
-                path.insert(0, PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
+                path[0] = PathEl::LineTo(Point::new(path.last_x.ceil() + 0.5, y.ceil() + 0.5));
+                path.insert(0, PathEl::MoveTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    y.ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    y.ceil() + 0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
             }
             None => {
                 // the precedent line was outside the visible range
                 path.clear();
-                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil()+0.5)));
+                path.push(PathEl::MoveTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    y.ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    y.ceil() + 0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
             }
             _ => {
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    y.ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    y.ceil() + 0.5,
                 )));
                 path.push(PathEl::LineTo(Point::new(
-                    (e.point.x + self.metrics.font_advance).ceil()+0.5,
-                    (self.metrics.font_height + y).ceil()+0.5,
+                    (e.point.x + self.metrics.font_advance).ceil() + 0.5,
+                    (self.metrics.font_height + y).ceil() + 0.5,
                 )));
             }
         }
@@ -830,9 +866,10 @@ impl EditorView {
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
-        let clip_rect = ctx.size().to_rect().inset((1.,0.,0.,0.));
+        let clip_rect = ctx.size().to_rect().inset((1., 0., 0., 0.));
         ctx.render_ctx.clip(clip_rect);
-        ctx.render_ctx.transform(Affine::translate((self.delta_x+EDITOR_LEFT_PADDING, 0.0)));
+        ctx.render_ctx
+            .transform(Affine::translate((self.delta_x + EDITOR_LEFT_PADDING, 0.0)));
 
         let mut line = String::new();
         let mut indices = Vec::new();
@@ -902,7 +939,7 @@ impl EditorView {
         match current_path.last() {
             Some(PathEl::ClosePath) => (),
             _ => {
-                current_path.push(PathEl::LineTo(Point::new(0.5, dy.ceil()+0.5)));
+                current_path.push(PathEl::LineTo(Point::new(0.5, dy.ceil() + 0.5)));
                 current_path.push(PathEl::ClosePath);
                 selection_path.push(std::mem::take(&mut current_path));
             }
@@ -920,15 +957,38 @@ impl EditorView {
         for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
-            let layout = ctx
+            let mut layout = ctx
                 .render_ctx
                 .text()
                 .new_text_layout(line.clone())
                 .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
-                .text_color(self.fg_color.clone())
-                .build()
-                .unwrap();
+                .text_color(self.fg_color.clone());
+            let layout = if line_idx < editor.len_lines() {
+                let highlight = self
+                    .highlight_cache
+                    .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx);
+                for h in highlight {
+                    let color = TextAttribute::TextColor(Color::rgba8(
+                        h.0.foreground.r,
+                        h.0.foreground.g,
+                        h.0.foreground.b,
+                        h.0.foreground.a,
+                    ));
+                    if h.0.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+                        layout = layout.range_attribute(
+                            indices[h.1.start].index..indices[h.1.end].index,
+                            TextAttribute::Style(FontStyle::Italic),
+                        );
+                    }
+                    layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
+                }
+                layout
+            } else {
+                layout
+            }
+            .build()
+            .unwrap();
 
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
 
@@ -953,7 +1013,7 @@ impl EditorView {
     }
 
     fn pix_to_point(&self, x: f64, y: f64, ctx: &mut EventCtx, editor: &EditStack) -> (usize, usize) {
-        let x = (x - self.delta_x -EDITOR_LEFT_PADDING).max(0.);
+        let x = (x - self.delta_x - EDITOR_LEFT_PADDING).max(0.);
         let y = (y - self.delta_y).max(0.);
         let line = ((y / self.metrics.font_height) as usize).min(editor.len_lines() - 1);
 
@@ -1006,8 +1066,8 @@ impl EditorView {
 
         let hit = layout.hit_test_text_position(i[caret.relative().index].index);
         let x = hit.point.x;
-        if x > -self.delta_x + self.size.width - self.metrics.font_advance -EDITOR_LEFT_PADDING {
-            self.delta_x = -x + self.size.width - self.metrics.font_advance -EDITOR_LEFT_PADDING;
+        if x > -self.delta_x + self.size.width - self.metrics.font_advance - EDITOR_LEFT_PADDING {
+            self.delta_x = -x + self.size.width - self.metrics.font_advance - EDITOR_LEFT_PADDING;
         }
         if x < -self.delta_x {
             self.delta_x = -x;
@@ -1017,6 +1077,11 @@ impl EditorView {
             (Some(self.delta_x), Some(self.delta_y)),
             self.owner_id,
         ));
+    }
+
+    fn invalidate_highlight_cache(&mut self, editor: &EditStack) {
+        let line = editor.main_caret().start_line(&editor.buffer);
+        self.highlight_cache.invalidate(line.index)
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -1184,9 +1249,9 @@ impl Gutter {
 
         ctx.render_ctx.stroke(
             Line::new(
-                ((self.width(editor) - self.metrics.font_advance).ceil()+0.5, 0.),
+                ((self.width(editor) - self.metrics.font_advance).ceil() + 0.5, 0.),
                 (
-                    (self.width(editor) - self.metrics.font_advance).ceil()+0.5,
+                    (self.width(editor) - self.metrics.font_advance).ceil() + 0.5,
                     self.size.height,
                 ),
             ),
@@ -1248,9 +1313,19 @@ impl ScrollBar {
 
     fn rect(&self) -> Rect {
         if self.is_vertical() {
-            Rect::new(0.0, self.range.start, self.metrics.font_advance + SCROLLBAR_X_PADDING, self.range.end)
+            Rect::new(
+                0.0,
+                self.range.start,
+                self.metrics.font_advance + SCROLLBAR_X_PADDING,
+                self.range.end,
+            )
         } else {
-            Rect::new(self.range.start, 0.0, self.range.end, self.metrics.font_advance + SCROLLBAR_X_PADDING)
+            Rect::new(
+                self.range.start,
+                0.0,
+                self.range.end,
+                self.metrics.font_advance + SCROLLBAR_X_PADDING,
+            )
         }
     }
 
@@ -1427,7 +1502,10 @@ impl Widget<EditStack> for ScrollBarSpacer {
 
     fn layout(&mut self, _ctx: &mut LayoutCtx, _bc: &BoxConstraints, _data: &EditStack, env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(env);
-        Size::new(self.metrics.font_advance + SCROLLBAR_X_PADDING, self.metrics.font_advance + SCROLLBAR_X_PADDING)
+        Size::new(
+            self.metrics.font_advance + SCROLLBAR_X_PADDING,
+            self.metrics.font_advance + SCROLLBAR_X_PADDING,
+        )
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, _data: &EditStack, env: &Env) {

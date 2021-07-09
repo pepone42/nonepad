@@ -295,6 +295,9 @@ impl Line {
             Some(Self { index: self.index + 1 })
         }
     }
+    pub fn to_string(&self, buffer: &Buffer) -> String {
+        buffer.line_slice(*self).to_string()
+    }
     pub fn displayable_string(
         &self,
         buffer: &Buffer,

@@ -1,18 +1,22 @@
 use chardetng::EncodingDetector;
 use encoding_rs::{Encoding, UTF_8};
 use ropey::{Rope, RopeSlice};
+use syntect::parsing::SyntaxReference;
 use std::borrow::Cow;
 use std::fs;
 use std::io::{Read, Result, Write};
 use std::{fmt::Display, path::Path};
+use crate::syntax::SYNTAXSET;
+
 use super::buffer::Buffer;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TextFileInfo {
     pub encoding: &'static Encoding,
     pub bom: Option<Vec<u8>>,
     pub linefeed: LineFeed,
     pub indentation: Indentation,
+    pub syntax: &'static SyntaxReference
 }
 
 impl Default for TextFileInfo {
@@ -22,7 +26,14 @@ impl Default for TextFileInfo {
             bom: None,
             linefeed: Default::default(),
             indentation: Default::default(),
+            syntax: SYNTAXSET.find_syntax_plain_text(),
         }
+    }
+}
+
+impl PartialEq for TextFileInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.encoding == other.encoding && self.bom == other.bom && self.linefeed == other.linefeed && self.indentation == other.indentation && self.syntax.name == other.syntax.name
     }
 }
 
@@ -100,26 +111,43 @@ impl LineFeed {
 
 impl TextFileInfo {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<(TextFileInfo, Rope)> {
+        let syntax = if let Ok(s ) = SYNTAXSET.find_syntax_for_file(&path) {
+            s.unwrap_or_else(|| SYNTAXSET.find_syntax_plain_text())
+        } else {
+            SYNTAXSET.find_syntax_plain_text()
+        };
+
+        //let syntax = SYNTAXSET.find_syntax_by_extension(&std::path::Path::extension(path.as_ref()).unwrap_or(&OsString::from("")).to_string_lossy()).unwrap_or_else(|| SYNTAXSET.find_syntax_plain_text());
         let mut file = fs::File::open(&path)?;
+
         let mut detector = EncodingDetector::new();
         let mut vec = Vec::new();
         file.read_to_end(&mut vec)?;
 
+        
+
         detector.feed(&vec, true);
         let encoding = Encoding::for_bom(&vec);
+        
+        
 
         match encoding {
             None => {
                 let encoding = detector.guess(None, true);
+                
                 let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
+
+                //crate::syntax::stats(buffer.to_string(), syntax);
+
                 Ok((
                     TextFileInfo {
                         encoding,
                         bom: None,
                         linefeed,
                         indentation,
+                        syntax
                     },
                     buffer,
                 ))
@@ -133,12 +161,16 @@ impl TextFileInfo {
                 let buffer = Rope::from_str(&encoding.decode_with_bom_removal(&vec).0);
                 let linefeed = detect_linefeed(&buffer.slice(..));
                 let indentation = detect_indentation(&buffer.slice(..));
+
+                //crate::syntax::stats(buffer.to_string(), syntax);
+
                 Ok((
                     TextFileInfo {
                         encoding,
                         bom: Some(bom),
                         linefeed,
                         indentation,
+                        syntax
                     },
                     buffer,
                 ))
