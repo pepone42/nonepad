@@ -293,8 +293,9 @@ impl Widget<EditStack> for EditorView {
                         key: druid::keyboard_types::Key::Tab,
                         ..
                     } => {
+                        self.invalidate_highlight_cache(editor);
                         editor.tab();
-                        self.highlight_cache.invalidate(0);
+
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
@@ -312,16 +313,18 @@ impl Widget<EditStack> for EditorView {
                 }
 
                 if HotKey::new(None, druid::keyboard_types::Key::Backspace).matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.backspace();
-                    self.highlight_cache.invalidate(0);
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(None, druid::keyboard_types::Key::Delete).matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.delete();
-                    self.highlight_cache.invalidate(0);
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -330,8 +333,9 @@ impl Widget<EditStack> for EditorView {
 
                 if HotKey::new(None, druid::keyboard_types::Key::Enter).matches(event) {
                     // || HotKey::new(None, druid::keyboard_types::Key::Return).matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.insert(editor.file.linefeed.to_str());
-                    self.highlight_cache.invalidate(0);
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -345,8 +349,8 @@ impl Widget<EditStack> for EditorView {
                         let data = clipboard
                             .get_format(format)
                             .expect("I promise not to unwrap in production");
+                        self.invalidate_highlight_cache(editor);
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
-                        self.highlight_cache.invalidate(0);
                     }
                     self.put_caret_in_visible_range(ctx, editor);
                     // TODO: The bug is fixed.
@@ -368,8 +372,9 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "x").matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
+                    self.invalidate_highlight_cache(editor);
                     editor.delete();
-                    self.highlight_cache.invalidate(0);
+
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -381,16 +386,18 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "z").matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.undo();
-                    self.highlight_cache.invalidate(0);
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "y").matches(event) {
+                    self.invalidate_highlight_cache(editor);
                     editor.redo();
-                    self.highlight_cache.invalidate(0);
+
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -464,8 +471,9 @@ impl Widget<EditStack> for EditorView {
                     if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
                         return;
                     }
+                    self.invalidate_highlight_cache(editor);
                     editor.insert(&text);
-                    self.highlight_cache.invalidate(0);
+
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -1069,6 +1077,11 @@ impl EditorView {
             (Some(self.delta_x), Some(self.delta_y)),
             self.owner_id,
         ));
+    }
+
+    fn invalidate_highlight_cache(&mut self, editor: &EditStack) {
+        let line = editor.main_caret().start_line(&editor.buffer);
+        self.highlight_cache.invalidate(line.index)
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
