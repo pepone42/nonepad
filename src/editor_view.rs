@@ -404,7 +404,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "o").matches(event) {
                     if editor.is_dirty()
-                        && MessageDialog::new()
+                        && !MessageDialog::new()
                             .set_level(rfd::MessageLevel::Warning)
                             .set_title("Are you sure?")
                             .set_description("Discard unsaved change?")
