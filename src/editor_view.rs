@@ -173,11 +173,13 @@ pub struct EditorView {
 
 impl Widget<EditStack> for EditorView {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
+        
         match event {
             Event::WindowConnected => {
                 ctx.request_focus();
             }
             Event::KeyDown(event) => {
+                crate::commands::COMMANDSET.hotkey_submit(ctx, event);
                 // if HotKey::new(SysMods::CmdShift, Key::KeyP).matches(event) {
                 //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
                 //     _ctx.request_paint();
@@ -293,9 +295,9 @@ impl Widget<EditStack> for EditorView {
                         key: druid::keyboard_types::Key::Tab,
                         ..
                     } => {
-                        self.invalidate_highlight_cache(editor);
+                        
                         editor.tab();
-
+                        self.invalidate_highlight_cache(editor);
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
@@ -313,18 +315,18 @@ impl Widget<EditStack> for EditorView {
                 }
 
                 if HotKey::new(None, druid::keyboard_types::Key::Backspace).matches(event) {
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.backspace();
-
+                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(None, druid::keyboard_types::Key::Delete).matches(event) {
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.delete();
-
+                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -333,9 +335,9 @@ impl Widget<EditStack> for EditorView {
 
                 if HotKey::new(None, druid::keyboard_types::Key::Enter).matches(event) {
                     // || HotKey::new(None, druid::keyboard_types::Key::Return).matches(event) {
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.insert(editor.file.linefeed.to_str());
-
+                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -349,8 +351,9 @@ impl Widget<EditStack> for EditorView {
                         let data = clipboard
                             .get_format(format)
                             .expect("I promise not to unwrap in production");
-                        self.invalidate_highlight_cache(editor);
+                        
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
+                        self.invalidate_highlight_cache(editor);
                     }
                     self.put_caret_in_visible_range(ctx, editor);
                     // TODO: The bug is fixed.
@@ -372,9 +375,9 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "x").matches(event) {
                     Application::global().clipboard().put_string(editor.selected_text());
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.delete();
-
+                    self.invalidate_highlight_cache(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -386,18 +389,18 @@ impl Widget<EditStack> for EditorView {
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "z").matches(event) {
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.undo();
-
+                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
                 }
                 if HotKey::new(SysMods::Cmd, "y").matches(event) {
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.redo();
-
+                    self.invalidate_highlight_cache(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -471,9 +474,9 @@ impl Widget<EditStack> for EditorView {
                     if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
                         return;
                     }
-                    self.invalidate_highlight_cache(editor);
+                    
                     editor.insert(&text);
-
+                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -577,6 +580,9 @@ impl Widget<EditStack> for EditorView {
                         ctx.set_handled();
                     }
                 }
+            }
+
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
             }
 
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
@@ -956,6 +962,7 @@ impl EditorView {
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
+            
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let mut layout = ctx
                 .render_ctx
