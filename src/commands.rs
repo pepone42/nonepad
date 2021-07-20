@@ -1,7 +1,9 @@
 use std::borrow::Borrow;
 
-use druid::{Command, EventCtx, HotKey, KeyEvent, Selector, SysMods, Target};
+use druid::{Command, EventCtx, HotKey, KeyEvent, Selector, SysMods, Target, Widget};
 use once_cell::sync::Lazy;
+
+use crate::{editor_view::EditorView, text_buffer::EditStack};
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
 pub const SEND_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
@@ -11,6 +13,7 @@ pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.
 pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
 pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
+
 
 pub trait UICmd {
     fn matches(&self, event: &KeyEvent) -> bool;
@@ -47,15 +50,42 @@ impl UICommandSet {
     }
 }
 
-pub static COMMANDSET: Lazy<UICommandSet> = Lazy::new(|| {
-    let mut v = UICommandSet::new();
-    v.commands.push(UICommand::new(
-        "Change the language of the file",
-        "nonepad.editor.language",
-        Some(HotKey::new(SysMods::CmdShift, "l")),
-    ));
-    v
-});
+fn string_to_hotkey(input: &str) -> Option<HotKey> {
+    let t: Vec<&str>= input.split('-').collect();
+    if t.len()!=2 {
+        return None;
+    }
+    let mods = match t[0] {
+        "Ctrl" => SysMods::Cmd,
+        "CtrlShift" => SysMods::CmdShift,
+        "CtrlAlt" => SysMods::AltCmd,
+        "Shift" => SysMods::Shift,
+        "CtrlAltShift" => SysMods::AltCmdShift,
+        _ => SysMods::None,
+    };
+    Some(HotKey::new(mods, t[1]))
+}
+
+pub const EDITOR_VIEW_UICMD: Selector<Box<dyn FnOnce(EditorView, EventCtx, EditStack)>> = Selector::new("nonepad.editor.uicmd");
+
+macro_rules! uicmd {
+    ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, |$self:ident $(:&mut impl Widget)?, $ctx:ident, $data:ident| $b:expr));+ $(;)? } ) => {
+        $(pub const $command: Selector<()> = Selector::new(stringify!("nonepad.palcmd",$command));)+
+        
+        pub static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
+            let mut v = UICommandSet::new();
+            $(v.commands.push(UICommand::new($description,$command,string_to_hotkey($hotkey)));)+
+            v
+        });
+    };
+}
+
+uicmd! {
+    COMMANDSET = {
+        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","Ctrl-l", |_s,_c,d| {});
+    }
+}
+
 pub trait CommandEmmeterCtx {
     fn submit_command(&mut self, cmd: impl Into<Command>);
 }
@@ -67,10 +97,10 @@ impl CommandEmmeterCtx for EventCtx<'_, '_> {
 }
 
 impl UICommand {
-    pub fn new(description: &str, selector: &'static str, shortcut: Option<druid::HotKey>) -> Self {
+    pub fn new(description: &str, selector: Selector, shortcut: Option<druid::HotKey>) -> Self {
         Self {
             description: description.to_owned(),
-            selector: Selector::<()>::new(selector),
+            selector: selector,
             shortcut,
         }
     }

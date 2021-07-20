@@ -179,7 +179,7 @@ impl Widget<EditStack> for EditorView {
                 ctx.request_focus();
             }
             Event::KeyDown(event) => {
-                crate::commands::COMMANDSET.hotkey_submit(ctx, event);
+                commands::COMMANDSET.hotkey_submit(ctx, event);
                 // if HotKey::new(SysMods::CmdShift, Key::KeyP).matches(event) {
                 //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
                 //     _ctx.request_paint();
@@ -446,7 +446,7 @@ impl Widget<EditStack> for EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
-                        crate::commands::SHOW_SEARCH_PANEL,
+                        commands::SHOW_SEARCH_PANEL,
                         editor.main_cursor_selected_text(),
                         Target::Global,
                     ));
@@ -582,7 +582,8 @@ impl Widget<EditStack> for EditorView {
                 }
             }
 
-            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
+            Event::Command(cmd) if cmd.is(commands::PALCMD_CHANGE_LANGUAGE) => {
+                dbg!("It Work!");
             }
 
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
@@ -611,22 +612,22 @@ impl Widget<EditStack> for EditorView {
                     }
                 }
             }
-            Event::Command(cmd) if cmd.is(crate::commands::REQUEST_NEXT_SEARCH) => {
-                if let Some(data) = cmd.get(crate::commands::REQUEST_NEXT_SEARCH) {
+            Event::Command(cmd) if cmd.is(commands::REQUEST_NEXT_SEARCH) => {
+                if let Some(data) = cmd.get(commands::REQUEST_NEXT_SEARCH) {
                     editor.search_next(data);
                     self.put_caret_in_visible_range(ctx, editor);
                 }
                 ctx.set_handled();
             }
-            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
-            Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
-                let (line, expand) = *cmd.get_unchecked(crate::commands::SELECT_LINE);
+            Event::Command(cmd) if cmd.is(commands::GIVE_FOCUS) => ctx.request_focus(),
+            Event::Command(cmd) if cmd.is(commands::SELECT_LINE) => {
+                let (line, expand) = *cmd.get_unchecked(commands::SELECT_LINE);
                 editor.buffer.select_line(line.into(), expand);
                 self.put_caret_in_visible_range(ctx, editor);
                 ctx.set_handled();
             }
-            Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
-                let d = *cmd.get_unchecked(crate::commands::SCROLL_TO);
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                let d = *cmd.get_unchecked(commands::SCROLL_TO);
                 self.delta_x = d.0.unwrap_or(self.delta_x);
                 self.delta_y = d.1.unwrap_or(self.delta_y);
                 ctx.set_handled();
