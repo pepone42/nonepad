@@ -44,6 +44,10 @@ impl Buffer {
         }
     }
 
+    pub fn same_content(&self, other: &Buffer) -> bool {
+        self.uuid == other.uuid
+    }
+
     pub fn from_rope(rope: Rope, tabsize: usize) -> Self {
         let b = Self {
             rope,

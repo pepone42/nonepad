@@ -14,16 +14,15 @@ pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
 pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
 
-
 pub trait UICmd {
     fn matches(&self, event: &KeyEvent) -> bool;
 }
 
-#[derive(Debug)]
 pub struct UICommand {
     description: String,
     selector: Selector<()>,
     shortcut: Option<druid::HotKey>,
+    exec: fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool,
 }
 
 impl UICmd for UICommand {
@@ -41,18 +40,25 @@ impl UICommandSet {
         Self { commands: Vec::new() }
     }
 
-    pub fn hotkey_submit(&self, ctx: &mut impl CommandEmmeterCtx, event: impl Borrow<KeyEvent>) {
+    pub fn hotkey_submit(
+        &self,
+        ctx: &mut EventCtx,
+        event: impl Borrow<KeyEvent>,
+        editor_view: &mut EditorView,
+        editor: &mut EditStack,
+    ) {
         for c in &COMMANDSET.commands {
             if c.matches(event.borrow()) {
-                c.submit(ctx)
+                (c.exec)(editor_view, ctx, editor);
+                //c.submit(ctx)
             }
         }
     }
 }
 
 fn string_to_hotkey(input: &str) -> Option<HotKey> {
-    let t: Vec<&str>= input.split('-').collect();
-    if t.len()!=2 {
+    let t: Vec<&str> = input.split('-').collect();
+    if t.len() != 2 {
         return None;
     }
     let mods = match t[0] {
@@ -66,15 +72,16 @@ fn string_to_hotkey(input: &str) -> Option<HotKey> {
     Some(HotKey::new(mods, t[1]))
 }
 
-pub const EDITOR_VIEW_UICMD: Selector<Box<dyn FnOnce(EditorView, EventCtx, EditStack)>> = Selector::new("nonepad.editor.uicmd");
+pub const EDITOR_VIEW_UICMD: Selector<Box<dyn FnOnce(EditorView, EventCtx, EditStack)>> =
+    Selector::new("nonepad.editor.uicmd");
 
 macro_rules! uicmd {
-    ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, |$self:ident $(:&mut impl Widget)?, $ctx:ident, $data:ident| $b:expr));+ $(;)? } ) => {
+    ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, $b:expr));+ $(;)? } ) => {
         $(pub const $command: Selector<()> = Selector::new(stringify!("nonepad.palcmd",$command));)+
-        
+
         pub static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
             let mut v = UICommandSet::new();
-            $(v.commands.push(UICommand::new($description,$command,string_to_hotkey($hotkey)));)+
+            $(v.commands.push(UICommand::new($description,$command,string_to_hotkey($hotkey), $b ));)+
             v
         });
     };
@@ -82,7 +89,12 @@ macro_rules! uicmd {
 
 uicmd! {
     COMMANDSET = {
-        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","Ctrl-l", |_s,_c,d| {});
+        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","Ctrl-l",
+        |editor_view, ctx, editor| {
+            dbg!("youhou!");
+            editor.tab();
+            true
+        });
     }
 }
 
@@ -97,15 +109,27 @@ impl CommandEmmeterCtx for EventCtx<'_, '_> {
 }
 
 impl UICommand {
-    pub fn new(description: &str, selector: Selector, shortcut: Option<druid::HotKey>) -> Self {
+    pub fn new(
+        description: &str,
+        selector: Selector,
+        shortcut: Option<druid::HotKey>,
+        exec: fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool,
+    ) -> Self {
         Self {
             description: description.to_owned(),
             selector: selector,
             shortcut,
+            exec,
         }
     }
-    pub fn submit<C: CommandEmmeterCtx>(&'static self, ctx: &mut C) {
+    pub fn submit<C: CommandEmmeterCtx>(
+        &'static self,
+        editor_view: &mut EditorView,
+        ctx: &mut C,
+        editor: &mut EditStack,
+    ) {
         // TODO (mpe): Specify target
+
         ctx.submit_command(Command::new(self.selector, (), Target::Auto))
     }
 }

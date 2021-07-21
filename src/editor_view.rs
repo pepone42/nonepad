@@ -6,7 +6,7 @@ use crate::commands::SCROLL_TO;
 use crate::syntax::StateCache;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
-use druid::FontStyle;
+use druid::{Data, FontStyle};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -179,7 +179,7 @@ impl Widget<EditStack> for EditorView {
                 ctx.request_focus();
             }
             Event::KeyDown(event) => {
-                commands::COMMANDSET.hotkey_submit(ctx, event);
+                commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
                 // if HotKey::new(SysMods::CmdShift, Key::KeyP).matches(event) {
                 //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
                 //     _ctx.request_paint();
@@ -582,10 +582,6 @@ impl Widget<EditStack> for EditorView {
                 }
             }
 
-            Event::Command(cmd) if cmd.is(commands::PALCMD_CHANGE_LANGUAGE) => {
-                dbg!("It Work!");
-            }
-
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
                 if let Err(e) = self.save_as(editor, file_info.path()) {
@@ -651,7 +647,14 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
+        if !old_data.buffer.same_content(&data.buffer) {
+            self.invalidate_highlight_cache(data);
+            
+        }
+        
+        ctx.request_paint();
+    }
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
