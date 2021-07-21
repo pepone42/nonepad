@@ -295,7 +295,6 @@ impl Widget<EditStack> for EditorView {
                     } => {
                         
                         editor.tab();
-                        self.invalidate_highlight_cache(editor);
                         self.put_caret_in_visible_range(ctx, editor);
                         ctx.request_paint();
                         ctx.set_handled();
@@ -315,7 +314,6 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(None, druid::keyboard_types::Key::Backspace).matches(event) {
                     
                     editor.backspace();
-                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -324,7 +322,6 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(None, druid::keyboard_types::Key::Delete).matches(event) {
                     
                     editor.delete();
-                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -335,7 +332,6 @@ impl Widget<EditStack> for EditorView {
                     // || HotKey::new(None, druid::keyboard_types::Key::Return).matches(event) {
                     
                     editor.insert(editor.file.linefeed.to_str());
-                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -351,7 +347,6 @@ impl Widget<EditStack> for EditorView {
                             .expect("I promise not to unwrap in production");
                         
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
-                        self.invalidate_highlight_cache(editor);
                     }
                     self.put_caret_in_visible_range(ctx, editor);
                     // TODO: The bug is fixed.
@@ -375,7 +370,6 @@ impl Widget<EditStack> for EditorView {
                     Application::global().clipboard().put_string(editor.selected_text());
                     
                     editor.delete();
-                    self.invalidate_highlight_cache(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -389,7 +383,6 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(SysMods::Cmd, "z").matches(event) {
                     
                     editor.undo();
-                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -398,7 +391,6 @@ impl Widget<EditStack> for EditorView {
                 if HotKey::new(SysMods::Cmd, "y").matches(event) {
                     
                     editor.redo();
-                    self.invalidate_highlight_cache(editor);
                     ctx.request_paint();
                     ctx.set_handled();
                     return;
@@ -474,7 +466,6 @@ impl Widget<EditStack> for EditorView {
                     }
                     
                     editor.insert(&text);
-                    self.invalidate_highlight_cache(editor);
                     self.put_caret_in_visible_range(ctx, editor);
                     ctx.request_paint();
                     ctx.set_handled();
@@ -645,7 +636,14 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
+        if !old_data.buffer.same_content(&data.buffer) {
+            let line = old_data.main_caret().start_line(&old_data.buffer).min(data.main_caret().start_line(&data.buffer));
+            self.invalidate_highlight_cache(line);
+        }
+        
+        ctx.request_paint();
+    }
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.size = bc.max();
@@ -1080,8 +1078,8 @@ impl EditorView {
         ));
     }
 
-    fn invalidate_highlight_cache(&mut self, editor: &EditStack) {
-        let line = editor.main_caret().start_line(&editor.buffer);
+    fn invalidate_highlight_cache(&mut self, line: position::Line) {
+        
         self.highlight_cache.invalidate(line.index)
     }
 
