@@ -459,7 +459,7 @@ impl Buffer {
             .search_next_in_range(s, start_index..self.len())
             .or_else(|| self.search_next_in_range(s, 0.into()..start_index));
         if let Some(i) = i {
-            if self.carets.iter().find(|c| c.start() == i).is_none() {
+            if self.carets.iter().any(|c| c.start() == i) {
                 self.carets.sort_unstable();
                 let c = self.last_created_caret().duplicate_to(i, i + s.len(), &self);
                 self.carets.push(c);

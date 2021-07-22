@@ -38,6 +38,12 @@ impl Carets {
     }
 }
 
+impl Default for Carets {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Data for Carets {
     fn same(&self, other: &Self) -> bool {
         if self.intern.len() != other.intern.len() {

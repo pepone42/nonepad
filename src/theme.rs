@@ -430,7 +430,7 @@ impl Default for Theme {
     }
 }
 
-pub static THEME: Lazy<Theme> = Lazy::new(|| Theme::default());
+pub static THEME: Lazy<Theme> = Lazy::new(Theme::default);
 
 fn string_or_seq_string<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where

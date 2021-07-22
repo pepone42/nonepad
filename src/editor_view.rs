@@ -35,11 +35,6 @@ pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 pub const EDITOR_LEFT_PADDING: f64 = 2.;
 pub const SCROLLBAR_X_PADDING: f64 = 2.;
 
-// pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
-// pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
-// pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
-// pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
-
 #[derive(Debug, Default)]
 struct SelectionPath {
     elem: Vec<PathEl>,
@@ -111,7 +106,7 @@ impl CommonMetrics {
         }
     }
 
-    pub fn to_env(&self, env: &mut Env) {
+    pub fn to_env(self, env: &mut Env) {
         env.set(env::FONT_BASELINE, self.font_baseline);
         env.set(env::FONT_ADVANCE, self.font_advance);
         env.set(env::FONT_DESCENT, self.font_descent);
@@ -180,12 +175,12 @@ impl Widget<EditStack> for EditorView {
         let handled = self.handle_event(event, ctx, editor);
         if handled {
             ctx.set_handled();
-            //ctx.request_paint();
         }
         if !old_editor.buffer.same(&editor.buffer) {
             self.put_caret_in_visible_range(ctx, editor);
-            //ctx.request_paint();
         }
+
+        #[allow(clippy::float_cmp)] // The equality will be true if we don't touch at all at self.delta_[xy]
         if old_dx != self.delta_x || old_dy != self.delta_y {
             ctx.request_paint();
         }
@@ -255,7 +250,7 @@ impl EditorView {
         match event {
             Event::WindowConnected => {
                 ctx.request_focus();
-                return false;
+                false
             }
             Event::KeyDown(event) => {
                 match event {
@@ -370,18 +365,18 @@ impl EditorView {
                         ..
                     } => {
                         editor.delete();
-                    return true;
+                        return true;
                     }
                     KeyEvent {
                         key: druid::keyboard_types::Key::Enter,
                         ..
                     } => {
                         editor.insert(editor.file.linefeed.to_str());
-                    return true;
+                        return true;
                     }
                     _ => (),
                 }
-                
+
                 if HotKey::new(SysMods::Cmd, "v").matches(event) {
                     let clipboard = Application::global().clipboard();
                     let supported_types = &[ClipboardFormat::TEXT];
@@ -554,16 +549,15 @@ impl EditorView {
                 false
             }
             Event::WindowCloseRequested => {
-                if editor.is_dirty() {
-                    if !MessageDialog::new()
+                if editor.is_dirty()
+                    && !MessageDialog::new()
                         .set_level(rfd::MessageLevel::Warning)
                         .set_description("The currently opened editor is not saved. Do you really want to quit?")
                         .set_title("Not saved")
                         .set_buttons(rfd::MessageButtons::OkCancle)
                         .show()
-                    {
-                        return true;
-                    }
+                {
+                    return true;
                 }
                 false
             }
@@ -688,10 +682,10 @@ impl EditorView {
     ) {
         let e = layout.hit_test_text_position(range.end.into());
         match &path.last_range {
-            Some(SelectionLineRange::RangeFrom(_)) if range.end == position::Relative::from(0) => {
+            Some(SelectionLineRange::RangeFrom(_)) if range.end == 0 => {
                 path.push(PathEl::ClosePath);
             }
-            Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
+            Some(SelectionLineRange::RangeFull) if range.end == 0 => {
                 path.push(PathEl::LineTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::ClosePath);
             }
@@ -906,7 +900,7 @@ impl EditorView {
                 .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
-            let layout = if line_idx < editor.len_lines() {
+            if line_idx < editor.len_lines() {
                 let highlight = self
                     .highlight_cache
                     .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx);
@@ -925,12 +919,8 @@ impl EditorView {
                     }
                     layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
                 }
-                layout
-            } else {
-                layout
             }
-            .build()
-            .unwrap();
+            let layout = layout.build().unwrap();
 
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
 
@@ -976,13 +966,12 @@ impl EditorView {
 
     fn text_layout(&self, text: &mut PietText, buf: String) -> druid::piet::D2DTextLayout {
         let font = text.font_family(&self.font_name).unwrap();
-        let layout = text
+        text
             .new_text_layout(buf)
             .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, self.metrics.font_size)
             .build()
-            .unwrap();
-        layout
+            .unwrap()
     }
 
     fn put_caret_in_visible_range(&mut self, ctx: &mut EventCtx, editor: &EditStack) {

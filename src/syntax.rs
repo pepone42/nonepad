@@ -7,7 +7,7 @@ use syntect::{
 
 use crate::{text_buffer::buffer::Buffer, theme::THEME};
 
-pub static SYNTAXSET: Lazy<SyntaxSet> = Lazy::new(|| SyntaxSet::load_defaults_newlines());
+pub static SYNTAXSET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
 
 #[derive(Debug)]
 pub struct StateCache {
@@ -69,11 +69,9 @@ impl StateCache {
         buffer: &Buffer,
         line: usize,
     ) -> &[(Style, Range<usize>)] {
-        if self.is_cached(line) {
-            &self.highlighted_line[line]
-        } else {
+        if !self.is_cached(line) {
             self.update_range(syntax, buffer, line, line + 10);
-            &self.highlighted_line[line]
         }
+        &self.highlighted_line[line]
     }
 }

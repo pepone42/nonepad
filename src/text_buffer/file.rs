@@ -100,7 +100,7 @@ impl Default for Indentation {
 }
 
 impl LineFeed {
-    pub fn to_str(&self) -> &'static str {
+    pub fn to_str(self) -> &'static str {
         match self {
             LineFeed::Cr => "\r",
             LineFeed::Lf => "\n",
