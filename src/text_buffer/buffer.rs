@@ -15,7 +15,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct Buffer {
     rope: Rope,
-    carets: Carets,
+    pub carets: Carets,
     pub(super) tabsize: usize,
     uuid: Uuid,
     max_visible_line_grapheme_len: Cell<usize>,
@@ -23,7 +23,7 @@ pub struct Buffer {
 
 impl Data for Buffer {
     fn same(&self, other: &Self) -> bool {
-        self.uuid == other.uuid && self.carets == other.carets
+        self.uuid == other.uuid && self.carets.same(&other.carets)
     }
 }
 
@@ -454,14 +454,14 @@ impl Buffer {
     }
 
     pub fn duplicate_cursor_from_str(&mut self, s: &str) {
-        let start_index = self.last_caret().index;
+        let start_index = self.last_created_caret().index;
         let i = self
             .search_next_in_range(s, start_index..self.len())
             .or_else(|| self.search_next_in_range(s, 0.into()..start_index));
         if let Some(i) = i {
             if self.carets.iter().find(|c| c.start() == i).is_none() {
                 self.carets.sort_unstable();
-                let c = self.last_caret().duplicate_to(i, i + s.len(), &self);
+                let c = self.last_created_caret().duplicate_to(i, i + s.len(), &self);
                 self.carets.push(c);
             }
         }
@@ -471,7 +471,14 @@ impl Buffer {
         self.carets.iter().find(|c| !c.is_clone).expect("No main cursor found!")
     }
 
-    pub fn last_caret(&self) -> &Caret {
+    pub fn first_caret(&self) -> &Caret {
+        self.carets
+            .iter()
+            .min_by_key(|c| c.start())
+            .expect("No cursor found!")
+    }
+
+    pub fn last_created_caret(&self) -> &Caret {
         self.carets
             .iter()
             .max_by_key(|c| c.generation)
