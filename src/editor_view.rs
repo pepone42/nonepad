@@ -13,8 +13,7 @@ use druid::{
     widget::Flex,
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
     FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
-    UpdateCtx, Widget, WidgetExt, WidgetId,
-};
+    UpdateCtx, Widget, WidgetExt, WidgetId};
 
 use rfd::MessageDialog;
 
@@ -34,11 +33,6 @@ pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 pub const EDITOR_LEFT_PADDING: f64 = 2.;
 pub const SCROLLBAR_X_PADDING: f64 = 2.;
-
-// pub const BG_COLOR: Key<Color> = Key::new("nondepad.editor.fg_color");
-// pub const FG_COLOR: Key<Color> = Key::new("nondepad.editor.bg_color");
-// pub const FG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.fg_selection_color");
-// pub const BG_SEL_COLOR: Key<Color> = Key::new("nondepad.editor.bg_selection_color");
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -111,7 +105,7 @@ impl CommonMetrics {
         }
     }
 
-    pub fn to_env(&self, env: &mut Env) {
+    pub fn to_env(self, env: &mut Env) {
         env.set(env::FONT_BASELINE, self.font_baseline);
         env.set(env::FONT_ADVANCE, self.font_advance);
         env.set(env::FONT_DESCENT, self.font_descent);
@@ -173,466 +167,21 @@ pub struct EditorView {
 
 impl Widget<EditStack> for EditorView {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
-        
-        match event {
-            Event::WindowConnected => {
-                ctx.request_focus();
-            }
-            Event::KeyDown(event) => {
-                commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
-                // if HotKey::new(SysMods::CmdShift, Key::KeyP).matches(event) {
-                //     handle.app_ctx().open_palette(vec![], |u| println!("Palette result {}", u));
-                //     _ctx.request_paint();
-                //     return true;
-                // }
+        let old_dx = self.delta_x;
+        let old_dy = self.delta_y;
+        let old_editor = editor.clone();
 
-                if HotKey::new(SysMods::AltCmd, druid::keyboard_types::Key::ArrowDown).matches(event) {
-                    editor.duplicate_down();
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::AltCmd, druid::keyboard_types::Key::ArrowUp).matches(event) {
-                    editor.duplicate_up();
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                match event {
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::ArrowRight,
-                        mods,
-                        ..
-                    } => {
-                        editor.forward(mods.shift(), mods.ctrl());
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::ArrowLeft,
-                        mods,
-                        ..
-                    } => {
-                        editor.backward(mods.shift(), mods.ctrl());
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::ArrowUp,
-                        mods,
-                        ..
-                    } => {
-                        editor.up(mods.shift());
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::ArrowDown,
-                        mods,
-                        ..
-                    } => {
-                        editor.down(mods.shift());
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::PageUp,
-                        mods,
-                        ..
-                    } => {
-                        for _ in 0..self.page_len {
-                            editor.up(mods.shift());
-                        }
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::PageDown,
-                        mods,
-                        ..
-                    } => {
-                        for _ in 0..self.page_len {
-                            editor.down(mods.shift())
-                        }
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::End,
-                        mods,
-                        ..
-                    } => {
-                        editor.end(mods.shift());
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::Home,
-                        mods,
-                        ..
-                    } => {
-                        editor.home(mods.shift());
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    KeyEvent {
-                        key: druid::keyboard_types::Key::Tab,
-                        ..
-                    } => {
-                        
-                        editor.tab();
-                        self.invalidate_highlight_cache(editor);
-                        self.put_caret_in_visible_range(ctx, editor);
-                        ctx.request_paint();
-                        ctx.set_handled();
-                        return;
-                    }
-                    _ => (),
-                }
+        let handled = self.handle_event(event, ctx, editor);
+        if handled {
+            ctx.set_handled();
+        }
+        if !old_editor.buffer.same(&editor.buffer) {
+            self.put_caret_in_visible_range(ctx, editor);
+        }
 
-                if HotKey::new(None, druid::keyboard_types::Key::Escape).matches(event) {
-                    editor.cancel_mutli_carets();
-                    editor.cancel_selection();
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-
-                if HotKey::new(None, druid::keyboard_types::Key::Backspace).matches(event) {
-                    
-                    editor.backspace();
-                    self.invalidate_highlight_cache(editor);
-                    self.put_caret_in_visible_range(ctx, editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(None, druid::keyboard_types::Key::Delete).matches(event) {
-                    
-                    editor.delete();
-                    self.invalidate_highlight_cache(editor);
-                    self.put_caret_in_visible_range(ctx, editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-
-                if HotKey::new(None, druid::keyboard_types::Key::Enter).matches(event) {
-                    // || HotKey::new(None, druid::keyboard_types::Key::Return).matches(event) {
-                    
-                    editor.insert(editor.file.linefeed.to_str());
-                    self.invalidate_highlight_cache(editor);
-                    self.put_caret_in_visible_range(ctx, editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "v").matches(event) {
-                    let clipboard = Application::global().clipboard();
-                    let supported_types = &[ClipboardFormat::TEXT];
-                    let best_available_type = clipboard.preferred_format(supported_types);
-                    if let Some(format) = best_available_type {
-                        let data = clipboard
-                            .get_format(format)
-                            .expect("I promise not to unwrap in production");
-                        
-                        editor.insert(String::from_utf8_lossy(&data).as_ref());
-                        self.invalidate_highlight_cache(editor);
-                    }
-                    self.put_caret_in_visible_range(ctx, editor);
-                    // TODO: The bug is fixed.
-                    // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
-                    // get_format correctly close the slipboard
-                    // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
-                    // editor.insert(&dbg!(s));
-
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "c").matches(event) {
-                    Application::global().clipboard().put_string(editor.selected_text());
-
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "x").matches(event) {
-                    Application::global().clipboard().put_string(editor.selected_text());
-                    
-                    editor.delete();
-                    self.invalidate_highlight_cache(editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "a").matches(event) {
-                    editor.select_all();
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "z").matches(event) {
-                    
-                    editor.undo();
-                    self.invalidate_highlight_cache(editor);
-                    self.put_caret_in_visible_range(ctx, editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "y").matches(event) {
-                    
-                    editor.redo();
-                    self.invalidate_highlight_cache(editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "o").matches(event) {
-                    if editor.is_dirty()
-                        && !MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Warning)
-                            .set_title("Are you sure?")
-                            .set_description("Discard unsaved change?")
-                            .set_buttons(rfd::MessageButtons::YesNo)
-                            .show()
-                    {
-                        ctx.set_handled();
-                        return;
-                    }
-
-                    let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "s").matches(event) {
-                    //self.save(editor, ctx);
-                    if editor.filename.is_some() {
-                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
-                    } else {
-                        let options = FileDialogOptions::new().show_hidden();
-                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
-                    }
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::CmdShift, "s").matches(event) {
-                    let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
-
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "f").matches(event) {
-                    ctx.submit_command(Command::new(
-                        commands::SHOW_SEARCH_PANEL,
-                        editor.main_cursor_selected_text(),
-                        Target::Global,
-                    ));
-
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-                if HotKey::new(SysMods::Cmd, "d").matches(event) {
-                    // if editor.has_many_carets() {
-                    //     duplicate_cursor_from_str()
-                    // } else {
-
-                    // }
-                    editor
-                        .buffer
-                        .duplicate_cursor_from_str(&editor.main_cursor_selected_text());
-                    // self.put_caret_in_visible_range(ctx, editor);
-                }
-
-                if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
-                    if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
-                        return;
-                    }
-                    if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
-                        return;
-                    }
-                    
-                    editor.insert(&text);
-                    self.invalidate_highlight_cache(editor);
-                    self.put_caret_in_visible_range(ctx, editor);
-                    ctx.request_paint();
-                    ctx.set_handled();
-                    return;
-                }
-            }
-            Event::Wheel(event) => {
-                // if editor.len_lines() as f64 * self.metrics.font_height >= ctx.size().height {
-                //     self.delta_y -= event.wheel_delta.y;
-                //     if self.delta_y > 0. {
-                //         self.delta_y = 0.;
-                //     }
-                //     if -self.delta_y
-                //         > editor.len_lines() as f64 * self.metrics.font_height - 4. * self.metrics.font_height
-                //     {
-                //         self.delta_y =
-                //             -((editor.len_lines() as f64) * self.metrics.font_height - 4. * self.metrics.font_height)
-                //     }
-                // }
-
-                ctx.submit_command(Command::new(
-                    commands::SCROLL_TO,
-                    (
-                        Some(self.delta_x - event.wheel_delta.x),
-                        Some(self.delta_y - event.wheel_delta.y),
-                    ),
-                    self.owner_id,
-                ));
-
-                // self.delta_x -= event.wheel_delta.x;
-                // if self.delta_x > 0. {
-                //     self.delta_x = 0.;
-                // }
-                if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
-                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
-                    let p = editor.point(x, y);
-                    editor.move_main_caret_to(p, true, false);
-                    self.put_caret_in_visible_range(ctx, editor);
-                }
-                ctx.request_paint();
-                ctx.set_handled();
-            }
-            Event::MouseDown(event) => {
-                if matches!(event.button, MouseButton::Left) {
-                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
-                    editor.cancel_mutli_carets();
-                    // FIXME: Update is not called if the caret position is not modified,
-                    let p = editor.point(x, y);
-                    match event.count {
-                        1 => {
-                            editor.move_main_caret_to(p, event.mods.shift(), false);
-                            self.held_state = HeldState::Grapheme;
-                        }
-                        2 => {
-                            editor.move_main_caret_to(p, event.mods.shift(), true);
-                            self.held_state = HeldState::Word;
-                        }
-                        3 => {
-                            editor.select_line(p.line, event.mods.shift());
-                            self.held_state = HeldState::Line;
-                        }
-                        4 => {
-                            editor.select_all();
-                            self.held_state = HeldState::None;
-                        }
-                        _ => (),
-                    }
-                    ctx.set_active(true);
-                }
-                ctx.request_focus();
-                ctx.request_paint();
-                ctx.set_handled();
-            }
-            Event::MouseUp(_event) => {
-                ctx.set_active(false);
-                ctx.set_handled();
-                self.held_state = HeldState::None;
-            }
-            Event::MouseMove(event) => {
-                if self.held_state.is_held() && ctx.is_active() && event.buttons.contains(MouseButton::Left) {
-                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
-                    let p = editor.point(x, y);
-                    match self.held_state {
-                        HeldState::Grapheme => editor.move_main_caret_to(p, true, false),
-                        HeldState::Word => editor.move_main_caret_to(p, true, true),
-                        HeldState::Line => editor.select_line(p.line, true),
-                        HeldState::None => unreachable!(),
-                    }
-                    self.put_caret_in_visible_range(ctx, editor);
-                }
-            }
-            Event::WindowCloseRequested => {
-                if editor.is_dirty() {
-                    if !MessageDialog::new()
-                        .set_level(rfd::MessageLevel::Warning)
-                        .set_description("The currently opened editor is not saved. Do you really want to quit?")
-                        .set_title("Not saved")
-                        .set_buttons(rfd::MessageButtons::OkCancle)
-                        .show()
-                    {
-                        ctx.set_handled();
-                    }
-                }
-            }
-
-            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
-                let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
-                if let Err(e) = self.save_as(editor, file_info.path()) {
-                    println!("Error writing file: {}", e);
-                }
-                ctx.set_handled();
-            }
-            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
-                if let Err(e) = self.save(editor) {
-                    println!("Error writing file: {}", e);
-                }
-
-                ctx.set_handled();
-            }
-            Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
-                if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
-                    if let Err(e) = self.open(editor, file_info.path()) {
-                        MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Error)
-                            .set_title("Error")
-                            .set_description(&format!("Error loading file {}", e))
-                            .set_buttons(rfd::MessageButtons::Ok)
-                            .show();
-                    }
-                }
-            }
-            Event::Command(cmd) if cmd.is(commands::REQUEST_NEXT_SEARCH) => {
-                if let Some(data) = cmd.get(commands::REQUEST_NEXT_SEARCH) {
-                    editor.search_next(data);
-                    self.put_caret_in_visible_range(ctx, editor);
-                }
-                ctx.set_handled();
-            }
-            Event::Command(cmd) if cmd.is(commands::GIVE_FOCUS) => ctx.request_focus(),
-            Event::Command(cmd) if cmd.is(commands::SELECT_LINE) => {
-                let (line, expand) = *cmd.get_unchecked(commands::SELECT_LINE);
-                editor.buffer.select_line(line.into(), expand);
-                self.put_caret_in_visible_range(ctx, editor);
-                ctx.set_handled();
-            }
-            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
-                let d = *cmd.get_unchecked(commands::SCROLL_TO);
-                self.delta_x = d.0.unwrap_or(self.delta_x);
-                self.delta_y = d.1.unwrap_or(self.delta_y);
-                ctx.set_handled();
-                ctx.request_paint();
-            }
-            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
-                self.held_state = HeldState::None;
-            }
-            _ => (),
+        #[allow(clippy::float_cmp)] // The equality will be true if we don't touch at all at self.delta_[xy]
+        if old_dx != self.delta_x || old_dy != self.delta_y {
+            ctx.request_paint();
         }
     }
 
@@ -649,11 +198,15 @@ impl Widget<EditStack> for EditorView {
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
         if !old_data.buffer.same_content(&data.buffer) {
-            self.invalidate_highlight_cache(data);
-            
+            let line = old_data
+                .first_caret()
+                .start_line(&old_data.buffer)
+                .min(data.first_caret().start_line(&data.buffer));
+            self.invalidate_highlight_cache(line);
         }
-        
-        ctx.request_paint();
+        if !old_data.same(data) {
+            ctx.request_paint();
+        }
     }
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
@@ -691,6 +244,377 @@ impl EditorView {
             highlight_cache: StateCache::new(),
         }
     }
+
+    fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
+        match event {
+            Event::WindowConnected => {
+                ctx.request_focus();
+                false
+            }
+            Event::KeyDown(event) => {
+                match event {
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowDown,
+                        mods,
+                        ..
+                    } if mods.alt() && mods.ctrl() => {
+                        editor.duplicate_down();
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowUp,
+                        mods,
+                        ..
+                    } if mods.alt() && mods.ctrl() => {
+                        editor.duplicate_up();
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowRight,
+                        mods,
+                        ..
+                    } => {
+                        editor.forward(mods.shift(), mods.ctrl());
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowLeft,
+                        mods,
+                        ..
+                    } => {
+                        editor.backward(mods.shift(), mods.ctrl());
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowUp,
+                        mods,
+                        ..
+                    } => {
+                        editor.up(mods.shift());
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowDown,
+                        mods,
+                        ..
+                    } => {
+                        editor.down(mods.shift());
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::PageUp,
+                        mods,
+                        ..
+                    } => {
+                        for _ in 0..self.page_len {
+                            editor.up(mods.shift());
+                        }
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::PageDown,
+                        mods,
+                        ..
+                    } => {
+                        for _ in 0..self.page_len {
+                            editor.down(mods.shift())
+                        }
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::End,
+                        mods,
+                        ..
+                    } => {
+                        editor.end(mods.shift());
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::Home,
+                        mods,
+                        ..
+                    } => {
+                        editor.home(mods.shift());
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::Tab,
+                        ..
+                    } => {
+                        editor.tab();
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::Escape,
+                        ..
+                    } => {
+                        editor.cancel_mutli_carets();
+                        editor.cancel_selection();
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::Backspace,
+                        ..
+                    } => {
+                        editor.backspace();
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::Delete,
+                        ..
+                    } => {
+                        editor.delete();
+                        return true;
+                    }
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::Enter,
+                        ..
+                    } => {
+                        editor.insert(editor.file.linefeed.to_str());
+                        return true;
+                    }
+                    _ => (),
+                }
+
+                if HotKey::new(SysMods::Cmd, "v").matches(event) {
+                    let clipboard = Application::global().clipboard();
+                    let supported_types = &[ClipboardFormat::TEXT];
+                    let best_available_type = clipboard.preferred_format(supported_types);
+                    if let Some(format) = best_available_type {
+                        let data = clipboard
+                            .get_format(format)
+                            .expect("I promise not to unwrap in production");
+                        editor.insert(String::from_utf8_lossy(&data).as_ref());
+                    }
+
+                    // TODO: The bug is fixed.
+                    // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
+                    // get_format correctly close the slipboard
+                    // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
+                    // editor.insert(&dbg!(s));
+
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "c").matches(event) {
+                    Application::global().clipboard().put_string(editor.selected_text());
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "x").matches(event) {
+                    Application::global().clipboard().put_string(editor.selected_text());
+                    editor.delete();
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "a").matches(event) {
+                    editor.select_all();
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "z").matches(event) {
+                    editor.undo();
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "y").matches(event) {
+                    editor.redo();
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "o").matches(event) {
+                    if editor.is_dirty()
+                        && !MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Warning)
+                            .set_title("Are you sure?")
+                            .set_description("Discard unsaved change?")
+                            .set_buttons(rfd::MessageButtons::YesNo)
+                            .show()
+                    {
+                        return true;
+                    }
+
+                    let options = FileDialogOptions::new().show_hidden();
+                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "s").matches(event) {
+                    //self.save(editor, ctx);
+                    if editor.filename.is_some() {
+                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
+                    } else {
+                        let options = FileDialogOptions::new().show_hidden();
+                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
+                    }
+                    return true;
+                }
+                if HotKey::new(SysMods::CmdShift, "s").matches(event) {
+                    let options = FileDialogOptions::new().show_hidden();
+                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "f").matches(event) {
+                    ctx.submit_command(Command::new(
+                        commands::SHOW_SEARCH_PANEL,
+                        editor.main_cursor_selected_text(),
+                        Target::Global,
+                    ));
+                    return true;
+                }
+                if HotKey::new(SysMods::Cmd, "d").matches(event) {
+                    editor
+                        .buffer
+                        .duplicate_cursor_from_str(&editor.main_cursor_selected_text());
+                    // TODO: put the last duplicated carret in visible range
+                    // self.put_caret_in_visible_range(ctx, editor);
+                }
+
+                if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
+                    if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
+                        return false;
+                    }
+                    if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
+                        return false;
+                    }
+
+                    editor.insert(&text);
+                    return true;
+                }
+                false
+            }
+            Event::Wheel(event) => {
+                ctx.submit_command(Command::new(
+                    commands::SCROLL_TO,
+                    (
+                        Some(self.delta_x - event.wheel_delta.x),
+                        Some(self.delta_y - event.wheel_delta.y),
+                    ),
+                    self.owner_id,
+                ));
+
+                if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
+                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
+                    let p = editor.point(x, y);
+                    editor.move_main_caret_to(p, true, false);
+                }
+                ctx.request_paint();
+                ctx.set_handled();
+                true
+            }
+            Event::MouseDown(event) => {
+                if matches!(event.button, MouseButton::Left) {
+                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
+                    editor.cancel_mutli_carets();
+                    // FIXME: Update is not called if the caret position is not modified,
+                    let p = editor.point(x, y);
+                    match event.count {
+                        1 => {
+                            editor.move_main_caret_to(p, event.mods.shift(), false);
+                            self.held_state = HeldState::Grapheme;
+                        }
+                        2 => {
+                            editor.move_main_caret_to(p, event.mods.shift(), true);
+                            self.held_state = HeldState::Word;
+                        }
+                        3 => {
+                            editor.select_line(p.line, event.mods.shift());
+                            self.held_state = HeldState::Line;
+                        }
+                        4 => {
+                            editor.select_all();
+                            self.held_state = HeldState::None;
+                        }
+                        _ => (),
+                    }
+                    ctx.set_active(true);
+                }
+                ctx.request_focus();
+                ctx.request_paint();
+                ctx.set_handled();
+                true
+            }
+            Event::MouseUp(_event) => {
+                ctx.set_active(false);
+                self.held_state = HeldState::None;
+                true
+            }
+            Event::MouseMove(event) => {
+                if self.held_state.is_held() && ctx.is_active() && event.buttons.contains(MouseButton::Left) {
+                    let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
+                    let p = editor.point(x, y);
+                    match self.held_state {
+                        HeldState::Grapheme => editor.move_main_caret_to(p, true, false),
+                        HeldState::Word => editor.move_main_caret_to(p, true, true),
+                        HeldState::Line => editor.select_line(p.line, true),
+                        HeldState::None => unreachable!(),
+                    }
+                    return true;
+                }
+                false
+            }
+            Event::WindowCloseRequested => {
+                if editor.is_dirty()
+                    && !MessageDialog::new()
+                        .set_level(rfd::MessageLevel::Warning)
+                        .set_description("The currently opened editor is not saved. Do you really want to quit?")
+                        .set_title("Not saved")
+                        .set_buttons(rfd::MessageButtons::OkCancel)
+                        .show()
+                {
+                    return true;
+                }
+                false
+            }
+
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
+                let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
+                if let Err(e) = self.save_as(editor, file_info.path()) {
+                    println!("Error writing file: {}", e);
+                }
+                true
+            }
+            Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
+                if let Err(e) = self.save(editor) {
+                    println!("Error writing file: {}", e);
+                }
+                true
+            }
+            Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
+                if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
+                    if let Err(e) = self.open(editor, file_info.path()) {
+                        MessageDialog::new()
+                            .set_level(rfd::MessageLevel::Error)
+                            .set_title("Error")
+                            .set_description(&format!("Error loading file {}", e))
+                            .set_buttons(rfd::MessageButtons::Ok)
+                            .show();
+                    }
+                }
+                true
+            }
+            Event::Command(cmd) if cmd.is(commands::REQUEST_NEXT_SEARCH) => {
+                if let Some(data) = cmd.get(commands::REQUEST_NEXT_SEARCH) {
+                    editor.search_next(data);
+                }
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
+                ctx.request_focus();
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
+                let (line, expand) = *cmd.get_unchecked(crate::commands::SELECT_LINE);
+                editor.buffer.select_line(line.into(), expand);
+                true
+            }
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                let d = *cmd.get_unchecked(commands::SCROLL_TO);
+                self.delta_x = d.0.unwrap_or(self.delta_x);
+                self.delta_y = d.1.unwrap_or(self.delta_y);
+                true
+            }
+            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+                self.held_state = HeldState::None;
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn visible_range(&self) -> Range<usize> {
         (-self.delta_y / self.metrics.font_height) as usize
             ..((-self.delta_y + self.size.height) / self.metrics.font_height) as usize + 1
@@ -756,10 +680,10 @@ impl EditorView {
     ) {
         let e = layout.hit_test_text_position(range.end.into());
         match &path.last_range {
-            Some(SelectionLineRange::RangeFrom(_)) if range.end == position::Relative::from(0) => {
+            Some(SelectionLineRange::RangeFrom(_)) if range.end == 0 => {
                 path.push(PathEl::ClosePath);
             }
-            Some(SelectionLineRange::RangeFull) if range.end == position::Relative::from(0) => {
+            Some(SelectionLineRange::RangeFull) if range.end == 0 => {
                 path.push(PathEl::LineTo(Point::new(0.5, y.ceil() + 0.5)));
                 path.push(PathEl::ClosePath);
             }
@@ -975,7 +899,7 @@ impl EditorView {
                 .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
-            let layout = if line_idx < editor.len_lines() {
+            if line_idx < editor.len_lines() {
                 let highlight = self
                     .highlight_cache
                     .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx);
@@ -994,12 +918,8 @@ impl EditorView {
                     }
                     layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
                 }
-                layout
-            } else {
-                layout
             }
-            .build()
-            .unwrap();
+            let layout = layout.build().unwrap();
 
             ctx.render_ctx.draw_text(&layout, (0.0, dy));
 
@@ -1032,7 +952,7 @@ impl EditorView {
         let mut i = Vec::new();
         editor.displayable_line(line.into(), &mut buf, &mut Vec::new(), &mut i);
 
-        let layout = self.text_layout(ctx, buf);
+        let layout = self.text_layout(ctx.text(), buf);
         let rel = rope_utils::relative_to_column(
             i[layout.hit_test_point((x, 0.0).into()).idx],
             line.into(),
@@ -1043,16 +963,14 @@ impl EditorView {
         (rel, line)
     }
 
-    fn text_layout(&self, ctx: &mut EventCtx, buf: String) -> druid::piet::D2DTextLayout {
-        let font = ctx.text().font_family(&self.font_name).unwrap();
-        let layout = ctx
-            .text()
+    fn text_layout(&self, text: &mut PietText, buf: String) -> druid::piet::D2DTextLayout {
+        let font = text.font_family(&self.font_name).unwrap();
+        text
             .new_text_layout(buf)
             .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, self.metrics.font_size)
             .build()
-            .unwrap();
-        layout
+            .unwrap()
     }
 
     fn put_caret_in_visible_range(&mut self, ctx: &mut EventCtx, editor: &EditStack) {
@@ -1073,7 +991,7 @@ impl EditorView {
         let mut i = Vec::new();
         editor.displayable_line(caret.line(), &mut buf, &mut i, &mut Vec::new());
 
-        let layout = self.text_layout(ctx, buf);
+        let layout = self.text_layout(ctx.text(), buf);
 
         let hit = layout.hit_test_text_position(i[caret.relative().index].index);
         let x = hit.point.x;
@@ -1090,8 +1008,7 @@ impl EditorView {
         ));
     }
 
-    fn invalidate_highlight_cache(&mut self, editor: &EditStack) {
-        let line = editor.main_caret().start_line(&editor.buffer);
+    fn invalidate_highlight_cache(&mut self, line: position::Line) {
         self.highlight_cache.invalidate(line.index)
     }
 

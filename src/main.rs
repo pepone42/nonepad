@@ -139,7 +139,7 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .clone()
                 .unwrap_or_default()
                 .file_name()
-                .unwrap_or(OsStr::new("[Untilted]"))
+                .unwrap_or_else(|| OsStr::new("[Untilted]"))
                 .to_string_lossy()
                 .to_string(),
             if data.editor.is_dirty() { "*" } else { "" }

@@ -6,7 +6,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::{Range, RangeInclusive};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Carets {
     intern: Vec<Caret>,
 }
@@ -38,6 +38,26 @@ impl Carets {
     }
 }
 
+impl Default for Carets {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Data for Carets {
+    fn same(&self, other: &Self) -> bool {
+        if self.intern.len() != other.intern.len() {
+            return false;
+        }
+        for i in 0..self.intern.len() {
+            if !self.intern[i].same(&other.intern[i]) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 impl Clone for Carets {
     fn clone(&self) -> Self {
         let mut intern: Vec<Caret> = self.intern.iter().filter(|c| c.is_clone).cloned().collect();
@@ -61,7 +81,7 @@ impl DerefMut for Carets {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Data)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Caret {
     pub index: Absolute,
     selection: Absolute,
@@ -69,6 +89,13 @@ pub struct Caret {
     sticky_col: Column,
     pub is_clone: bool,
     pub(super) generation: usize,
+}
+
+impl Data for Caret {
+    fn same(&self, other: &Self) -> bool {
+        self.index == other.index &&
+        self.selection == other.selection
+    }
 }
 
 impl Clone for Caret {
