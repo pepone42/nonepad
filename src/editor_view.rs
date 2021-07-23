@@ -554,7 +554,7 @@ impl EditorView {
                         .set_level(rfd::MessageLevel::Warning)
                         .set_description("The currently opened editor is not saved. Do you really want to quit?")
                         .set_title("Not saved")
-                        .set_buttons(rfd::MessageButtons::OkCancle)
+                        .set_buttons(rfd::MessageButtons::OkCancel)
                         .show()
                 {
                     return true;

@@ -1312,9 +1312,9 @@ checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "rfd"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d70f2f644f85e23857c7fa9b939ec6a85f3eace37ebcae9ec977a33865496f5"
+checksum = "c1084e570d9ce1890734b33edd8c1a7b7276076f9610fa23a48aa955587da141"
 dependencies = [
  "block",
  "dispatch",
