@@ -4,11 +4,11 @@
 mod bottom_panel;
 mod commands;
 mod editor_view;
-mod text_buffer;
-mod widgets;
 mod seticon;
-mod theme;
 mod syntax;
+mod text_buffer;
+mod theme;
+mod widgets;
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -39,30 +39,53 @@ impl AppDelegate<MainWindowState> for Delegate {
         data: &mut MainWindowState,
         _env: &Env,
     ) -> Option<druid::Event> {
-        if matches!(
-            event,
+        match event {
             druid::Event::KeyDown(druid::KeyEvent {
                 key: druid::KbKey::Escape,
                 ..
-            })
-        ) && data.bottom_panel.is_open()
-        {
-            ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
-            return None;
+            }) if data.bottom_panel.is_open() => {
+                ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
+                return None;
+            }
+            druid::Event::MouseUp(_) => {
+                ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
+            }
+
+            _ => (),
         }
-        if matches!(event, druid::Event::MouseUp(_)) {
-            ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global));
-        }
+
+        // if matches!(
+        //     &event,
+        //     druid::Event::KeyDown(druid::KeyEvent {
+        //         key: druid::KbKey::Escape,
+        //         ..
+        //     })
+        // ) && data.bottom_panel.is_open()
+        // {
+        //     ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
+        //     return None;
+        // }
+        // if matches!(&event, druid::Event::MouseUp(_)) {
+        //     ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global));
+        // }
+        // if matches!(&event, druid::Event::Command(cmd) if cmd.is(commands::REQUEST_CLOSE_BOTTOM_PANEL)) {
+        //     ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
+        //     return None;
+        // }
         Some(event)
     }
     fn command(
         &mut self,
-        _ctx: &mut DelegateCtx,
+        ctx: &mut DelegateCtx,
         _target: Target,
-        _cmd: &Command,
+        cmd: &Command,
         _data: &mut MainWindowState,
         _env: &Env,
     ) -> druid::Handled {
+        if cmd.is(commands::REQUEST_CLOSE_BOTTOM_PANEL) {
+            ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
+            return druid::Handled::Yes;
+        }
         druid::Handled::No
     }
     fn window_added(
@@ -121,7 +144,6 @@ impl MainWindowState {
 }
 
 fn build_ui() -> impl Widget<MainWindowState> {
-
     // let panel_background_painter = Painter::new(|ctx, _data: &MainWindowState, env| {
     //     let bounds = ctx.size().to_rect();
     //         ctx.fill(bounds, &env.get(crate::theme::PANEL_BACKGROUND));
@@ -170,11 +192,9 @@ fn build_ui() -> impl Widget<MainWindowState> {
                 .with_flex_spacer(1.0)
                 .with_child(label_right.padding(2.0))
                 .padding(1.0)
-                .background(Color::rgb8(0x1d,0x1e,0x22)) // using a Painter cause a redraw every frame
-
+                .background(Color::rgb8(0x1d, 0x1e, 0x22)), // using a Painter cause a redraw every frame
         )
         .main_axis_alignment(MainAxisAlignment::Center)
-        
 }
 
 fn main() -> anyhow::Result<()> {
@@ -183,9 +203,6 @@ fn main() -> anyhow::Result<()> {
     } else {
         MainWindowState::new()
     };
-
-    
-    
 
     let win = WindowDesc::new(build_ui()).title(LocalizedString::new("NonePad"));
     AppLauncher::with_window(win)
@@ -200,8 +217,14 @@ fn main() -> anyhow::Result<()> {
             // );
 
             let theme = Theme::default();
-            env.set(druid::theme::WINDOW_BACKGROUND_COLOR, Color::from_hex_str(&theme.colors.editor_background).unwrap());
-            env.set(druid::theme::BORDER_DARK, Color::from_hex_str(&theme.colors.panel_border).unwrap());
+            env.set(
+                druid::theme::WINDOW_BACKGROUND_COLOR,
+                Color::from_hex_str(&theme.colors.editor_background).unwrap(),
+            );
+            env.set(
+                druid::theme::BORDER_DARK,
+                Color::from_hex_str(&theme.colors.panel_border).unwrap(),
+            );
 
             theme.to_env(env);
             // env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));

@@ -253,7 +253,6 @@ impl EditorView {
             }
             Event::KeyDown(event) => {
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
-                
                 match event {
                     KeyEvent {
                         key: druid::keyboard_types::Key::ArrowDown,

@@ -1,13 +1,15 @@
 use std::borrow::Borrow;
 
-use druid::{Command, EventCtx, HotKey, KeyEvent, Selector, SysMods, Target, Widget};
+use druid::{Command, EventCtx, HotKey, KeyEvent, Selector, SysMods, Target};
 use once_cell::sync::Lazy;
 
 use crate::{editor_view::EditorView, text_buffer::EditStack};
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
+pub const SHOW_PALETTE_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.show_palette");
 pub const SEND_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
+pub const REQUEST_CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.request_close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
 pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
 pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
@@ -20,7 +22,7 @@ pub trait UICmd {
 
 pub struct UICommand {
     description: String,
-    selector: Selector<()>,
+    //selector: Selector<()>,
     shortcut: Option<druid::HotKey>,
     exec: fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool,
 }
@@ -69,19 +71,24 @@ fn string_to_hotkey(input: &str) -> Option<HotKey> {
         "CtrlAltShift" => SysMods::AltCmdShift,
         _ => SysMods::None,
     };
-    Some(HotKey::new(mods, t[1]))
+    if t[0].contains("Shift") {
+        Some(HotKey::new(mods, t[1].to_uppercase().as_str()))
+    } else {
+        Some(HotKey::new(mods, t[1]))
+    }
+    
 }
 
-pub const EDITOR_VIEW_UICMD: Selector<Box<dyn FnOnce(EditorView, EventCtx, EditStack)>> =
-    Selector::new("nonepad.editor.uicmd");
+// pub const EDITOR_VIEW_UICMD: Selector<Box<dyn FnOnce(EditorView, EventCtx, EditStack)>> =
+//     Selector::new("nonepad.editor.uicmd");
 
 macro_rules! uicmd {
     ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, $b:expr));+ $(;)? } ) => {
-        $(pub const $command: Selector<()> = Selector::new(stringify!("nonepad.palcmd",$command));)+
+        //$(pub const $command: Selector<()> = Selector::new(stringify!("nonepad.palcmd",$command));)+
 
         pub static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
             let mut v = UICommandSet::new();
-            $(v.commands.push(UICommand::new($description,$command,string_to_hotkey($hotkey), $b ));)+
+            $(v.commands.push(UICommand::new($description,/*$command,*/string_to_hotkey($hotkey), $b ));)+
             v
         });
     };
@@ -89,10 +96,15 @@ macro_rules! uicmd {
 
 uicmd! {
     COMMANDSET = {
-        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","Ctrl-l",
-        |editor_view, ctx, editor| {
+        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","CtrlShift-l",
+        |_editor_view, _ctx, editor| {
             dbg!("youhou!");
             editor.tab();
+            true
+        });
+        PALCMD_SHOW = ("Show commande palette","CtrlShift-P",
+        |_editor_view, ctx, editor| {
+            ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
             true
         });
     }
@@ -111,25 +123,25 @@ impl CommandEmmeterCtx for EventCtx<'_, '_> {
 impl UICommand {
     pub fn new(
         description: &str,
-        selector: Selector,
+        //selector: Selector,
         shortcut: Option<druid::HotKey>,
         exec: fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool,
     ) -> Self {
         Self {
             description: description.to_owned(),
-            selector: selector,
+            //selector: selector,
             shortcut,
             exec,
         }
     }
-    pub fn submit<C: CommandEmmeterCtx>(
-        &'static self,
-        editor_view: &mut EditorView,
-        ctx: &mut C,
-        editor: &mut EditStack,
-    ) {
-        // TODO (mpe): Specify target
+    // pub fn submit<C: CommandEmmeterCtx>(
+    //     &'static self,
+    //     editor_view: &mut EditorView,
+    //     ctx: &mut C,
+    //     editor: &mut EditStack,
+    // ) {
+    //     // TODO (mpe): Specify target
 
-        ctx.submit_command(Command::new(self.selector, (), Target::Auto))
-    }
+    //     ctx.submit_command(Command::new(self.selector, (), Target::Auto))
+    // }
 }
