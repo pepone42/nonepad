@@ -6,14 +6,15 @@ use crate::commands::SCROLL_TO;
 use crate::syntax::StateCache;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
-use druid::{Data, FontStyle};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
     widget::Flex,
     Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
     FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
-    UpdateCtx, Widget, WidgetExt, WidgetId};
+    UpdateCtx, Widget, WidgetExt, WidgetId,
+};
+use druid::{Data, FontStyle};
 
 use rfd::MessageDialog;
 
@@ -210,12 +211,18 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
-        self.size = bc.max();
+        self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, bc.max());
+        let h = if bc.max().height < self.metrics.font_height {
+            self.metrics.font_height +2.
+        } else {
+            bc.max().height
+        };
+        self.size = Size::new(bc.max().width,h);
 
         self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, self.size);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
-
-        bc.max()
+        
+        self.size
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
@@ -237,7 +244,7 @@ impl EditorView {
             delta_y: 0.0,
             page_len: 0,
 
-            size: Default::default(),
+            size: Size::new(1.0,1.0),
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
@@ -891,7 +898,7 @@ impl EditorView {
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
             //editor.buffer.line(line_idx, &mut line);
-            
+
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let mut layout = ctx
                 .render_ctx
@@ -966,8 +973,7 @@ impl EditorView {
 
     fn text_layout(&self, text: &mut PietText, buf: String) -> druid::piet::D2DTextLayout {
         let font = text.font_family(&self.font_name).unwrap();
-        text
-            .new_text_layout(buf)
+        text.new_text_layout(buf)
             .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, self.metrics.font_size)
             .build()
