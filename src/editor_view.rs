@@ -964,7 +964,7 @@ impl EditorView {
         (rel, line)
     }
 
-    fn text_layout(&self, text: &mut PietText, buf: String) -> druid::piet::D2DTextLayout {
+    fn text_layout(&self, text: &mut PietText, buf: String) -> impl druid::piet::TextLayout {
         let font = text.font_family(&self.font_name).unwrap();
         text
             .new_text_layout(buf)
