@@ -28,8 +28,12 @@ mod env {
     pub const FONT_HEIGHT: Key<f64> = Key::new("nonepad.editor.fonth_height");
     pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
 }
-
+#[cfg(windows)]
 pub const FONT_NAME: &str = "Consolas";
+#[cfg(target_os = "linux")]
+pub const FONT_NAME: &str = "DejaVu Sans Mono";
+#[cfg(target_os = "macos")]
+pub const FONT_NAME: &str = "SF Mono";
 pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 pub const EDITOR_LEFT_PADDING: f64 = 2.;
