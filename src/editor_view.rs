@@ -254,6 +254,7 @@ impl EditorView {
             }
             Event::KeyDown(event) => {
                 match event {
+                    #[cfg(windows)]
                     KeyEvent {
                         key: druid::keyboard_types::Key::ArrowDown,
                         mods,
@@ -262,11 +263,30 @@ impl EditorView {
                         editor.duplicate_down();
                         return true;
                     }
+                    #[cfg(windows)]
                     KeyEvent {
                         key: druid::keyboard_types::Key::ArrowUp,
                         mods,
                         ..
                     } if mods.alt() && mods.ctrl() => {
+                        editor.duplicate_up();
+                        return true;
+                    }
+                    #[cfg(not(windows))]
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowDown,
+                        mods,
+                        ..
+                    } if mods.alt() && mods.shift() => {
+                        editor.duplicate_down();
+                        return true;
+                    }
+                    #[cfg(not(windows))]
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowUp,
+                        mods,
+                        ..
+                    } if mods.alt() && mods.shift() => {
                         editor.duplicate_up();
                         return true;
                     }
@@ -554,7 +574,7 @@ impl EditorView {
                         .set_level(rfd::MessageLevel::Warning)
                         .set_description("The currently opened editor is not saved. Do you really want to quit?")
                         .set_title("Not saved")
-                        .set_buttons(rfd::MessageButtons::OkCancel)
+                        .set_buttons(rfd::MessageButtons::YesNo)
                         .show()
                 {
                     return true;
