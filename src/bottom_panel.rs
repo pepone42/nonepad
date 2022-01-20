@@ -98,22 +98,17 @@ fn build_search_panel() -> impl Widget<SearchState> {
 }
 #[derive(Debug, Clone, Data, Lens, Default)]
 struct PaletteState {
-    s: EditStack,
+    s: String,
 }
 fn build_palette_panel() -> impl Widget<PaletteState> {
     Flex::column().with_child(
-        //TextBox::new().with_text_size(12.0)
-        druid::widget::Container::new(
-            crate::editor_view::EditorView::new(WidgetId::reserved(1234))
-                .on_enter(|ctx, data: &mut crate::EditStack, _| {
-                    dbg!(data);
-                    ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
-                })
-                .focus()
-                .lens(PaletteState::s)
-                .expand_width(),
-        )
-        .rounded(druid::theme::TEXTBOX_BORDER_RADIUS)
-        .border(druid::theme::BORDER_DARK, druid::theme::TEXTBOX_BORDER_WIDTH),
+        TextBox::new().with_text_size(12.0)
+        .on_enter(|ctx, data: &mut String, _| {
+            dbg!(data);
+            ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
+        })
+        .focus()
+        .lens(PaletteState::s)
+        .expand_width(),
     )
 }

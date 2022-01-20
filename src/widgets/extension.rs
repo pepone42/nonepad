@@ -18,7 +18,7 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for OnEnter<T> {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         if let Event::KeyDown(KeyEvent { key: KbKey::Enter, .. }) = event {
             (self.action)(ctx, data, env);
-            ctx.is_handled();
+            ctx.set_handled();            
         } else {
             child.event(ctx, event, data, env)
         }
