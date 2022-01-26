@@ -39,8 +39,8 @@ impl<T: Data> SendData<T> {
 impl<T: Data, W: Widget<T>> Controller<T, W> for SendData<T> {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, state: &mut T, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(crate::commands::SEND_DATA) => {
-                let data = cmd.get_unchecked(crate::commands::SEND_DATA);
+            Event::Command(cmd) if cmd.is(crate::commands::SEND_STRING_DATA) => {
+                let data = cmd.get_unchecked(crate::commands::SEND_STRING_DATA);
                 (self.action)(ctx, state, data, env);
             }
             _ => (),

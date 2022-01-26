@@ -1,11 +1,13 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 
-use crate::commands;
+use crate::commands::{self, SHOW_PALETTE_PANEL, SEND_PALETTE_PANEL_DATA};
 use crate::commands::SCROLL_TO;
 use crate::syntax::StateCache;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+use crate::widgets::Item;
 
+use druid::im::Vector;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -213,15 +215,15 @@ impl Widget<EditStack> for EditorView {
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
         self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, bc.max());
         let h = if bc.max().height < self.metrics.font_height {
-            self.metrics.font_height +2.
+            self.metrics.font_height + 2.
         } else {
             bc.max().height
         };
-        self.size = Size::new(bc.max().width,h);
+        self.size = Size::new(bc.max().width, h);
 
         self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, self.size);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
-        
+
         self.size
     }
 
@@ -244,7 +246,7 @@ impl EditorView {
             delta_y: 0.0,
             page_len: 0,
 
-            size: Size::new(1.0,1.0),
+            size: Size::new(1.0, 1.0),
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
@@ -259,6 +261,15 @@ impl EditorView {
                 false
             }
             Event::KeyDown(event) => {
+                if HotKey::new(SysMods::CmdShift, "P").matches(event) {
+                    ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
+                    let mut items = Vector::new();
+                    for c in &commands::COMMANDSET.commands {
+                        dbg!(&c.description);
+                        items.push_back(Item::new(&c.description, &""));
+                    }
+                    ctx.submit_command(Command::new(SEND_PALETTE_PANEL_DATA, (items,|i| {dbg!(i);}), Target::Auto));
+                }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
                 match event {
                     KeyEvent {
@@ -424,37 +435,37 @@ impl EditorView {
                     editor.redo();
                     return true;
                 }
-                if HotKey::new(SysMods::Cmd, "o").matches(event) {
-                    if editor.is_dirty()
-                        && !MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Warning)
-                            .set_title("Are you sure?")
-                            .set_description("Discard unsaved change?")
-                            .set_buttons(rfd::MessageButtons::YesNo)
-                            .show()
-                    {
-                        return true;
-                    }
+                // if HotKey::new(SysMods::Cmd, "o").matches(event) {
+                //     if editor.is_dirty()
+                //         && !MessageDialog::new()
+                //             .set_level(rfd::MessageLevel::Warning)
+                //             .set_title("Are you sure?")
+                //             .set_description("Discard unsaved change?")
+                //             .set_buttons(rfd::MessageButtons::YesNo)
+                //             .show()
+                //     {
+                //         return true;
+                //     }
 
-                    let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "s").matches(event) {
-                    //self.save(editor, ctx);
-                    if editor.filename.is_some() {
-                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
-                    } else {
-                        let options = FileDialogOptions::new().show_hidden();
-                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
-                    }
-                    return true;
-                }
-                if HotKey::new(SysMods::CmdShift, "s").matches(event) {
-                    let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
-                    return true;
-                }
+                //     let options = FileDialogOptions::new().show_hidden();
+                //     ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
+                //     return true;
+                // }
+                // if HotKey::new(SysMods::Cmd, "s").matches(event) {
+                //     //self.save(editor, ctx);
+                //     if editor.filename.is_some() {
+                //         ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
+                //     } else {
+                //         let options = FileDialogOptions::new().show_hidden();
+                //         ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
+                //     }
+                //     return true;
+                // }
+                // if HotKey::new(SysMods::CmdShift, "s").matches(event) {
+                //     let options = FileDialogOptions::new().show_hidden();
+                //     ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
+                //     return true;
+                // }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
                         commands::SHOW_SEARCH_PANEL,
@@ -1119,7 +1130,12 @@ impl Widget<EditStack> for Gutter {
         }
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {}
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
+        match event {
+            LifeCycle::WidgetAdded => ctx.register_for_focus(),
+            _ => (),
+        }
+    }
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 

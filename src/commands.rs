@@ -1,13 +1,19 @@
 use std::borrow::Borrow;
 
-use druid::{Command, EventCtx, HotKey, KeyEvent, Selector, SysMods, Target};
+use druid::{commands, im::Vector, Command, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target};
 use once_cell::sync::Lazy;
+use rfd::MessageDialog;
 
-use crate::{editor_view::EditorView, text_buffer::EditStack};
+use crate::{
+    editor_view::EditorView,
+    text_buffer::EditStack,
+    widgets::{Item, PaletteListState},
+};
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
 pub const SHOW_PALETTE_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.show_palette");
-pub const SEND_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
+pub const SEND_PALETTE_PANEL_DATA: Selector<(Vector<Item>,fn(usize))> = Selector::new("nonepad.bottom_panel.show_palette_data");
+pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const REQUEST_CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.request_close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
@@ -21,8 +27,8 @@ pub trait UICmd {
 }
 
 pub struct UICommand {
-    description: String,
-    //selector: Selector<()>,
+    pub description: String,
+    pub show_in_palette: bool,
     shortcut: Option<druid::HotKey>,
     exec: fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool,
 }
@@ -34,7 +40,7 @@ impl UICmd for UICommand {
 }
 
 pub struct UICommandSet {
-    commands: Vec<UICommand>,
+    pub commands: Vec<UICommand>,
 }
 
 impl UICommandSet {
@@ -76,19 +82,18 @@ fn string_to_hotkey(input: &str) -> Option<HotKey> {
     } else {
         Some(HotKey::new(mods, t[1]))
     }
-    
 }
 
 // pub const EDITOR_VIEW_UICMD: Selector<Box<dyn FnOnce(EditorView, EventCtx, EditStack)>> =
 //     Selector::new("nonepad.editor.uicmd");
 
 macro_rules! uicmd {
-    ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, $b:expr));+ $(;)? } ) => {
+    ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, $v:expr, $b:expr));+ $(;)? } ) => {
         //$(pub const $command: Selector<()> = Selector::new(stringify!("nonepad.palcmd",$command));)+
 
         pub static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
             let mut v = UICommandSet::new();
-            $(v.commands.push(UICommand::new($description,/*$command,*/string_to_hotkey($hotkey), $b ));)+
+            $(v.commands.push(UICommand::new($description, $v,string_to_hotkey($hotkey), $b ));)+
             v
         });
     };
@@ -96,16 +101,50 @@ macro_rules! uicmd {
 
 uicmd! {
     COMMANDSET = {
-        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","CtrlShift-l",
+        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","CtrlShift-l", true,
         |_editor_view, _ctx, editor| {
             dbg!("youhou!");
             editor.tab();
             true
         });
-        PALCMD_SHOW = ("Show commande palette","CtrlShift-P",
-        |_editor_view, ctx, editor| {
-            ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
+        PALCMD_CHANGE_TYPE_TYPE = ("Change indentation type","", true,
+        |_editor_view, _ctx, editor| {
+            dbg!("fafa!");
+            editor.tab();
             true
+        });
+        PALCMD_OPEN = ("Open","Ctrl-o", true,
+        |_editor_view, ctx, editor| {
+            if editor.is_dirty()
+            && !MessageDialog::new()
+                .set_level(rfd::MessageLevel::Warning)
+                .set_title("Are you sure?")
+                .set_description("Discard unsaved change?")
+                .set_buttons(rfd::MessageButtons::YesNo)
+                .show()
+            {
+                return true;
+            }
+
+            let options = FileDialogOptions::new().show_hidden();
+            ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
+            true
+        });
+        PALCMD_SAVE = ("Save","Ctrl-s",true,
+        |_editor_view, ctx, editor| {
+            if editor.filename.is_some() {
+                ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
+            } else {
+                let options = FileDialogOptions::new().show_hidden();
+                ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
+            }
+            return true;
+        });
+        PALCMD_SAVE_AS = ("Save As","CtrlShift-s",true,
+        |_editor_view, ctx, editor| {
+            let options = FileDialogOptions::new().show_hidden();
+            ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
+            return true;
         });
     }
 }
@@ -123,13 +162,13 @@ impl CommandEmmeterCtx for EventCtx<'_, '_> {
 impl UICommand {
     pub fn new(
         description: &str,
-        //selector: Selector,
+        show_in_palette: bool,
         shortcut: Option<druid::HotKey>,
         exec: fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool,
     ) -> Self {
         Self {
             description: description.to_owned(),
-            //selector: selector,
+            show_in_palette,
             shortcut,
             exec,
         }

@@ -1,10 +1,10 @@
 use druid::{
     widget::{Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId,
+    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, im::Vector,
 };
 use once_cell::unsync::Lazy;
 
-use crate::widgets::{EmptyWidget, Extension};
+use crate::widgets::{EmptyWidget, Extension, PaletteListState, Item};
 use crate::{commands, text_buffer::EditStack, widgets};
 
 pub const PANEL_CLOSED: usize = 0x0;
@@ -17,7 +17,7 @@ pub struct BottomPanel {}
 pub struct BottonPanelState {
     pub current: usize,
     search_state: SearchState,
-    panel_state: PaletteState,
+    panel_state: PaletteListState,
 }
 
 impl BottonPanelState {
@@ -46,7 +46,6 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
             Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL) => {
                 data.current = PANEL_CLOSED;
                 ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
-
                 return;
             }
             Event::Command(cmd) if cmd.is(commands::SHOW_SEARCH_PANEL) => {
@@ -54,7 +53,7 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
                 let id = child.id().unwrap();
                 let input = cmd.get_unchecked(commands::SHOW_SEARCH_PANEL).clone();
                 ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
-                ctx.submit_command(Command::new(commands::SEND_DATA, input, id));
+                ctx.submit_command(Command::new(commands::SEND_STRING_DATA, input, id));
                 return;
             }
             Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
@@ -99,16 +98,19 @@ fn build_search_panel() -> impl Widget<SearchState> {
 #[derive(Debug, Clone, Data, Lens, Default)]
 struct PaletteState {
     s: String,
+    list: PaletteListState
 }
-fn build_palette_panel() -> impl Widget<PaletteState> {
-    Flex::column().with_child(
-        TextBox::new().with_text_size(12.0)
-        .on_enter(|ctx, data: &mut String, _| {
-            dbg!(data);
-            ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
-        })
-        .focus()
-        .lens(PaletteState::s)
-        .expand_width(),
-    )
+fn build_palette_panel() -> impl Widget<PaletteListState> {
+    
+    // Flex::column().with_child(
+    //     TextBox::new().with_text_size(12.0)
+    //     .on_enter(|ctx, data: &mut String, _| {
+    //         dbg!(data);
+    //         ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
+    //     })
+    //     .focus()
+    //     .lens(PaletteState::s)
+    //     .expand_width(),
+    // ).with_child(widgets::PaletteList::new().lens(PaletteState::list))
+    widgets::PaletteList::new().focus()
 }
