@@ -16,6 +16,7 @@ pub struct Item {
     title: Arc<String>,
     description: Arc<String>,
     filtered: bool,
+    score: isize,
 }
 
 impl Item {
@@ -24,6 +25,7 @@ impl Item {
             title: Arc::new(title.into()),
             description: Arc::new(description.into()),
             filtered: false,
+            score: 0,
         }
     }
 }
@@ -44,9 +46,14 @@ impl PaletteListState {
         }
     }
 
-    fn filter(&mut self, input: &str) {
+    fn filter(&mut self) {
         for s in self.list.iter_mut() {
-            s.filtered = best_match(input, &s.title).is_none();
+            if let Some(m) = best_match(&self.filter, &s.title) {
+                s.filtered = false;
+                s.score = m.score();
+            } else {
+                s.filtered = true;
+            }
         }
     }
 }
@@ -87,7 +94,11 @@ impl Widget<PaletteListState> for PaletteList {
                     ..
                 } => {
                     dbg!("up");
-                    data.selected_idx = if data.selected_idx==0 {0} else {data.selected_idx-1};
+                    data.selected_idx = if data.selected_idx == 0 {
+                        0
+                    } else {
+                        data.selected_idx - 1
+                    };
                     ctx.set_handled();
                 }
                 KeyEvent {
@@ -95,7 +106,7 @@ impl Widget<PaletteListState> for PaletteList {
                     ..
                 } => {
                     dbg!("down");
-                    data.selected_idx = dbg!(min(data.selected_idx+1, data.list.len()-1));
+                    data.selected_idx = dbg!(min(data.selected_idx + 1, data.list.len() - 1));
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
@@ -105,7 +116,11 @@ impl Widget<PaletteListState> for PaletteList {
                     ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
                     ctx.set_handled();
                 }
-                _ => self.search.event(ctx, event, &mut data.filter, env),
+                _ => {
+                    let r = self.search.event(ctx, event, &mut data.filter, env);
+                    dbg!(&data.filter);
+                    data.filter();
+                }
             },
             _ => self.search.event(ctx, event, &mut data.filter, env),
         }
@@ -129,8 +144,8 @@ impl Widget<PaletteListState> for PaletteList {
         env: &druid::Env,
     ) {
         self.search.update(ctx, &old_data.filter, &data.filter, env);
-        
-        if old_data.selected_idx != data.selected_idx {
+
+        if old_data.selected_idx != data.selected_idx || !old_data.filter.same(&data.filter) {
             ctx.request_paint();
         }
     }
@@ -151,7 +166,7 @@ impl Widget<PaletteListState> for PaletteList {
         self.search.paint(ctx, &data.filter, env);
 
         let mut dy = self.filter_height + 2.;
-        for (i,item) in data.list.iter().enumerate() {
+        for (i, item) in data.list.iter().filter(|c| !c.filtered).enumerate() {
             let layout = ctx
                 .render_ctx
                 .text()
@@ -165,15 +180,12 @@ impl Widget<PaletteListState> for PaletteList {
                 .build()
                 .unwrap();
             ctx.render_ctx.draw_text(&layout, (5.0, dy));
-            if i==data.selected_idx {
+            if i == data.selected_idx {
                 ctx.render_ctx.stroke(
-                        Line::new(
-                            (2., dy),
-                            (2.,dy + layout.size().height),
-                        ),
-                        &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
-                        2.0,
-                    );
+                    Line::new((2., dy), (2., dy + layout.size().height)),
+                    &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
+                    2.0,
+                );
             }
             dy += layout.size().height;
         }
