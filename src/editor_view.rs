@@ -1059,7 +1059,7 @@ impl EditorView {
     }
 
     fn highlight_chunk(&mut self, syntax: &SyntaxReference, buffer: &Buffer) -> Option<Range<usize>> {
-        self.highlight_cache.highlight_chunk(syntax, buffer)
+        self.highlight_cache.highlight_chunk(syntax, &buffer.rope)
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
