@@ -1,9 +1,11 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
+use std::time::Duration;
 
 use crate::commands;
 use crate::commands::SCROLL_TO;
 use crate::syntax::StateCache;
+use crate::text_buffer::buffer::Buffer;
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
 use druid::{
@@ -14,9 +16,10 @@ use druid::{
     FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
     UpdateCtx, Widget, WidgetExt, WidgetId,
 };
-use druid::{Data, FontStyle};
+use druid::{Data, FontStyle, TimerToken};
 
 use rfd::MessageDialog;
+use syntect::parsing::SyntaxReference;
 
 mod env {
     use druid::Key;
@@ -167,6 +170,8 @@ pub struct EditorView {
 
     held_state: HeldState,
     highlight_cache: StateCache,
+
+    highlight_timer_id: TimerToken,
     //handle: WindowHandle,
 }
 
@@ -178,6 +183,10 @@ impl Widget<EditStack> for EditorView {
 
         let handled = self.handle_event(event, ctx, editor);
         if handled {
+            //let id = ctx.widget_id();
+            
+            //ctx.submit_command(Command::new(crate::commands::HIGHLIGHT, (), Target::Widget(id)));
+
             ctx.set_handled();
         }
         if !old_editor.buffer.same(&editor.buffer) {
@@ -198,6 +207,7 @@ impl Widget<EditStack> for EditorView {
             self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
 
             ctx.register_for_focus();
+            self.highlight_timer_id = ctx.request_timer(Duration::from_millis(1));
         }
     }
 
@@ -247,6 +257,7 @@ impl EditorView {
             longest_line_len: 0.,
             held_state: HeldState::None,
             highlight_cache: StateCache::new(),
+            highlight_timer_id: TimerToken::INVALID,
         }
     }
 
@@ -637,6 +648,15 @@ impl EditorView {
                 self.held_state = HeldState::None;
                 true
             }
+            Event::Timer(i) if *i == self.highlight_timer_id => {
+                if let Some(r) = self.highlight_chunk(editor.file.syntax, &editor.buffer) {
+                    if r.contains(&self.visible_range().start) || r.contains(&self.visible_range().end) {
+                        ctx.request_paint();
+                    }
+                }
+                self.highlight_timer_id = ctx.request_timer(Duration::from_micros(1));
+                false
+            }
             _ => false,
         }
     }
@@ -925,23 +945,25 @@ impl EditorView {
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
             if line_idx < editor.len_lines() {
-                let highlight = self
-                    .highlight_cache
-                    .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx);
-                for h in highlight {
-                    let color = TextAttribute::TextColor(Color::rgba8(
-                        h.0.foreground.r,
-                        h.0.foreground.g,
-                        h.0.foreground.b,
-                        h.0.foreground.a,
-                    ));
-                    if h.0.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
-                        layout = layout.range_attribute(
-                            indices[h.1.start].index..indices[h.1.end].index,
-                            TextAttribute::Style(FontStyle::Italic),
-                        );
+                if let Some(highlight) =
+                    self.highlight_cache
+                        .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx)
+                {
+                    for h in highlight {
+                        let color = TextAttribute::TextColor(Color::rgba8(
+                            h.0.foreground.r,
+                            h.0.foreground.g,
+                            h.0.foreground.b,
+                            h.0.foreground.a,
+                        ));
+                        if h.0.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+                            layout = layout.range_attribute(
+                                indices[h.1.start].index..indices[h.1.end].index,
+                                TextAttribute::Style(FontStyle::Italic),
+                            );
+                        }
+                        layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
                     }
-                    layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
                 }
             }
             let layout = layout.build().unwrap();
@@ -990,8 +1012,7 @@ impl EditorView {
 
     fn text_layout(&self, text: &mut PietText, buf: String) -> impl druid::piet::TextLayout {
         let font = text.font_family(&self.font_name).unwrap();
-        text
-            .new_text_layout(buf)
+        text.new_text_layout(buf)
             .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
             .font(font, self.metrics.font_size)
             .build()
@@ -1035,6 +1056,10 @@ impl EditorView {
 
     fn invalidate_highlight_cache(&mut self, line: position::Line) {
         self.highlight_cache.invalidate(line.index)
+    }
+
+    fn highlight_chunk(&mut self, syntax: &SyntaxReference, buffer: &Buffer) -> Option<Range<usize>> {
+        self.highlight_cache.highlight_chunk(syntax, buffer)
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>

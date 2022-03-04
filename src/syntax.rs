@@ -1,5 +1,10 @@
+use druid::piet::TextLayout;
 use once_cell::sync::Lazy;
-use std::ops::Range;
+use std::{
+    ops::Range,
+    sync::{Arc, Mutex},
+    thread,
+};
 use syntect::{
     highlighting::{HighlightState, Highlighter, RangedHighlightIterator, Style},
     parsing::{ParseState, ScopeStack, SyntaxReference, SyntaxSet},
@@ -57,10 +62,24 @@ impl StateCache {
     pub fn invalidate(&mut self, line: usize) {
         self.states.truncate(line >> 4);
         self.highlighted_line.truncate(line);
+        // let b = Arc::new(Mutex::new(buffer.clone()));
+        // let total_line = buffer.len_lines();
+        // thread::spawn( || {
+        //     self.update_range(&syntax, &b.lock().unwrap(), line, total_line);
+        // });
     }
 
     fn is_cached(&self, line: usize) -> bool {
         line < self.highlighted_line.len()
+    }
+    pub fn highlight_chunk(&mut self, syntax: &SyntaxReference, buffer: &Buffer) -> Option<Range<usize>> {
+        let line = self.highlighted_line.len();
+        if line >= buffer.len_lines() {
+            None
+        } else {
+            self.update_range(syntax, buffer, line, line + 1000);
+            Some(line ..line + 1000)
+        }
     }
 
     pub fn get_highlighted_line(
@@ -68,10 +87,12 @@ impl StateCache {
         syntax: &SyntaxReference,
         buffer: &Buffer,
         line: usize,
-    ) -> &[(Style, Range<usize>)] {
+    ) -> Option<&[(Style, Range<usize>)]> {
         if !self.is_cached(line) {
-            self.update_range(syntax, buffer, line, line + 10);
+            //self.update_range(syntax, buffer, line, line + 10);
+            None
+        } else {
+            Some(&self.highlighted_line[line])
         }
-        &self.highlighted_line[line]
     }
 }
