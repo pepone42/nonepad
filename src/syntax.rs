@@ -31,13 +31,13 @@ impl StateCache {
         }
     }
 
-    pub fn update_range(&mut self, syntax: &SyntaxReference, rope: &Rope, start: usize, end: usize) {
+    pub fn update_range(&mut self, highlighted_line: Arc<Mutex<Vec<Vec<(Style, Range<usize>)>>>>, syntax: &SyntaxReference, rope: &Rope, start: usize, end: usize) {
         // states are cached every 16 lines
         let start = (start >> 4).min(self.states.len());
         let end = (end.min(rope.len_lines()) >> 4) + 1;
 
         self.states.truncate(start);
-        self.highlighted_line.truncate(start << 4);
+        highlighted_line.lock().unwrap().truncate(start << 4);
         let mut states = self.states.last().cloned().unwrap_or_else(|| {
             (
                 ParseState::new(syntax),
@@ -66,7 +66,7 @@ impl StateCache {
                 self.states.push(states.clone());
             }
 
-            self.highlighted_line.push(h);
+            highlighted_line.lock().unwrap().push(h);
         }
     }
 
@@ -84,15 +84,15 @@ impl StateCache {
     fn is_cached(&self, line: usize) -> bool {
         line < self.highlighted_line.len()
     }
-    pub fn highlight_chunk(&mut self, syntax: &SyntaxReference, rope: &Rope) -> Option<Range<usize>> {
-        let line = self.highlighted_line.len();
-        if line >= rope.len_lines() {
-            None
-        } else {
-            self.update_range(syntax, rope, line, line + 1000);
-            Some(line..line + 1000)
-        }
-    }
+    // pub fn highlight_chunk(&mut self, syntax: &SyntaxReference, rope: &Rope) -> Option<Range<usize>> {
+    //     let line = self.highlighted_line.len();
+    //     if line >= rope.len_lines() {
+    //         None
+    //     } else {
+    //         self.update_range(syntax, rope, line, line + 1000);
+    //         Some(line..line + 1000)
+    //     }
+    // }
 
     pub fn get_highlighted_line(
         &mut self,
