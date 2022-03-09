@@ -1,14 +1,13 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use crate::commands;
 use crate::commands::SCROLL_TO;
-use crate::syntax::{StateCache, SYNTAXSET};
-use crate::text_buffer::buffer::Buffer;
+use crate::syntax::{StateCache, SYNTAXSET, StyledLinesCache};
+
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
 use druid::{
@@ -23,7 +22,6 @@ use druid::{Data, FontStyle, TimerToken};
 
 use rfd::MessageDialog;
 use ropey::Rope;
-use syntect::highlighting::Style;
 use syntect::parsing::SyntaxReference;
 
 mod env {
@@ -155,14 +153,12 @@ impl HeldState {
 }
 
 pub enum HighlighterMessage {
-    Cancel,
-    UpateRange(Rope, usize),
-    UpdateSyntax(SyntaxReference),
+    Stop,
+    Update(SyntaxReference, Rope, usize),
 }
 
 #[derive(Debug)]
 pub struct EditorView {
-    //editor: EditStack,
     delta_y: f64,
     delta_x: f64,
     page_len: usize,
@@ -180,12 +176,10 @@ pub struct EditorView {
     longest_line_len: f64,
 
     held_state: HeldState,
-    highlight_cache: StateCache,
 
     highlight_timer_id: TimerToken,
-    highlight_channel_tx: Sender<HighlighterMessage>,
-    highlighted_line: Arc<Mutex<Vec<Vec<(Style, Range<usize>)>>>>,
-    //handle: WindowHandle,
+    highlight_channel_tx: Option<Sender<HighlighterMessage>>,
+    highlighted_line: StyledLinesCache,
 }
 
 impl Widget<EditStack> for EditorView {
@@ -214,15 +208,58 @@ impl Widget<EditStack> for EditorView {
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, editor: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
+            let (tx, rx) = mpsc::channel();
+            self.highlight_channel_tx = Some(tx);
+            let highlighted_line = self.highlighted_line.clone();
+            //let mut highlighted_line: Vec<Vec<(Style, Range<usize>)>> = Vec::new();
+            let owner_id = self.owner_id.clone();
+            let event_sink = ctx.get_external_handle();
+            thread::spawn(move || {
+                let mut syntax = SYNTAXSET.find_syntax_plain_text();
+                let mut highlight_cache = StateCache::new();
+                let mut current_index = 0;
+                let mut rope = Rope::new();
+                loop {
+                    match rx.try_recv() {
+                        Ok(message) => match message {
+                            HighlighterMessage::Stop => return,
+                            HighlighterMessage::Update(s, r, start) => {
+                                rope = r;
+                                current_index = start;
+                                syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
+                                //highlight_cache.invalidate(highlighted_line.clone(), current_index);
+                            }
+                        },
+                        _ => (),
+                    }
+                    if current_index < rope.len_lines() {
+                        highlight_cache.update_range(
+                            highlighted_line.clone(),
+                            &syntax,
+                            &rope,
+                            current_index,
+                            current_index + 10,
+                        );
+                        current_index += 10;
+                        let _ = event_sink.submit_command(
+                            crate::commands::HIGHLIGHT,
+                            (current_index, current_index + 10),
+                            owner_id,
+                        );
+                    } else {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                }
+            });
+
             self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
             self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
             self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
             self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
 
             ctx.register_for_focus();
-            self.highlight_timer_id = ctx.request_timer(Duration::from_millis(1));
-            self.highlight_channel_tx
-                .send(HighlighterMessage::UpdateSyntax(editor.file.syntax.clone()));
+            self.highlight_timer_id = ctx.request_timer(Duration::from_millis(5));
+            self.update_highlighter(editor, 0);
         }
     }
 
@@ -232,13 +269,10 @@ impl Widget<EditStack> for EditorView {
                 .first_caret()
                 .start_line(&old_data.buffer)
                 .min(data.first_caret().start_line(&data.buffer));
-            //self.invalidate_highlight_cache(line);
-            self.highlight_channel_tx
-                .send(HighlighterMessage::UpateRange(data.buffer.rope.clone(), line.index));
+            self.update_highlighter(data, line.index);
         }
         if !old_data.file.syntax.name.same(&data.file.syntax.name) {
-            self.highlight_channel_tx
-                .send(HighlighterMessage::UpdateSyntax(data.file.syntax.clone()));
+            self.update_highlighter(data, 0);
         }
         if !old_data.same(data) {
             ctx.request_paint();
@@ -261,7 +295,6 @@ impl Widget<EditStack> for EditorView {
 
 impl EditorView {
     pub fn new(owner_id: WidgetId) -> Self {
-        let (tx, rx) = mpsc::channel();
         let e = EditorView {
             bg_color: Color::BLACK,
             fg_color: Color::WHITE,
@@ -278,39 +311,38 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
-            highlight_cache: StateCache::new(),
             highlight_timer_id: TimerToken::INVALID,
-            highlight_channel_tx: tx,
-            highlighted_line: Arc::new(Mutex::new(Vec::new())),
+            highlight_channel_tx: None,
+            highlighted_line: StyledLinesCache::new(),
         };
-        let highlighted_line = e.highlighted_line.clone();
-        //let mut highlighted_line: Vec<Vec<(Style, Range<usize>)>> = Vec::new();
 
-        thread::spawn(move || {
-            let mut syntax = SYNTAXSET.find_syntax_plain_text();
-            let mut highlight_cache = StateCache::new();
-            while true {
+        e
+    }
 
-
-                match rx.try_recv() {
-                    Ok(message) => match message {
-                        HighlighterMessage::Cancel => (),
-                        HighlighterMessage::UpateRange(r, start) => {
-                            dbg!("hey!", start);
-                            highlight_cache.update_range(highlighted_line.clone(), &syntax, &r, start, start + 10);
-
-                        }
-                        HighlighterMessage::UpdateSyntax(s) => {
-                            dbg!("Langauge: ", &s.name);
-                            syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
-
-                        }
-                    },
-                    _ => (),
+    fn update_highlighter(&self, data: &EditStack, line: usize) {
+        if let Some(tx) = self.highlight_channel_tx.clone() {
+            match tx.send(HighlighterMessage::Update(
+                data.file.syntax.clone(),
+                data.buffer.rope.clone(),
+                line,
+            )) {
+                Ok(()) => (),
+                Err(_e) => {
+                    dbg!("Error sending data to highlighter!");
                 }
             }
-        });
-        e
+        }
+    }
+
+    fn stop_highlighter(&self) {
+        if let Some(tx) = self.highlight_channel_tx.clone() {
+            match tx.send(HighlighterMessage::Stop) {
+                Ok(()) => (),
+                Err(_e) => {
+                    dbg!("Error stopping the highlighter!");
+                }
+            }
+        }
     }
 
     fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
@@ -648,6 +680,10 @@ impl EditorView {
                 }
                 false
             }
+            Event::WindowDisconnected => {
+                self.stop_highlighter();
+                true
+            }
 
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
@@ -700,13 +736,22 @@ impl EditorView {
                 self.held_state = HeldState::None;
                 true
             }
+            Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
+                let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
+                if self.visible_range().contains(&d.0) || self.visible_range().contains(&d.1) {
+                    ctx.request_paint();
+                }
+                true
+            }
             // Event::Timer(i) if *i == self.highlight_timer_id => {
-            //     if let Some(r) = self.highlight_chunk(editor.file.syntax, &editor.buffer) {
-            //         if r.contains(&self.visible_range().start) || r.contains(&self.visible_range().end) {
-            //             ctx.request_paint();
-            //         }
+            //     let h = self.highlighted_line.lock().unwrap();
+            //     // let start = std::cmp::min(self.visible_range().start, h.len());
+            //     // let end = std::cmp::min(self.visible_range().end, h.len());
+            //     if h.iter().filter(|h| !h.1).count() > 0 {
+            //         //if h.len() < editor.len_lines() {
+            //         ctx.request_paint();
             //     }
-            //     self.highlight_timer_id = ctx.request_timer(Duration::from_micros(1));
+            //     self.highlight_timer_id = ctx.request_timer(Duration::from_micros(5));
             //     false
             // }
             _ => false,
@@ -997,24 +1042,29 @@ impl EditorView {
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
             if line_idx < editor.len_lines() {
-                if let Some(highlight) = self.highlighted_line.lock().unwrap().get(line_idx)
+                if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx)
                 // self.highlight_cache
                 //     .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx)
                 {
-                    for h in highlight {
+                    for h in highlight.iter() {
                         let color = TextAttribute::TextColor(Color::rgba8(
-                            h.0.foreground.r,
-                            h.0.foreground.g,
-                            h.0.foreground.b,
-                            h.0.foreground.a,
+                            h.style.foreground.r,
+                            h.style.foreground.g,
+                            h.style.foreground.b,
+                            h.style.foreground.a,
                         ));
-                        if h.0.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
-                            layout = layout.range_attribute(
-                                indices[h.1.start].index..indices[h.1.end].index,
-                                TextAttribute::Style(FontStyle::Italic),
-                            );
+                        let start = indices.get(h.range.start);
+                        let end = indices.get(h.range.end);
+                        if start.is_some() && end.is_some() {
+                            if h.style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+                                layout = layout.range_attribute(
+                                    indices[start.unwrap().index].index..indices[end.unwrap().index].index,
+                                    TextAttribute::Style(FontStyle::Italic),
+                                );
+                            }
+
+                            layout = layout.range_attribute(start.unwrap().index..end.unwrap().index, color);
                         }
-                        layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
                     }
                 }
             }
@@ -1106,10 +1156,6 @@ impl EditorView {
         ));
     }
 
-    fn invalidate_highlight_cache(&mut self, line: position::Line) {
-        self.highlight_cache.invalidate(line.index)
-    }
-
     // fn highlight_chunk(&mut self, syntax: &SyntaxReference, buffer: &Buffer) -> Option<Range<usize>> {
     //     self.highlight_cache.highlight_chunk(syntax, &buffer.rope)
     // }
@@ -1131,15 +1177,24 @@ impl EditorView {
 
         editor.save(&filename)?;
         editor.filename = Some(filename.as_ref().to_path_buf());
-
+        self.update_highlighter(editor, 0);
+        // self.highlight_channel_tx.send(HighlighterMessage::Update(
+        //     editor.file.syntax.clone(),
+        //     editor.buffer.rope.clone(),
+        //     0,
+        // ));
         Ok(())
     }
 
     fn save(&mut self, editor: &mut EditStack) -> anyhow::Result<()> {
         anyhow::ensure!(editor.filename.is_some(), "editor.filename must not be None");
         editor.save(editor.filename.clone().as_ref().unwrap())?;
-        self.highlight_channel_tx
-            .send(HighlighterMessage::UpdateSyntax(editor.file.syntax.clone()));
+        self.update_highlighter(editor, 0);
+        // self.highlight_channel_tx.send(HighlighterMessage::Update(
+        //     editor.file.syntax.clone(),
+        //     editor.buffer.rope.clone(),
+        //     0,
+        // ));
         Ok(())
     }
     fn open<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -1147,8 +1202,12 @@ impl EditorView {
         P: AsRef<Path>,
     {
         editor.open(filename)?;
-        self.highlight_channel_tx
-            .send(HighlighterMessage::UpdateSyntax(editor.file.syntax.clone()));
+        self.update_highlighter(editor, 0);
+        // self.highlight_channel_tx.send(HighlighterMessage::Update(
+        //     editor.file.syntax.clone(),
+        //     editor.buffer.rope.clone(),
+        //     0,
+        // ));
         Ok(())
     }
 }
