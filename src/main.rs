@@ -200,8 +200,8 @@ fn main() -> anyhow::Result<()> {
             // );
 
             let theme = Theme::default();
-            env.set(druid::theme::WINDOW_BACKGROUND_COLOR, Color::from_hex_str(&theme.colors.editor_background).unwrap());
-            env.set(druid::theme::BORDER_DARK, Color::from_hex_str(&theme.colors.panel_border).unwrap());
+            env.set(druid::theme::WINDOW_BACKGROUND_COLOR, Color::from_hex_str(&theme.vscode.colors.editor_background).unwrap());
+            env.set(druid::theme::BORDER_DARK, Color::from_hex_str(&theme.vscode.colors.panel_border).unwrap());
 
             theme.to_env(env);
             // env.set(crate::editor_view::BG_COLOR, Color::rgb8(34, 40, 42));
