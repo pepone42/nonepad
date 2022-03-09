@@ -80,7 +80,8 @@ impl StateCache {
         let end = (end.min(rope.len_lines()) >> 4) + 1;
         
         self.states.truncate(start);
-        highlighted_line.lines.lock().unwrap().truncate(start << 4);
+        
+        //h.truncate(start << 4);
         let mut states = self.states.last().cloned().unwrap_or_else(|| {
             (
                 ParseState::new(syntax),
@@ -106,8 +107,12 @@ impl StateCache {
             if i & 0xF == 0xF {
                 self.states.push(states.clone());
             }
-
-            highlighted_line.lines.lock().unwrap().push(h);
+            let mut hl = highlighted_line.lines.lock().unwrap();
+            if i>= hl.len() {
+                hl.push(h);
+            } else {
+                hl[i] = h;
+            }
         }
     }
 
