@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Buffer {
-    rope: Rope,
+    pub rope: Rope,
     pub carets: Carets,
     pub(super) tabsize: usize,
     uuid: Uuid,
