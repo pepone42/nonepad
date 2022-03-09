@@ -216,6 +216,7 @@ impl Widget<EditStack> for EditorView {
                 let mut syntax = SYNTAXSET.find_syntax_plain_text();
                 let mut highlight_cache = StateCache::new();
                 let mut current_index = 0;
+                let mut chunk_len = 100;
                 let mut rope = Rope::new();
                 loop {
                     match rx.try_recv() {
@@ -224,6 +225,8 @@ impl Widget<EditStack> for EditorView {
                             HighlighterMessage::Update(s, r, start) => {
                                 rope = r;
                                 current_index = start;
+                                // The first chunk is smaller, to repaint quickly with highlight 
+                                chunk_len = 100;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                             }
                         },
@@ -235,14 +238,16 @@ impl Widget<EditStack> for EditorView {
                             &syntax,
                             &rope,
                             current_index,
-                            current_index + 10,
+                            current_index + chunk_len,
                         );
-                        current_index += 10;
                         let _ = event_sink.submit_command(
                             crate::commands::HIGHLIGHT,
-                            (current_index, current_index + 10),
+                            (current_index, current_index + chunk_len),
                             owner_id,
                         );
+                        current_index += chunk_len;
+                        // subsequent chunck are bigger, for better performance
+                        chunk_len = 1000;
                     } else {
                         thread::sleep(Duration::from_millis(1));
                     }
@@ -733,7 +738,9 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
                 let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
-                if self.visible_range().contains(&d.0) || self.visible_range().contains(&d.1) {
+                
+                if self.visible_range().contains(&d.0) || self.visible_range().contains(&d.1) || 
+                (self.visible_range().start >= d.0 && self.visible_range().end <= d.1) {
                     ctx.request_paint();
                 }
                 true
