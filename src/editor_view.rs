@@ -18,7 +18,7 @@ use druid::{
     FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
     UpdateCtx, Widget, WidgetExt, WidgetId,
 };
-use druid::{Data, FontStyle, TimerToken};
+use druid::{Data, FontStyle};
 
 use rfd::MessageDialog;
 use ropey::Rope;
@@ -177,7 +177,6 @@ pub struct EditorView {
 
     held_state: HeldState,
 
-    highlight_timer_id: TimerToken,
     highlight_channel_tx: Option<Sender<HighlighterMessage>>,
     highlighted_line: StyledLinesCache,
 }
@@ -211,7 +210,6 @@ impl Widget<EditStack> for EditorView {
             let (tx, rx) = mpsc::channel();
             self.highlight_channel_tx = Some(tx);
             let highlighted_line = self.highlighted_line.clone();
-            //let mut highlighted_line: Vec<Vec<(Style, Range<usize>)>> = Vec::new();
             let owner_id = self.owner_id.clone();
             let event_sink = ctx.get_external_handle();
             thread::spawn(move || {
@@ -227,7 +225,6 @@ impl Widget<EditStack> for EditorView {
                                 rope = r;
                                 current_index = start;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
-                                //highlight_cache.invalidate(highlighted_line.clone(), current_index);
                             }
                         },
                         _ => (),
@@ -258,7 +255,6 @@ impl Widget<EditStack> for EditorView {
             self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
 
             ctx.register_for_focus();
-            self.highlight_timer_id = ctx.request_timer(Duration::from_millis(5));
             self.update_highlighter(editor, 0);
         }
     }
@@ -311,7 +307,6 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
-            highlight_timer_id: TimerToken::INVALID,
             highlight_channel_tx: None,
             highlighted_line: StyledLinesCache::new(),
         };
@@ -743,17 +738,6 @@ impl EditorView {
                 }
                 true
             }
-            // Event::Timer(i) if *i == self.highlight_timer_id => {
-            //     let h = self.highlighted_line.lock().unwrap();
-            //     // let start = std::cmp::min(self.visible_range().start, h.len());
-            //     // let end = std::cmp::min(self.visible_range().end, h.len());
-            //     if h.iter().filter(|h| !h.1).count() > 0 {
-            //         //if h.len() < editor.len_lines() {
-            //         ctx.request_paint();
-            //     }
-            //     self.highlight_timer_id = ctx.request_timer(Duration::from_micros(5));
-            //     false
-            // }
             _ => false,
         }
     }
@@ -939,7 +923,6 @@ impl EditorView {
 
     fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) -> bool {
         let font = ctx.render_ctx.text().font_family(&self.font_name).unwrap();
-        // self.size.to_rect();
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
@@ -1032,7 +1015,6 @@ impl EditorView {
 
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
-            //editor.buffer.line(line_idx, &mut line);
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let mut layout = ctx
                 .render_ctx
@@ -1043,8 +1025,6 @@ impl EditorView {
                 .text_color(self.fg_color.clone());
             if line_idx < editor.len_lines() {
                 if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx)
-                // self.highlight_cache
-                //     .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx)
                 {
                     for h in highlight.iter() {
                         let color = TextAttribute::TextColor(Color::rgba8(
@@ -1156,10 +1136,6 @@ impl EditorView {
         ));
     }
 
-    // fn highlight_chunk(&mut self, syntax: &SyntaxReference, buffer: &Buffer) -> Option<Range<usize>> {
-    //     self.highlight_cache.highlight_chunk(syntax, &buffer.rope)
-    // }
-
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
     where
         P: AsRef<Path>,
@@ -1178,11 +1154,6 @@ impl EditorView {
         editor.save(&filename)?;
         editor.filename = Some(filename.as_ref().to_path_buf());
         self.update_highlighter(editor, 0);
-        // self.highlight_channel_tx.send(HighlighterMessage::Update(
-        //     editor.file.syntax.clone(),
-        //     editor.buffer.rope.clone(),
-        //     0,
-        // ));
         Ok(())
     }
 
@@ -1190,11 +1161,6 @@ impl EditorView {
         anyhow::ensure!(editor.filename.is_some(), "editor.filename must not be None");
         editor.save(editor.filename.clone().as_ref().unwrap())?;
         self.update_highlighter(editor, 0);
-        // self.highlight_channel_tx.send(HighlighterMessage::Update(
-        //     editor.file.syntax.clone(),
-        //     editor.buffer.rope.clone(),
-        //     0,
-        // ));
         Ok(())
     }
     fn open<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -1203,11 +1169,7 @@ impl EditorView {
     {
         editor.open(filename)?;
         self.update_highlighter(editor, 0);
-        // self.highlight_channel_tx.send(HighlighterMessage::Update(
-        //     editor.file.syntax.clone(),
-        //     editor.buffer.rope.clone(),
-        //     0,
-        // ));
+
         Ok(())
     }
 }
@@ -1228,7 +1190,6 @@ impl Widget<EditStack> for Gutter {
         match event {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 self.dy = cmd.get_unchecked(commands::SCROLL_TO).1.unwrap_or(self.dy);
-                // .clamp(-self.height(&data), 0.);
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1236,7 +1197,6 @@ impl Widget<EditStack> for Gutter {
                 self.is_held = false;
             }
             Event::MouseMove(m) => {
-                //ctx.set_cursor(&Cursor::ResizeLeftRight);
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);

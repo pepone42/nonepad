@@ -81,7 +81,6 @@ impl StateCache {
         
         self.states.truncate(start);
         
-        //h.truncate(start << 4);
         let mut states = self.states.last().cloned().unwrap_or_else(|| {
             (
                 ParseState::new(syntax),
@@ -115,39 +114,4 @@ impl StateCache {
             }
         }
     }
-
-    // pub fn invalidate(&mut self, highlighted_line: Arc<Mutex<Vec<StyledLine>>>, line: usize) {
-    //     //}, syntax: &SyntaxReference, rope: &Rope) {
-    //     self.states.truncate(line >> 4);
-    //     //highlighted_line.lock().unwrap().truncate(line);
-    //     // let b = Arc::new(Mutex::new(buffer.clone()));
-    //     // let total_line = rope.len_lines();
-    //     // thread::spawn( move || {
-    //     //     self.update_range(&syntax, &rope, line, total_line);
-    //     // });
-    // }
-
-    // pub fn highlight_chunk(&mut self, syntax: &SyntaxReference, rope: &Rope) -> Option<Range<usize>> {
-    //     let line = self.highlighted_line.len();
-    //     if line >= rope.len_lines() {
-    //         None
-    //     } else {
-    //         self.update_range(syntax, rope, line, line + 1000);
-    //         Some(line..line + 1000)
-    //     }
-    // }
-
-    // pub fn get_highlighted_line(
-    //     &mut self,
-    //     syntax: &SyntaxReference,
-    //     buffer: &Buffer,
-    //     line: usize,
-    // ) -> Option<&[(Style, Range<usize>)]> {
-    //     if !self.is_cached(line) {
-    //         //self.update_range(syntax, buffer, line, line + 10);
-    //         None
-    //     } else {
-    //         Some(&self.highlighted_line[line])
-    //     }
-    // }
 }
