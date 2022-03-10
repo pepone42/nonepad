@@ -13,6 +13,7 @@ mod syntax;
 use std::ffi::OsStr;
 use std::path::Path;
 
+use druid::WindowHandle;
 use druid::widget::{Flex, Label, MainAxisAlignment};
 use druid::{
     piet::Color, AppDelegate, AppLauncher, Command, Data, DelegateCtx, Env, Lens, LocalizedString, Target, Widget,
@@ -68,6 +69,7 @@ impl AppDelegate<MainWindowState> for Delegate {
     fn window_added(
         &mut self,
         id: druid::WindowId,
+        _handle: WindowHandle,
         _data: &mut MainWindowState,
         _env: &Env,
         _ctx: &mut druid::DelegateCtx,
