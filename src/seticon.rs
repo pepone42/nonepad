@@ -51,6 +51,6 @@ pub fn set_icon(_win_id: WindowId) {
     unsafe {windows::set_windows_icon()}
 }
 #[cfg(not(windows))]
-pub fn set_icon(win_id: WindowId) {
+pub fn set_icon(_win_id: WindowId) {
     // todo
 }

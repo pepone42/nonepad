@@ -1,9 +1,13 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
+use std::sync::mpsc::{self, Sender};
+use std::thread;
+use std::time::Duration;
 
 use crate::commands::{self, SHOW_PALETTE_PANEL, SEND_PALETTE_PANEL_DATA};
 use crate::commands::SCROLL_TO;
-use crate::syntax::StateCache;
+use crate::syntax::{StateCache, SYNTAXSET, StyledLinesCache};
+
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 use crate::widgets::Item;
 
@@ -19,6 +23,8 @@ use druid::{
 use druid::{Data, FontStyle};
 
 use rfd::MessageDialog;
+use ropey::Rope;
+use syntect::parsing::SyntaxReference;
 
 mod env {
     use druid::Key;
@@ -30,8 +36,12 @@ mod env {
     pub const FONT_HEIGHT: Key<f64> = Key::new("nonepad.editor.fonth_height");
     pub const PAGE_LEN: Key<u64> = Key::new("nonepad.editor.page_len");
 }
-
+#[cfg(windows)]
 pub const FONT_NAME: &str = "Consolas";
+#[cfg(target_os = "linux")]
+pub const FONT_NAME: &str = "DejaVu Sans Mono";
+#[cfg(target_os = "macos")]
+pub const FONT_NAME: &str = "SF Mono";
 pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 pub const EDITOR_LEFT_PADDING: f64 = 2.;
@@ -144,9 +154,13 @@ impl HeldState {
     }
 }
 
+pub enum HighlighterMessage {
+    Stop,
+    Update(SyntaxReference, Rope, usize),
+}
+
 #[derive(Debug)]
 pub struct EditorView {
-    //editor: EditStack,
     delta_y: f64,
     delta_x: f64,
     page_len: usize,
@@ -164,8 +178,9 @@ pub struct EditorView {
     longest_line_len: f64,
 
     held_state: HeldState,
-    highlight_cache: StateCache,
-    //handle: WindowHandle,
+
+    highlight_channel_tx: Option<Sender<HighlighterMessage>>,
+    highlighted_line: StyledLinesCache,
 }
 
 impl Widget<EditStack> for EditorView {
@@ -176,6 +191,10 @@ impl Widget<EditStack> for EditorView {
 
         let handled = self.handle_event(event, ctx, editor);
         if handled {
+            //let id = ctx.widget_id();
+
+            //ctx.submit_command(Command::new(crate::commands::HIGHLIGHT, (), Target::Widget(id)));
+
             ctx.set_handled();
         }
         if !old_editor.buffer.same(&editor.buffer) {
@@ -188,14 +207,62 @@ impl Widget<EditStack> for EditorView {
         }
     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, env: &Env) {
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, editor: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
+            let (tx, rx) = mpsc::channel();
+            self.highlight_channel_tx = Some(tx);
+            let highlighted_line = self.highlighted_line.clone();
+            let owner_id = self.owner_id.clone();
+            let event_sink = ctx.get_external_handle();
+            thread::spawn(move || {
+                let mut syntax = SYNTAXSET.find_syntax_plain_text();
+                let mut highlight_cache = StateCache::new();
+                let mut current_index = 0;
+                let mut chunk_len = 100;
+                let mut rope = Rope::new();
+                loop {
+                    match rx.try_recv() {
+                        Ok(message) => match message {
+                            HighlighterMessage::Stop => return,
+                            HighlighterMessage::Update(s, r, start) => {
+                                rope = r;
+                                current_index = start;
+                                // The first chunk is smaller, to repaint quickly with highlight 
+                                chunk_len = 100;
+                                syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
+                            }
+                        },
+                        _ => (),
+                    }
+                    if current_index < rope.len_lines() {
+                        highlight_cache.update_range(
+                            highlighted_line.clone(),
+                            &syntax,
+                            &rope,
+                            current_index,
+                            current_index + chunk_len,
+                        );
+                        let _ = event_sink.submit_command(
+                            crate::commands::HIGHLIGHT,
+                            (current_index, current_index + chunk_len),
+                            owner_id,
+                        );
+                        current_index += chunk_len;
+                        // subsequent chunck are bigger, for better performance
+                        chunk_len = 1000;
+                    } else {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                }
+            });
+
             self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
             self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
             self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
             self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
 
             ctx.register_for_focus();
+            self.update_highlighter(editor, 0);
         }
     }
 
@@ -205,7 +272,10 @@ impl Widget<EditStack> for EditorView {
                 .first_caret()
                 .start_line(&old_data.buffer)
                 .min(data.first_caret().start_line(&data.buffer));
-            self.invalidate_highlight_cache(line);
+            self.update_highlighter(data, line.index);
+        }
+        if !old_data.file.syntax.name.same(&data.file.syntax.name) {
+            self.update_highlighter(data, 0);
         }
         if !old_data.same(data) {
             ctx.request_paint();
@@ -234,7 +304,7 @@ impl Widget<EditStack> for EditorView {
 
 impl EditorView {
     pub fn new(owner_id: WidgetId) -> Self {
-        EditorView {
+        let e = EditorView {
             bg_color: Color::BLACK,
             fg_color: Color::WHITE,
             fg_sel_color: Color::BLACK,
@@ -250,7 +320,36 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
-            highlight_cache: StateCache::new(),
+            highlight_channel_tx: None,
+            highlighted_line: StyledLinesCache::new(),
+        };
+
+        e
+    }
+
+    fn update_highlighter(&self, data: &EditStack, line: usize) {
+        if let Some(tx) = self.highlight_channel_tx.clone() {
+            match tx.send(HighlighterMessage::Update(
+                data.file.syntax.clone(),
+                data.buffer.rope.clone(),
+                line,
+            )) {
+                Ok(()) => (),
+                Err(_e) => {
+                    dbg!("Error sending data to highlighter!");
+                }
+            }
+        }
+    }
+
+    fn stop_highlighter(&self) {
+        if let Some(tx) = self.highlight_channel_tx.clone() {
+            match tx.send(HighlighterMessage::Stop) {
+                Ok(()) => (),
+                Err(_e) => {
+                    dbg!("Error stopping the highlighter!");
+                }
+            }
         }
     }
 
@@ -272,6 +371,7 @@ impl EditorView {
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
                 match event {
+                    #[cfg(windows)]
                     KeyEvent {
                         key: druid::keyboard_types::Key::ArrowDown,
                         mods,
@@ -280,11 +380,30 @@ impl EditorView {
                         editor.duplicate_down();
                         return true;
                     }
+                    #[cfg(windows)]
                     KeyEvent {
                         key: druid::keyboard_types::Key::ArrowUp,
                         mods,
                         ..
                     } if mods.alt() && mods.ctrl() => {
+                        editor.duplicate_up();
+                        return true;
+                    }
+                    #[cfg(not(windows))]
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowDown,
+                        mods,
+                        ..
+                    } if mods.alt() && mods.shift() => {
+                        editor.duplicate_down();
+                        return true;
+                    }
+                    #[cfg(not(windows))]
+                    KeyEvent {
+                        key: druid::keyboard_types::Key::ArrowUp,
+                        mods,
+                        ..
+                    } if mods.alt() && mods.shift() => {
                         editor.duplicate_up();
                         return true;
                     }
@@ -571,12 +690,16 @@ impl EditorView {
                         .set_level(rfd::MessageLevel::Warning)
                         .set_description("The currently opened editor is not saved. Do you really want to quit?")
                         .set_title("Not saved")
-                        .set_buttons(rfd::MessageButtons::OkCancel)
+                        .set_buttons(rfd::MessageButtons::YesNo)
                         .show()
                 {
                     return true;
                 }
                 false
+            }
+            Event::WindowDisconnected => {
+                self.stop_highlighter();
+                true
             }
 
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
@@ -628,6 +751,15 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
                 self.held_state = HeldState::None;
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
+                let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
+                
+                if self.visible_range().contains(&d.0) || self.visible_range().contains(&d.1) || 
+                (self.visible_range().start >= d.0 && self.visible_range().end <= d.1) {
+                    ctx.request_paint();
+                }
                 true
             }
             _ => false,
@@ -815,7 +947,6 @@ impl EditorView {
 
     fn paint_editor(&mut self, editor: &EditStack, ctx: &mut PaintCtx, env: &Env) -> bool {
         let font = ctx.render_ctx.text().font_family(&self.font_name).unwrap();
-        // self.size.to_rect();
         let rect = Rect::new(0.0, 0.0, self.size.width, self.size.height);
         ctx.render_ctx.fill(rect, &self.bg_color);
 
@@ -908,8 +1039,6 @@ impl EditorView {
 
         let mut dy = (self.delta_y / self.metrics.font_height).fract() * self.metrics.font_height;
         for line_idx in self.visible_range() {
-            //editor.buffer.line(line_idx, &mut line);
-
             editor.displayable_line(position::Line::from(line_idx), &mut line, &mut indices, &mut Vec::new());
             let mut layout = ctx
                 .render_ctx
@@ -919,23 +1048,28 @@ impl EditorView {
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
             if line_idx < editor.len_lines() {
-                let highlight = self
-                    .highlight_cache
-                    .get_highlighted_line(editor.file.syntax, &editor.buffer, line_idx);
-                for h in highlight {
-                    let color = TextAttribute::TextColor(Color::rgba8(
-                        h.0.foreground.r,
-                        h.0.foreground.g,
-                        h.0.foreground.b,
-                        h.0.foreground.a,
-                    ));
-                    if h.0.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
-                        layout = layout.range_attribute(
-                            indices[h.1.start].index..indices[h.1.end].index,
-                            TextAttribute::Style(FontStyle::Italic),
-                        );
+                if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx)
+                {
+                    for h in highlight.iter() {
+                        let color = TextAttribute::TextColor(Color::rgba8(
+                            h.style.foreground.r,
+                            h.style.foreground.g,
+                            h.style.foreground.b,
+                            h.style.foreground.a,
+                        ));
+                        let start = indices.get(h.range.start);
+                        let end = indices.get(h.range.end);
+                        if start.is_some() && end.is_some() {
+                            if h.style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
+                                layout = layout.range_attribute(
+                                    indices[start.unwrap().index].index..indices[end.unwrap().index].index,
+                                    TextAttribute::Style(FontStyle::Italic),
+                                );
+                            }
+
+                            layout = layout.range_attribute(start.unwrap().index..end.unwrap().index, color);
+                        }
                     }
-                    layout = layout.range_attribute(indices[h.1.start].index..indices[h.1.end].index, color);
                 }
             }
             let layout = layout.build().unwrap();
@@ -982,7 +1116,7 @@ impl EditorView {
         (rel, line)
     }
 
-    fn text_layout(&self, text: &mut PietText, buf: String) -> druid::piet::D2DTextLayout {
+    fn text_layout(&self, text: &mut PietText, buf: String) -> impl druid::piet::TextLayout {
         let font = text.font_family(&self.font_name).unwrap();
         text.new_text_layout(buf)
             .default_attribute(TextAttribute::Weight(FONT_WEIGTH))
@@ -1026,10 +1160,6 @@ impl EditorView {
         ));
     }
 
-    fn invalidate_highlight_cache(&mut self, line: position::Line) {
-        self.highlight_cache.invalidate(line.index)
-    }
-
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
     where
         P: AsRef<Path>,
@@ -1047,13 +1177,14 @@ impl EditorView {
 
         editor.save(&filename)?;
         editor.filename = Some(filename.as_ref().to_path_buf());
-
+        self.update_highlighter(editor, 0);
         Ok(())
     }
 
     fn save(&mut self, editor: &mut EditStack) -> anyhow::Result<()> {
         anyhow::ensure!(editor.filename.is_some(), "editor.filename must not be None");
         editor.save(editor.filename.clone().as_ref().unwrap())?;
+        self.update_highlighter(editor, 0);
         Ok(())
     }
     fn open<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>
@@ -1061,6 +1192,8 @@ impl EditorView {
         P: AsRef<Path>,
     {
         editor.open(filename)?;
+        self.update_highlighter(editor, 0);
+
         Ok(())
     }
 }
@@ -1081,7 +1214,6 @@ impl Widget<EditStack> for Gutter {
         match event {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 self.dy = cmd.get_unchecked(commands::SCROLL_TO).1.unwrap_or(self.dy);
-                // .clamp(-self.height(&data), 0.);
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1089,7 +1221,6 @@ impl Widget<EditStack> for Gutter {
                 self.is_held = false;
             }
             Event::MouseMove(m) => {
-                //ctx.set_cursor(&Cursor::ResizeLeftRight);
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);

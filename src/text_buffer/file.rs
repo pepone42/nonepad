@@ -59,7 +59,7 @@ impl Default for LineFeed {
         #[cfg(target_os = "windows")]
         return LineFeed::CrLf;
         #[cfg(not(target_os = "windows"))]
-        return LineFeed::LF;
+        return LineFeed::Lf;
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
