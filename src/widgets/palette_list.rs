@@ -5,11 +5,13 @@ use druid::im::Vector;
 use druid::kurbo::Line;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::TextBox;
-use druid::{Command, Data, Event, FontFamily, KbKey, KeyEvent, RenderContext, Size, Target, Widget};
+use druid::{Command, Data, Event, FontFamily, KbKey, KeyEvent, RenderContext, Selector, Size, Target, Widget};
 
 use sublime_fuzzy::best_match;
 
 use crate::commands;
+
+const FILTER: Selector<()> = Selector::new("nonepad.editor.palette.filter");
 
 #[derive(Debug, Data, Clone, Default)]
 pub struct Item {
@@ -47,13 +49,31 @@ impl PaletteListState {
     }
 
     fn filter(&mut self) {
-        for s in self.list.iter_mut() {
-            if let Some(m) = best_match(&self.filter, &s.title) {
+        if self.filter.len() == 0 {
+            for s in self.list.iter_mut() {
                 s.filtered = false;
-                s.score = m.score();
-            } else {
-                s.filtered = true;
+                s.score = 0;
             }
+        } else {
+            for s in self.list.iter_mut() {
+                if let Some(m) = best_match(&self.filter, &s.title) {
+                    s.filtered = false;
+                    s.score = m.score();
+                } else {
+                    s.filtered = true;
+                }
+            }
+        }
+    }
+
+    fn prev(&mut self) {
+        if let Some((i,_)) = dbg!(self.list.iter().filter(|f| !f.filtered).enumerate().nth(self.selected_idx-1)) {
+            self.selected_idx = i;
+        }
+    }
+    fn next(&mut self) {
+        if let Some((i,_)) = dbg!(self.list.iter().filter(|f| !f.filtered).enumerate().nth(self.selected_idx+1)) {
+            self.selected_idx = i;
         }
     }
 }
@@ -93,20 +113,15 @@ impl Widget<PaletteListState> for PaletteList {
                     key: druid::keyboard_types::Key::ArrowUp,
                     ..
                 } => {
-                    dbg!("up");
-                    data.selected_idx = if data.selected_idx == 0 {
-                        0
-                    } else {
-                        data.selected_idx - 1
-                    };
+                    data.prev();
                     ctx.set_handled();
                 }
                 KeyEvent {
                     key: druid::keyboard_types::Key::ArrowDown,
                     ..
                 } => {
-                    dbg!("down");
-                    data.selected_idx = dbg!(min(data.selected_idx + 1, data.list.len() - 1));
+
+                    data.next();
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
@@ -116,12 +131,13 @@ impl Widget<PaletteListState> for PaletteList {
                     ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
                     ctx.set_handled();
                 }
-                _ => {
-                    let r = self.search.event(ctx, event, &mut data.filter, env);
-                    dbg!(&data.filter);
-                    data.filter();
-                }
+                _ => ()
             },
+            Event::Command(c) if c.is(FILTER) => {
+                dbg!(&data.filter);
+                data.filter();
+                ctx.request_paint();
+            }
             _ => self.search.event(ctx, event, &mut data.filter, env),
         }
     }
@@ -147,6 +163,9 @@ impl Widget<PaletteListState> for PaletteList {
 
         if old_data.selected_idx != data.selected_idx || !old_data.filter.same(&data.filter) {
             ctx.request_paint();
+        }
+        if !old_data.filter.same(&data.filter) {
+            ctx.submit_command(Command::new(FILTER, (), ctx.widget_id()))
         }
     }
 
