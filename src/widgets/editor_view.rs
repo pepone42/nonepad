@@ -4,21 +4,18 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::commands::{self, SHOW_PALETTE_PANEL, SEND_PALETTE_PANEL_DATA, ShowPalette};
-use crate::commands::SCROLL_TO;
-use crate::syntax::{StateCache, SYNTAXSET, StyledLinesCache};
+use crate::commands::{self, SCROLL_TO};
+use crate::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 
 use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
-use crate::widgets::Item;
 
-use druid::im::Vector;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
     widget::Flex,
-    Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
-    UpdateCtx, Widget, WidgetExt, WidgetId,
+    Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FontWeight, HotKey,
+    KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx, Widget, WidgetExt,
+    WidgetId,
 };
 use druid::{Data, FontStyle};
 
@@ -227,7 +224,7 @@ impl Widget<EditStack> for EditorView {
                             HighlighterMessage::Update(s, r, start) => {
                                 rope = r;
                                 current_index = start;
-                                // The first chunk is smaller, to repaint quickly with highlight 
+                                // The first chunk is smaller, to repaint quickly with highlight
                                 chunk_len = 100;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                             }
@@ -360,18 +357,6 @@ impl EditorView {
                 false
             }
             Event::KeyDown(event) => {
-                if HotKey::new(SysMods::CmdShift, "P").matches(event) {
-                    let mut items = Vector::new();
-                    for c in &commands::COMMANDSET.commands {
-                        dbg!(&c.description);
-                        items.push_back(Item::new(&c.description, &""));
-                    }
-                    //ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
-                    
-                    //ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (items,commands::PALETTE_EXECUTE_COMMAND), Target::Auto));
-                    ctx.show_palette(items, "Commands",commands::PALETTE_EXECUTE_COMMAND);
-                }
-                commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
                 match event {
                     #[cfg(windows)]
                     KeyEvent {
@@ -757,19 +742,16 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
                 let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
-                
-                if self.visible_range().contains(&d.0) || self.visible_range().contains(&d.1) || 
-                (self.visible_range().start >= d.0 && self.visible_range().end <= d.1) {
+
+                if self.visible_range().contains(&d.0)
+                    || self.visible_range().contains(&d.1)
+                    || (self.visible_range().start >= d.0 && self.visible_range().end <= d.1)
+                {
                     ctx.request_paint();
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::PALETTE_EXECUTE_COMMAND) => {
-                let index = *cmd.get_unchecked(crate::commands::PALETTE_EXECUTE_COMMAND);
-                let ui_cmd = &commands::COMMANDSET.commands[index];
-                ui_cmd.exec(ctx,self,editor);
-                true
-            }
+
             _ => false,
         }
     }
@@ -1056,8 +1038,7 @@ impl EditorView {
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
             if line_idx < editor.len_lines() {
-                if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx)
-                {
+                if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx) {
                     for h in highlight.iter() {
                         let color = TextAttribute::TextColor(Color::rgba8(
                             h.style.foreground.r,
@@ -1209,7 +1190,6 @@ impl EditorView {
 #[derive(Debug)]
 pub struct Gutter {
     metrics: CommonMetrics,
-    font_name: String,
     page_len: usize,
     size: Size,
     dy: f64,
@@ -1295,7 +1275,6 @@ impl Gutter {
     fn new(owner_id: WidgetId) -> Self {
         Gutter {
             metrics: Default::default(),
-            font_name: FONT_NAME.to_string(),
             page_len: 0,
             size: Default::default(),
             dy: 0.0,

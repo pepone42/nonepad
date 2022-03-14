@@ -1,11 +1,10 @@
-use std::cmp::{max, min};
 use std::sync::Arc;
 
 use druid::im::Vector;
 use druid::kurbo::Line;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::TextBox;
-use druid::{Command, Data, Event, FontFamily, KbKey, KeyEvent, RenderContext, Selector, Size, Target, Widget, WidgetId};
+use druid::{Command, Data, Event, KbKey, KeyEvent, RenderContext, Selector, Size, Target, Widget, WidgetId};
 
 use sublime_fuzzy::best_match;
 

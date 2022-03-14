@@ -1,11 +1,11 @@
 use druid::{
     widget::{Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, im::Vector,
+    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId,
 };
-use once_cell::unsync::Lazy;
 
-use crate::widgets::{EmptyWidget, Extension, PaletteListState, Item};
-use crate::{commands, text_buffer::EditStack, widgets};
+
+use crate::widgets::{EmptyWidget, Extension, PaletteListState};
+use crate::{commands, widgets};
 
 pub const PANEL_CLOSED: usize = 0x0;
 pub const PANEL_SEARCH: usize = 0x1;
