@@ -59,6 +59,8 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
             Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
                 data.current = PANEL_PALETTE;
                 let id = child.id().unwrap();
+                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL).clone();
+                ctx.submit_command(Command::new(commands::SEND_PALETTE_PANEL_DATA, input, id));
                 ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
                 return;
             }

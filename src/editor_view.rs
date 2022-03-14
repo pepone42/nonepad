@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::commands::{self, SHOW_PALETTE_PANEL, SEND_PALETTE_PANEL_DATA};
+use crate::commands::{self, SHOW_PALETTE_PANEL, SEND_PALETTE_PANEL_DATA, ShowPalette};
 use crate::commands::SCROLL_TO;
 use crate::syntax::{StateCache, SYNTAXSET, StyledLinesCache};
 
@@ -361,13 +361,15 @@ impl EditorView {
             }
             Event::KeyDown(event) => {
                 if HotKey::new(SysMods::CmdShift, "P").matches(event) {
-                    ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
                     let mut items = Vector::new();
                     for c in &commands::COMMANDSET.commands {
                         dbg!(&c.description);
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    ctx.submit_command(Command::new(SEND_PALETTE_PANEL_DATA, (items,|i| {dbg!(i);}), Target::Auto));
+                    //ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
+                    
+                    //ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (items,commands::PALETTE_EXECUTE_COMMAND), Target::Auto));
+                    ctx.show_palette(items, "Commands",commands::PALETTE_EXECUTE_COMMAND);
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, editor);
                 match event {
@@ -760,6 +762,12 @@ impl EditorView {
                 (self.visible_range().start >= d.0 && self.visible_range().end <= d.1) {
                     ctx.request_paint();
                 }
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::PALETTE_EXECUTE_COMMAND) => {
+                let index = *cmd.get_unchecked(crate::commands::PALETTE_EXECUTE_COMMAND);
+                let ui_cmd = &commands::COMMANDSET.commands[index];
+                ui_cmd.exec(ctx,self,editor);
                 true
             }
             _ => false,

@@ -39,7 +39,7 @@ impl AppDelegate<MainWindowState> for Delegate {
         event: druid::Event,
         data: &mut MainWindowState,
         _env: &Env,
-    ) -> Option<druid::Event> {
+    ) -> Option<druid::Event> {	        
         match event {
             druid::Event::KeyDown(druid::KeyEvent {
                 key: druid::KbKey::Escape,

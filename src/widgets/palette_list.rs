@@ -5,7 +5,7 @@ use druid::im::Vector;
 use druid::kurbo::Line;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::TextBox;
-use druid::{Command, Data, Event, FontFamily, KbKey, KeyEvent, RenderContext, Selector, Size, Target, Widget};
+use druid::{Command, Data, Event, FontFamily, KbKey, KeyEvent, RenderContext, Selector, Size, Target, Widget, WidgetId};
 
 use sublime_fuzzy::best_match;
 
@@ -81,7 +81,8 @@ impl PaletteListState {
 pub struct PaletteList {
     search: TextBox<String>,
     filter_height: f64,
-    action: Option<fn(usize)>,
+    action: Option<Selector<usize>>,
+    emmeter: Option<WidgetId,>
 }
 
 impl PaletteList {
@@ -90,6 +91,7 @@ impl PaletteList {
             search: TextBox::new().with_text_size(12.0),
             filter_height: 0.,
             action: None,
+            emmeter: None,
         }
     }
 }
@@ -105,8 +107,9 @@ impl Widget<PaletteListState> for PaletteList {
         match event {
             Event::Command(cmd) if cmd.is(crate::commands::SEND_PALETTE_PANEL_DATA) => {
                 let d = cmd.get_unchecked(crate::commands::SEND_PALETTE_PANEL_DATA);
-                data.list = d.0.clone();
-                self.action = Some(d.1);
+                data.list = d.1.clone();
+                self.action = Some(d.2);
+                self.emmeter = Some(d.0);
             }
             Event::KeyDown(k) => match k {
                 KeyEvent {
@@ -126,7 +129,7 @@ impl Widget<PaletteListState> for PaletteList {
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
                     if let Some(f) = self.action {
-                        (f)(data.selected_idx);
+                        ctx.submit_command(Command::new(f, data.selected_idx, self.emmeter.unwrap()));
                     }
                     ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
                     ctx.set_handled();
