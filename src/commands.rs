@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 
-use druid::{commands, im::Vector, Command, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target};
+use druid::{
+    commands, im::Vector, Command, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target, WidgetId,
+};
 use once_cell::sync::Lazy;
 use rfd::MessageDialog;
 
@@ -11,8 +13,10 @@ use crate::{
 };
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
-pub const SHOW_PALETTE_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.show_palette");
-pub const SEND_PALETTE_PANEL_DATA: Selector<(Vector<Item>,fn(usize))> = Selector::new("nonepad.bottom_panel.show_palette_data");
+pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, Vector<Item>, Selector<usize>)> =
+    Selector::new("nonepad.bottom_panel.show_palette");
+pub const SEND_PALETTE_PANEL_DATA: Selector<(WidgetId, Vector<Item>, Selector<usize>)> =
+    Selector::new("nonepad.bottom_panel.show_palette_data");
 pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const REQUEST_CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.request_close");
@@ -21,7 +25,9 @@ pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.
 pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
 pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
-pub const HIGHLIGHT: Selector<(usize,usize)> = Selector::new("nonepad.editor.highlight");
+pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
+
+pub const PALETTE_EXECUTE_COMMAND: Selector<usize> = Selector::new("nonepad.palette.execute_command");
 
 pub trait UICmd {
     fn matches(&self, event: &KeyEvent) -> bool;
@@ -160,6 +166,20 @@ impl CommandEmmeterCtx for EventCtx<'_, '_> {
     }
 }
 
+pub trait ShowPalette {
+    fn show_palette(&mut self, items: Vector<Item>, description: &'static str, callback_cmd: Selector<usize>);
+}
+
+impl ShowPalette for EventCtx<'_, '_> {
+    fn show_palette(&mut self, items: Vector<Item>, description: &'static str, callback_cmd: Selector<usize>) {
+        self.submit_command(Command::new(
+            SHOW_PALETTE_PANEL,
+            (self.widget_id(), items, callback_cmd),
+            Target::Auto,
+        ));
+    }
+}
+
 impl UICommand {
     pub fn new(
         description: &str,
@@ -173,6 +193,9 @@ impl UICommand {
             shortcut,
             exec,
         }
+    }
+    pub fn exec(&self, ctx: &mut EventCtx, editor_view: &mut EditorView, editor: &mut EditStack) {
+        (self.exec)(editor_view, ctx, editor);
     }
     // pub fn submit<C: CommandEmmeterCtx>(
     //     &'static self,
