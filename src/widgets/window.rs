@@ -19,6 +19,7 @@ pub struct Window {
 #[derive(Clone, Data, Lens)]
 pub struct NPWindowState {
     pub editor: EditStack,
+    //pub editor2: EditStack,
     status: String,
     bottom_panel: BottonPanelState,
 }
@@ -27,6 +28,7 @@ impl Default for NPWindowState {
     fn default() -> Self {
         NPWindowState {
             editor: EditStack::default(),
+            //editor2: EditStack::default(),
             status: "Untilted".to_owned(),
             bottom_panel: BottonPanelState::default(),
         }
@@ -41,6 +43,7 @@ impl NPWindowState {
     pub fn from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<NPWindowState> {
         Ok(Self {
             editor: EditStack::from_file(&path)?,
+            //editor2: EditStack::default(),
             status: path
                 .as_ref()
                 .file_name()
@@ -157,8 +160,10 @@ impl Window {
         .with_text_size(12.0);
 
         let edit = editor_view::new().lens(NPWindowState::editor);
+        //let edit2 = editor_view::new().lens(NPWindowState::editor2);
         Window {
             inner: Flex::column()
+                //.with_flex_child(Flex::row().with_flex_child(edit,0.5).with_flex_child(edit2,0.5).padding(2.0), 1.0)
                 .with_flex_child(edit.padding(2.0), 1.0)
                 .must_fill_main_axis(true)
                 .with_child(bottom_panel::build().lens(NPWindowState::bottom_panel))

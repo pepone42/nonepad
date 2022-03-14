@@ -738,7 +738,7 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
                 self.held_state = HeldState::None;
-                true
+                false
             }
             Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
                 let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
@@ -1067,17 +1067,19 @@ impl EditorView {
 
             self.longest_line_len = self.longest_line_len.max(layout.image_bounds().width());
 
-            editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
-                let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
-                ctx.render_ctx.stroke(
-                    Line::new(
-                        (metrics.point.x.ceil(), (self.metrics.font_height + dy).ceil()),
-                        (metrics.point.x.ceil(), dy.ceil()),
-                    ),
-                    &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
-                    2.0,
-                );
-            });
+            if ctx.has_focus() {
+                editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
+                    let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
+                    ctx.render_ctx.stroke(
+                        Line::new(
+                            (metrics.point.x.ceil(), (self.metrics.font_height + dy).ceil()),
+                            (metrics.point.x.ceil(), dy.ceil()),
+                        ),
+                        &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
+                        2.0,
+                    );
+                });
+            }
 
             dy += self.metrics.font_height;
         }
@@ -1439,6 +1441,7 @@ impl Widget<EditStack> for ScrollBar {
             Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
                 self.is_held = false;
                 self.is_hovered = false;
+                ctx.request_paint();
             }
             Event::MouseDown(m) => {
                 if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {
