@@ -107,6 +107,8 @@ impl Widget<PaletteListState> for PaletteList {
             Event::Command(cmd) if cmd.is(crate::commands::SEND_PALETTE_PANEL_DATA) => {
                 let d = cmd.get_unchecked(crate::commands::SEND_PALETTE_PANEL_DATA);
                 data.list = d.1.clone();
+                data.selected_idx = 0;
+                data.filter.clear();
                 self.action = Some(d.2);
                 self.emmeter = Some(d.0);
             }
@@ -128,7 +130,8 @@ impl Widget<PaletteListState> for PaletteList {
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
                     if let Some(f) = self.action {
-                        ctx.submit_command(Command::new(commands::PALETTE_CALLBACK, (data.selected_idx, data.list[data.selected_idx].title.clone(),f), Target::Global));
+                        let index = data.list.iter().enumerate().filter(|i| !i.1.filtered).nth(data.selected_idx).unwrap().0;
+                        ctx.submit_command(Command::new(commands::PALETTE_CALLBACK, (index, data.list[index].title.clone(),f), Target::Global));
                     }
                     ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), Target::Global));
                     ctx.set_handled();
@@ -138,6 +141,7 @@ impl Widget<PaletteListState> for PaletteList {
             Event::Command(c) if c.is(FILTER) => {
                 dbg!(&data.filter);
                 data.filter();
+                data.selected_idx = 0;
                 ctx.request_paint();
             }
             _ => self.search.event(ctx, event, &mut data.filter, env),
