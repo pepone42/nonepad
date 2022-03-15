@@ -15,7 +15,6 @@ pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, Vector<Item>, Selector<usize>)
 pub const SEND_PALETTE_PANEL_DATA: Selector<(WidgetId, Vector<Item>, Selector<usize>)> = Selector::new("nonepad.bottom_panel.show_palette_data");
 pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
-pub const REQUEST_CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.request_close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
 pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
 pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
@@ -24,10 +23,6 @@ pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonep
 pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
 pub const PALETTE_EXECUTE_COMMAND: Selector<usize> = Selector::new("nonepad.palette.execute_command");
 
-pub trait UICmd {
-    fn matches(&self, event: &KeyEvent) -> bool;
-}
-
 pub struct UICommand {
     pub description: String,
     pub show_in_palette: bool,
@@ -35,7 +30,23 @@ pub struct UICommand {
     exec: fn(&mut Window, &mut EventCtx, &mut NPWindowState) -> bool,
 }
 
-impl UICmd for UICommand {
+impl UICommand {
+    pub fn new(
+        description: &str,
+        show_in_palette: bool,
+        shortcut: Option<druid::HotKey>,
+        exec: fn(&mut Window, &mut EventCtx, &mut NPWindowState) -> bool,
+    ) -> Self {
+        Self {
+            description: description.to_owned(),
+            show_in_palette,
+            shortcut,
+            exec,
+        }
+    }
+    pub fn exec(&self, ctx: &mut EventCtx, editor_view: &mut Window, editor: &mut NPWindowState) {
+        (self.exec)(editor_view, ctx, editor);
+    }
     fn matches(&self, event: &KeyEvent) -> bool {
         self.shortcut.clone().map(|s| s.matches(event)).unwrap_or(false)
     }
@@ -157,24 +168,5 @@ impl ShowPalette for EventCtx<'_, '_> {
             (self.widget_id(), items, callback_cmd),
             Target::Auto,
         ));
-    }
-}
-
-impl UICommand {
-    pub fn new(
-        description: &str,
-        show_in_palette: bool,
-        shortcut: Option<druid::HotKey>,
-        exec: fn(&mut Window, &mut EventCtx, &mut NPWindowState) -> bool,
-    ) -> Self {
-        Self {
-            description: description.to_owned(),
-            show_in_palette,
-            shortcut,
-            exec,
-        }
-    }
-    pub fn exec(&self, ctx: &mut EventCtx, editor_view: &mut Window, editor: &mut NPWindowState) {
-        (self.exec)(editor_view, ctx, editor);
     }
 }

@@ -69,23 +69,14 @@ impl Widget<NPWindowState> for Window {
                 if HotKey::new(SysMods::CmdShift, "P").matches(event) {
                     let mut items = Vector::new();
                     for c in &commands::COMMANDSET.commands {
-                        dbg!(&c.description);
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    //ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (), Target::Auto));
-                    
-                    //ctx.submit_command(Command::new(SHOW_PALETTE_PANEL, (items,commands::PALETTE_EXECUTE_COMMAND), Target::Auto));
                     ctx.show_palette(items, "Commands",commands::PALETTE_EXECUTE_COMMAND);
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
             }
             druid::Event::MouseUp(_) => {
                 ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
-            }
-            druid::Event::Command(cmd) if cmd.is(commands::REQUEST_CLOSE_BOTTOM_PANEL) => {
-                ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
-                ctx.set_handled();
-                return;
             }
             druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_EXECUTE_COMMAND) => {
                 let index = *cmd.get_unchecked(crate::commands::PALETTE_EXECUTE_COMMAND);

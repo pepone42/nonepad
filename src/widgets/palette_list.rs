@@ -130,7 +130,7 @@ impl Widget<PaletteListState> for PaletteList {
                     if let Some(f) = self.action {
                         ctx.submit_command(Command::new(f, data.selected_idx, self.emmeter.unwrap()));
                     }
-                    ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
+                    ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), Target::Global));
                     ctx.set_handled();
                 }
                 _ => ()
