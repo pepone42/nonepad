@@ -93,6 +93,12 @@ impl PaletteList {
             emmeter: None,
         }
     }
+    pub fn init(&mut self, data: &mut PaletteListState, list: Vector<Item>, action: UICommandType) {
+        data.list = list.clone();
+        data.selected_idx = 0;
+        data.filter.clear();
+        self.action = Some(action);
+    }
 }
 
 impl Widget<PaletteListState> for PaletteList {
@@ -103,6 +109,7 @@ impl Widget<PaletteListState> for PaletteList {
         data: &mut PaletteListState,
         env: &druid::Env,
     ) {
+        ctx.request_focus();
         match event {
             Event::Command(cmd) if cmd.is(crate::commands::SEND_PALETTE_PANEL_DATA) => {
                 let d = cmd.get_unchecked(crate::commands::SEND_PALETTE_PANEL_DATA);
@@ -129,11 +136,19 @@ impl Widget<PaletteListState> for PaletteList {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
+                    ctx.resign_focus();
+                    ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));                    
                     if let Some(f) = self.action {
                         let index = data.list.iter().enumerate().filter(|i| !i.1.filtered).nth(data.selected_idx).unwrap().0;
                         ctx.submit_command(Command::new(commands::PALETTE_CALLBACK, (index, data.list[index].title.clone(),f), Target::Global));
                     }
-                    ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), Target::Global));
+
+                    ctx.set_handled();
+                    
+                }
+                KeyEvent { key: KbKey::Escape, .. } => {
+                    ctx.resign_focus();
+                    ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
                     ctx.set_handled();
                 }
                 _ => ()

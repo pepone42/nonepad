@@ -6,7 +6,7 @@ mod seticon;
 mod theme;
 mod widgets;
 
-use druid::WindowHandle;
+use druid::{WindowHandle, Size};
 use druid::{piet::Color, AppDelegate, AppLauncher, Command, DelegateCtx, Env, LocalizedString, Target, WindowDesc};
 
 use seticon::set_icon;
@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
         NPWindowState::new()
     };
 
-    let win = WindowDesc::new(widgets::window::NPWindow::build()).title(LocalizedString::new("NonePad"));
+    let win = WindowDesc::new(widgets::window::NPWindow::build()).title(LocalizedString::new("NonePad")).with_min_size(Size::new(500.,500.));
     AppLauncher::with_window(win)
         .delegate(Delegate)
         .configure_env(|env, _| {

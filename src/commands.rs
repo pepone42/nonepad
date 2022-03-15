@@ -29,7 +29,7 @@ pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.s
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
 pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
 pub const PALETTE_CALLBACK: Selector<(usize, Arc<String>, UICommandType)> = Selector::new("nonepad.editor.execute_command");
-
+pub const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
 pub struct UICommand {
     pub description: String,
     pub show_in_palette: bool,

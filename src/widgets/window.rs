@@ -1,20 +1,22 @@
 use std::{ffi::OsStr, path::Path};
 
 use druid::{
-    widget::{Flex, Label, MainAxisAlignment, IdentityWrapper},
-    Color, Data, Env, Lens, Widget, WidgetExt, Command, HotKey, SysMods, im::Vector, WidgetId, Size,
+    im::Vector,
+    widget::{Flex, IdentityWrapper, Label, MainAxisAlignment},
+    Affine, BoxConstraints, Color, Command, Data, Env, HotKey, Lens, Rect, Region, RenderContext, Size, SysMods,
+    Target, Widget, WidgetExt, WidgetId,
 };
 
-use super::{text_buffer::EditStack,  Item, PaletteList, PaletteListState};
-use crate::commands::{self, ShowPalette, UICommandType};
 use super::{
     bottom_panel::{self, BottonPanelState},
     editor_view,
 };
+use super::{text_buffer::EditStack, Item, PaletteList, PaletteListState};
+use crate::commands::{self, ShowPalette, UICommandType};
 
 pub struct NPWindow {
     inner: Flex<NPWindowState>,
-    palette: IdentityWrapper<PaletteList>,
+    palette: PaletteList,
     in_palette: bool,
 }
 
@@ -61,10 +63,6 @@ impl NPWindowState {
 }
 impl Widget<NPWindowState> for NPWindow {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut NPWindowState, env: &druid::Env) {
-        if self.in_palette {
-            self.palette.event(ctx, event, &mut data.palette_state, env);
-            return;
-        }
         match event {
             druid::Event::KeyDown(druid::KeyEvent {
                 key: druid::KbKey::Escape,
@@ -75,15 +73,19 @@ impl Widget<NPWindowState> for NPWindow {
                 return;
             }
             druid::Event::KeyDown(event) => {
-                if HotKey::new(SysMods::CmdShift, "P").matches(event) {
+                if HotKey::new(SysMods::CmdShift, "P").matches(event) && !self.in_palette {
                     let mut items = Vector::new();
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    ctx.show_palette(items, "Commands",UICommandType::Window(|index,_name,ctx, win, data| {
-                        let ui_cmd = &commands::COMMANDSET.commands[index];
-                        ui_cmd.exec(ctx,win,data);
-                    }));
+                    ctx.show_palette(
+                        items,
+                        "Commands",
+                        UICommandType::Window(|index, _name, ctx, win, data| {
+                            let ui_cmd = &commands::COMMANDSET.commands[index];
+                            ui_cmd.exec(ctx, win, data);
+                        }),
+                    );
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
             }
@@ -93,25 +95,32 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
                 if let UICommandType::Window(action) = item.2 {
-                    (action)(item.0,item.1.clone(),ctx,self,data);
+                    (action)(item.0, item.1.clone(), ctx, self, data);
                     ctx.set_handled();
                     return;
                 }
             }
             druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
-                dbg!("here");
                 self.in_palette = true;
                 ctx.request_layout();
-                let id = self.palette.id().unwrap();
-                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL).clone();
-                ctx.submit_command(Command::new(commands::SEND_PALETTE_PANEL_DATA, input, id));
-                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
+                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL); //.clone();
+                self.palette.init(&mut data.palette_state, input.1.clone(), input.2);
+                return;
+            }
+            druid::Event::Command(cmd) if cmd.is(commands::CLOSE_PALETTE) => {
+                // ctx.request_focus don't work. I guess it needs to be delayed
+                // TODO: send focus to the last focused editor
+                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
+                self.in_palette = false;
                 return;
             }
             _ => (),
         }
-
-        self.inner.event(ctx, event, data, env);
+        if self.in_palette {
+            self.palette.event(ctx, event, &mut data.palette_state, env);
+        } else {
+            self.inner.event(ctx, event, data, env);
+        }
     }
 
     fn lifecycle(
@@ -127,7 +136,8 @@ impl Widget<NPWindowState> for NPWindow {
 
     fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &NPWindowState, data: &NPWindowState, env: &druid::Env) {
         self.inner.update(ctx, old_data, data, env);
-        self.palette.update(ctx, &old_data.palette_state, &data.palette_state, env)
+        self.palette
+            .update(ctx, &old_data.palette_state, &data.palette_state, env)
     }
 
     fn layout(
@@ -138,14 +148,14 @@ impl Widget<NPWindowState> for NPWindow {
         env: &druid::Env,
     ) -> druid::Size {
         if self.in_palette {
-            self.palette.layout(ctx, &bc.shrink((500.,500.)), &data.palette_state, env)
-        } else {
-            self.inner.layout(ctx, bc, data, env)
+            self.inner.layout(ctx, bc, data, env);
+            let b = BoxConstraints::new(Size::new(500., 500.), Size::new(500., 500.));
+            return self.palette.layout(ctx, &b, &data.palette_state, env);
         }
+        self.inner.layout(ctx, bc, data, env)
     }
 
     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &NPWindowState, env: &druid::Env) {
-        
         self.inner.paint(ctx, data, env);
         if self.in_palette {
             self.palette.paint(ctx, &data.palette_state, env);
@@ -200,7 +210,7 @@ impl NPWindow {
                         .background(Color::rgb8(0x1d, 0x1e, 0x22)), // using a Painter cause a redraw every frame
                 )
                 .main_axis_alignment(MainAxisAlignment::Center),
-            palette: PaletteList::new().with_id(WidgetId::next()),
+            palette: PaletteList::new(),
             in_palette: false,
         }
     }
