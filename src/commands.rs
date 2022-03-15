@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, sync::Arc};
 
 use druid::{
     im::Vector, Command, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target, WidgetId,
@@ -7,12 +7,12 @@ use once_cell::sync::Lazy;
 use rfd::MessageDialog;
 
 use crate::{
-    widgets::{Item, window::{Window, NPWindowState}},
+    widgets::{Item, window::{Window, NPWindowState}, text_buffer::syntax::SYNTAXSET},
 };
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
-pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, Vector<Item>, Selector<usize>)> = Selector::new("nonepad.bottom_panel.show_palette");
-pub const SEND_PALETTE_PANEL_DATA: Selector<(WidgetId, Vector<Item>, Selector<usize>)> = Selector::new("nonepad.bottom_panel.show_palette_data");
+pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, Vector<Item>, Selector<(usize,Arc<String>)>)> = Selector::new("nonepad.bottom_panel.show_palette");
+pub const SEND_PALETTE_PANEL_DATA: Selector<(WidgetId, Vector<Item>, Selector<(usize,Arc<String>)>)> = Selector::new("nonepad.bottom_panel.show_palette_data");
 pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
@@ -21,7 +21,8 @@ pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
 pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
 pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
-pub const PALETTE_EXECUTE_COMMAND: Selector<usize> = Selector::new("nonepad.palette.execute_command");
+pub const PALETTE_EXECUTE_COMMAND: Selector<(usize,Arc<String>)> = Selector::new("nonepad.palette.execute_command");
+pub const CHANGE_LANGUAGE_FILE: Selector<(usize,Arc<String>)> = Selector::new("nonepad.editor.change_language_file");
 
 pub struct UICommand {
     pub description: String,
@@ -110,9 +111,9 @@ macro_rules! uicmd {
 uicmd! {
     COMMANDSET = {
         PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","CtrlShift-l", true,
-        |_editor_view, _ctx, window| {
-            dbg!("youhou!");
-            window.editor.tab();
+        |_editor_view, ctx, _window| {
+            let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
+            ctx.show_palette(languages,&"Please make a choice",CHANGE_LANGUAGE_FILE);
             true
         });
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation type","", true,
@@ -158,11 +159,11 @@ uicmd! {
 }
 
 pub trait ShowPalette {
-    fn show_palette(&mut self, items: Vector<Item>, description: &'static str, callback_cmd: Selector<usize>);
+    fn show_palette(&mut self, items: Vector<Item>, description: &'static str, callback_cmd: Selector<(usize,Arc<String>)>);
 }
 
 impl ShowPalette for EventCtx<'_, '_> {
-    fn show_palette(&mut self, items: Vector<Item>, _description: &'static str, callback_cmd: Selector<usize>) {
+    fn show_palette(&mut self, items: Vector<Item>, _description: &'static str, callback_cmd: Selector<(usize,Arc<String>)>) {
         self.submit_command(Command::new(
             SHOW_PALETTE_PANEL,
             (self.widget_id(), items, callback_cmd),

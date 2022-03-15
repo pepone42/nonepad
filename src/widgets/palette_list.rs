@@ -80,7 +80,7 @@ impl PaletteListState {
 pub struct PaletteList {
     search: TextBox<String>,
     filter_height: f64,
-    action: Option<Selector<usize>>,
+    action: Option<Selector<(usize,Arc<String>)>>,
     emmeter: Option<WidgetId,>
 }
 
@@ -128,7 +128,7 @@ impl Widget<PaletteListState> for PaletteList {
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
                     if let Some(f) = self.action {
-                        ctx.submit_command(Command::new(f, data.selected_idx, self.emmeter.unwrap()));
+                        ctx.submit_command(Command::new(f, (data.selected_idx, data.list[data.selected_idx].title.clone()), self.emmeter.unwrap()));
                     }
                     ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), Target::Global));
                     ctx.set_handled();

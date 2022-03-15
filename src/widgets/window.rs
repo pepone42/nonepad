@@ -5,8 +5,8 @@ use druid::{
     Color, Data, Env, Lens, Widget, WidgetExt, Command, HotKey, SysMods, im::Vector,
 };
 
-use crate::{text_buffer::EditStack, commands::{self, ShowPalette}, widgets::Item};
-
+use super::{text_buffer::EditStack,  Item};
+use crate::commands::{self, ShowPalette};
 use super::{
     bottom_panel::{self, BottonPanelState},
     editor_view,
@@ -79,8 +79,8 @@ impl Widget<NPWindowState> for Window {
                 ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
             }
             druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_EXECUTE_COMMAND) => {
-                let index = *cmd.get_unchecked(crate::commands::PALETTE_EXECUTE_COMMAND);
-                let ui_cmd = &commands::COMMANDSET.commands[index];
+                let index = cmd.get_unchecked(crate::commands::PALETTE_EXECUTE_COMMAND);
+                let ui_cmd = &commands::COMMANDSET.commands[index.0];
                 ui_cmd.exec(ctx,self,data);
                 ctx.set_handled();
                 return;

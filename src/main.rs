@@ -3,8 +3,6 @@
 
 mod commands;
 mod seticon;
-mod syntax;
-mod text_buffer;
 mod theme;
 mod widgets;
 

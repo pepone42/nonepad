@@ -5,9 +5,8 @@ use std::thread;
 use std::time::Duration;
 
 use crate::commands::{self, SCROLL_TO};
-use crate::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
-
-use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
+use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
@@ -749,6 +748,11 @@ impl EditorView {
                 {
                     ctx.request_paint();
                 }
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::CHANGE_LANGUAGE_FILE) => {
+                let index = cmd.get_unchecked(crate::commands::CHANGE_LANGUAGE_FILE);
+                editor.file.syntax = SYNTAXSET.find_syntax_by_name(&index.1).unwrap();
                 true
             }
 

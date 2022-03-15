@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::fs;
 use std::io::{Read, Result, Write};
 use std::{fmt::Display, path::Path};
-use crate::syntax::SYNTAXSET;
+use super::syntax::SYNTAXSET;
 
 use super::buffer::Buffer;
 
