@@ -6,13 +6,13 @@ use druid::{
 };
 
 use super::{text_buffer::EditStack,  Item};
-use crate::commands::{self, ShowPalette};
+use crate::commands::{self, ShowPalette, UICommandType};
 use super::{
     bottom_panel::{self, BottonPanelState},
     editor_view,
 };
 
-pub struct Window {
+pub struct NPWindow {
     inner: Flex<NPWindowState>,
 }
 
@@ -54,7 +54,7 @@ impl NPWindowState {
         })
     }
 }
-impl Widget<NPWindowState> for Window {
+impl Widget<NPWindowState> for NPWindow {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut NPWindowState, env: &druid::Env) {
         match event {
             druid::Event::KeyDown(druid::KeyEvent {
@@ -71,19 +71,23 @@ impl Widget<NPWindowState> for Window {
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    ctx.show_palette(items, "Commands",commands::PALETTE_EXECUTE_COMMAND);
+                    ctx.show_palette(items, "Commands",UICommandType::Window(|index,_name,ctx, win, data| {
+                        let ui_cmd = &commands::COMMANDSET.commands[index];
+                        ui_cmd.exec(ctx,win,data);
+                    }));
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
             }
             druid::Event::MouseUp(_) => {
                 ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
             }
-            druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_EXECUTE_COMMAND) => {
-                let index = cmd.get_unchecked(crate::commands::PALETTE_EXECUTE_COMMAND);
-                let ui_cmd = &commands::COMMANDSET.commands[index.0];
-                ui_cmd.exec(ctx,self,data);
-                ctx.set_handled();
-                return;
+            druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
+                if let UICommandType::Window(action) = item.2 {
+                    (action)(item.0,item.1.clone(),ctx,self,data);
+                    ctx.set_handled();
+                    return;
+                }
             }
             _ => (),
         }
@@ -120,7 +124,7 @@ impl Widget<NPWindowState> for Window {
     }
 }
 
-impl Window {
+impl NPWindow {
     pub fn build() -> Self {
         let label_left = Label::new(|data: &NPWindowState, _env: &Env| {
             format!(
@@ -152,7 +156,7 @@ impl Window {
 
         let edit = editor_view::new().lens(NPWindowState::editor);
         //let edit2 = editor_view::new().lens(NPWindowState::editor2);
-        Window {
+        NPWindow {
             inner: Flex::column()
                 //.with_flex_child(Flex::row().with_flex_child(edit,0.5).with_flex_child(edit2,0.5).padding(2.0), 1.0)
                 .with_flex_child(edit.padding(2.0), 1.0)

@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
         NPWindowState::new()
     };
 
-    let win = WindowDesc::new(widgets::window::Window::build()).title(LocalizedString::new("NonePad"));
+    let win = WindowDesc::new(widgets::window::NPWindow::build()).title(LocalizedString::new("NonePad"));
     AppLauncher::with_window(win)
         .delegate(Delegate)
         .configure_env(|env, _| {

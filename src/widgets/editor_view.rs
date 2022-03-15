@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::commands::{self, SCROLL_TO};
+use crate::commands::{self, SCROLL_TO, UICommandType};
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
@@ -750,12 +750,15 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::CHANGE_LANGUAGE_FILE) => {
-                let index = cmd.get_unchecked(crate::commands::CHANGE_LANGUAGE_FILE);
-                editor.file.syntax = SYNTAXSET.find_syntax_by_name(&index.1).unwrap();
-                true
+            Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
+                
+                if let UICommandType::Editor(action) = item.2 {
+                    (action)(item.0,item.1.clone(),ctx,self,editor);
+                    return true;
+                }
+                false
             }
-
             _ => false,
         }
     }
