@@ -139,8 +139,9 @@ impl Widget<PaletteListState> for PaletteList {
                     ctx.resign_focus();
                     ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));                    
                     if let Some(f) = self.action {
-                        let index = data.list.iter().enumerate().filter(|i| !i.1.filtered).nth(data.selected_idx).unwrap().0;
-                        ctx.submit_command(Command::new(commands::PALETTE_CALLBACK, (index, data.list[index].title.clone(),f), Target::Global));
+                        if let Some(index) = data.list.iter().enumerate().filter(|i| !i.1.filtered).nth(data.selected_idx).map(|i| i.0) {
+                            ctx.submit_command(Command::new(commands::PALETTE_CALLBACK, (index, data.list[index].title.clone(),f), Target::Global));
+                        }
                     }
 
                     ctx.set_handled();
