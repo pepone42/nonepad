@@ -150,6 +150,7 @@ impl Widget<NPWindowState> for NPWindow {
         env: &druid::Env,
     ) -> druid::Size {
         if self.in_palette {
+            self.inner.layout(ctx, bc, data, env);
             self.palette.layout(ctx, bc, &data.palette_state, env)
         } else {
             self.inner.layout(ctx, bc, data, env)
