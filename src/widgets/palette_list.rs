@@ -45,6 +45,7 @@ pub struct PaletteListState {
     selected_idx: usize,
     list: Vector<Item>,
     visible_list: Vector<(usize, Item)>,
+    bbox: Rect,
 }
 
 impl PaletteListState {
@@ -64,7 +65,7 @@ impl PaletteListState {
                 s.filtered = false;
                 s.score = 0;
             }
-            self.visible_list = self.list.iter().enumerate().map(|i| (i.0,i.1.clone())).collect();
+            self.visible_list = self.list.iter().enumerate().map(|i| (i.0, i.1.clone())).collect();
         } else {
             for s in self.list.iter_mut() {
                 if let Some(m) = best_match(&self.filter, &s.title) {
@@ -75,22 +76,22 @@ impl PaletteListState {
                 }
             }
             self.visible_list = self
-            .list
-            .iter()
-            .enumerate()
-            .filter(|c| !c.1.filtered)
-            .map(|i| (i.0, i.1.clone()))
-            .collect();
-        self.visible_list.sort_by(|l, r| {
-            let result = r.1.score.cmp(&l.1.score);
-            if result == Equal {
-                l.1.title.cmp(&r.1.title)
-            } else {
-                result
-            }
-        });
+                .list
+                .iter()
+                .enumerate()
+                .filter(|c| !c.1.filtered)
+                .map(|i| (i.0, i.1.clone()))
+                .collect();
+            self.visible_list.sort_by(|l, r| {
+                let result = r.1.score.cmp(&l.1.score);
+                if result == Equal {
+                    l.1.title.cmp(&r.1.title)
+                } else {
+                    result
+                }
+            });
         }
-        
+
         //dbg!(&self.visible_list);
     }
 
@@ -168,12 +169,15 @@ impl Widget<PaletteListState> for Palette {
             //     self.action = Some(d.2);
             //     self.emmeter = Some(d.0);
             // }
+            // Event::MouseDown(_) => {
+            //     dbg!(data.clicked);
+            //     data.clicked = true;
+            // }
             Event::KeyDown(k) => match k {
                 KeyEvent {
                     key: druid::keyboard_types::Key::ArrowUp,
                     ..
                 } => {
-                    ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), dbg!(self.textbox_id)));
                     data.prev();
                     ctx.set_handled();
                 }
@@ -181,7 +185,6 @@ impl Widget<PaletteListState> for Palette {
                     key: druid::keyboard_types::Key::ArrowDown,
                     ..
                 } => {
-                    ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), dbg!(self.textbox_id)));
                     data.next();
                     ctx.set_handled();
                 }
@@ -265,6 +268,7 @@ struct PaletteList;
 
 impl Widget<PaletteListState> for PaletteList {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &Event, data: &mut PaletteListState, env: &druid::Env) {
+
         // match event {
         //     Event::KeyDown(k) => match k {
         //         KeyEvent {
@@ -362,9 +366,31 @@ impl Widget<PaletteListState> for PaletteList {
     }
 }
 
+struct EmptyWidget;
+impl<T> Widget<T> for EmptyWidget {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
+        match event {
+            Event::MouseDown(_) => {
+                ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
+            }
+            _ => (),
+        }
+    }
+
+    fn lifecycle(&mut self, ctx: &mut druid::LifeCycleCtx, event: &LifeCycle, data: &T, env: &druid::Env) {}
+
+    fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &T, data: &T, env: &druid::Env) {}
+
+    fn layout(&mut self, ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, data: &T, env: &druid::Env) -> Size {
+        bc.max()
+    }
+
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &T, env: &druid::Env) {}
+}
+
 fn build(id: WidgetId) -> Flex<PaletteListState> {
     Flex::row()
-        .with_flex_spacer(0.5)
+        .with_flex_child(EmptyWidget, 0.5)
         .with_child(
             Flex::column()
                 .with_child(
@@ -384,7 +410,8 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                     .background(Color::from_hex_str(&THEME.vscode.colors.side_bar_background).unwrap())
                     .rounded(4.),
                 )
-                .with_flex_spacer(1.),
+                .with_flex_child(EmptyWidget, 1.)
+                .fix_width(550.),
         )
-        .with_flex_spacer(0.5)
+        .with_flex_child(EmptyWidget, 0.5)
 }

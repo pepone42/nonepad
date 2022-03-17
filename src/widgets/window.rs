@@ -116,6 +116,7 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_paint();
                 return;
             }
+
             _ => (),
         }
         if self.in_palette {
