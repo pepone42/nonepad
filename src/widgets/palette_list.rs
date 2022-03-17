@@ -49,16 +49,6 @@ pub struct PaletteListState {
 }
 
 impl PaletteListState {
-    // pub fn new(list: Vector<Item>) -> Self {
-    //     let visible_list:Vector<(usize,Item)> = list.iter().enumerate().map(|i| (i.0,i.1.clone())).collect();
-    //     PaletteListState {
-    //         filter: "".into(),
-    //         selected_idx: 0,
-    //         list,
-    //         visible_list
-    //     }
-    // }
-
     fn apply_filter(&mut self) {
         if self.filter.len() == 0 {
             for s in self.list.iter_mut() {
@@ -91,32 +81,17 @@ impl PaletteListState {
                 }
             });
         }
-
-        //dbg!(&self.visible_list);
     }
 
     fn prev(&mut self) {
         if self.selected_idx > 0 {
             self.selected_idx -= 1;
         }
-
-        // if let Some((i, _)) = dbg!(self
-        //     .visible_list
-        //     .get(self.selected_idx - 1))
-        // {
-        //     self.selected_idx = *i;
-        // }
     }
     fn next(&mut self) {
         if (self.selected_idx < self.visible_list.len() - 1) {
             self.selected_idx += 1;
         }
-        // if let Some((i, _)) = dbg!(self
-        //     .visible_list
-        //     .get(self.selected_idx + 1))
-        // {
-        //     self.selected_idx = *i;
-        // }
     }
 }
 
@@ -131,7 +106,6 @@ impl Palette {
     pub fn new() -> Self {
         let textbox_id = WidgetId::next();
         Palette {
-            //search: TextBox::new().with_text_size(12.0),
             inner: build(textbox_id),
             textbox_id,
             action: None,
@@ -158,21 +132,7 @@ impl Widget<PaletteListState> for Palette {
         data: &mut PaletteListState,
         env: &druid::Env,
     ) {
-        //ctx.request_focus();
-
         match event {
-            // Event::Command(cmd) if cmd.is(crate::commands::SEND_PALETTE_PANEL_DATA) => {
-            //     let d = cmd.get_unchecked(crate::commands::SEND_PALETTE_PANEL_DATA);
-            //     data.list = d.1.clone();
-            //     data.selected_idx = 0;
-            //     data.filter.clear();
-            //     self.action = Some(d.2);
-            //     self.emmeter = Some(d.0);
-            // }
-            // Event::MouseDown(_) => {
-            //     dbg!(data.clicked);
-            //     data.clicked = true;
-            // }
             Event::KeyDown(k) => match k {
                 KeyEvent {
                     key: druid::keyboard_types::Key::ArrowUp,
@@ -267,29 +227,7 @@ impl Widget<PaletteListState> for Palette {
 struct PaletteList;
 
 impl Widget<PaletteListState> for PaletteList {
-    fn event(&mut self, ctx: &mut druid::EventCtx, event: &Event, data: &mut PaletteListState, env: &druid::Env) {
-
-        // match event {
-        //     Event::KeyDown(k) => match k {
-        //         KeyEvent {
-        //             key: druid::keyboard_types::Key::ArrowUp,
-        //             ..
-        //         } => {
-        //             data.prev();
-        //             ctx.set_handled();
-        //         }
-        //         KeyEvent {
-        //             key: druid::keyboard_types::Key::ArrowDown,
-        //             ..
-        //         } => {
-        //             data.next();
-        //             ctx.set_handled();
-        //         }
-        //         _ => (),
-        //     },
-        //     _ => (),
-        // }
-    }
+    fn event(&mut self, ctx: &mut druid::EventCtx, event: &Event, data: &mut PaletteListState, env: &druid::Env) {}
 
     fn lifecycle(
         &mut self,
@@ -316,52 +254,32 @@ impl Widget<PaletteListState> for PaletteList {
         data: &PaletteListState,
         env: &druid::Env,
     ) -> Size {
-        //Size::new(500., 500.)
-        // let mut dy = 0.;
-        // for (i, item) in data.list.iter().filter(|c| !c.filtered).enumerate() {
-        //     let layout = ctx
-        //         .text()
-        //         .new_text_layout(item.title.clone())
-        //         //.font(FontFamily::MONOSPACE, 12.0)
-        //         .font(
-        //             env.get(druid::theme::UI_FONT).family,
-        //             env.get(druid::theme::TEXT_SIZE_NORMAL),
-        //         )
-        //         .text_color(env.get(druid::theme::TEXT_COLOR))
-        //         .build()
-        //         .unwrap();
-        //     dy += layout.size().height;
-        // }
-        // Size::new(500., dy)
         bc.max()
     }
 
     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
         let size = ctx.size();
         ctx.clip(Rect::ZERO.with_size(size));
-        let mut dy = 0.;
+        let mut dy = 2.5;
         for (i, item) in data.visible_list.iter().enumerate() {
             let layout = ctx
                 .render_ctx
                 .text()
-                .new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
-                //.font(FontFamily::MONOSPACE, 12.0)
-                .font(
-                    env.get(druid::theme::UI_FONT).family,
-                    env.get(druid::theme::TEXT_SIZE_NORMAL),
-                )
+                //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
+                .new_text_layout(item.1.title.clone())
+                .font(env.get(druid::theme::UI_FONT).family, 14.0)
                 .text_color(env.get(druid::theme::TEXT_COLOR))
+                .alignment(druid::TextAlignment::Start).max_width(500.)
                 .build()
                 .unwrap();
-            ctx.render_ctx.draw_text(&layout, (5.0, dy));
             if i == data.selected_idx {
-                ctx.render_ctx.stroke(
-                    Line::new((2., dy), (2., dy + layout.size().height)),
-                    &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
-                    2.0,
+                ctx.render_ctx.fill(
+                    Rect::new(2.5, dy, size.width - 4.5, dy + layout.size().height+ 4.5),
+                    &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND)
                 );
             }
-            dy += layout.size().height;
+            ctx.render_ctx.draw_text(&layout, (25.5, dy));
+            dy += layout.size().height + 2.;
         }
     }
 }
@@ -405,7 +323,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                                     .with_id(id)
                                     .lens(PaletteListState::filter),
                             )
-                            .with_child(PaletteList.fix_size(500., 500.)),
+                            .with_child(PaletteList.fix_size(550., 500.)),
                     )
                     .background(Color::from_hex_str(&THEME.vscode.colors.side_bar_background).unwrap())
                     .rounded(4.),
