@@ -19,7 +19,6 @@ pub enum UICommandType {
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
 pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, Vector<Item>, UICommandType)> = Selector::new("nonepad.bottom_panel.show_palette");
-pub const SEND_PALETTE_PANEL_DATA: Selector<(WidgetId, Vector<Item>, UICommandType)> = Selector::new("nonepad.bottom_panel.show_palette_data");
 pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");

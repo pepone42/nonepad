@@ -2,14 +2,14 @@ use std::{ffi::OsStr, path::Path};
 
 use druid::{
     im::Vector,
-    widget::{Flex, IdentityWrapper, Label, MainAxisAlignment},
-    Affine, BoxConstraints, Color, Command, Data, Env, HotKey, Lens, Rect, Region, RenderContext, Size, SysMods,
-    Target, Widget, WidgetExt, WidgetId,
+    widget::{Flex, Label, MainAxisAlignment},
+     Color, Command, Data, Env, HotKey, Lens, SysMods,
+    Target, Widget, WidgetExt,
 };
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view, Extension,
+    editor_view,
 };
 use super::{text_buffer::EditStack, Item, Palette, PaletteListState};
 use crate::commands::{self, ShowPalette, UICommandType};

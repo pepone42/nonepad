@@ -2,20 +2,18 @@ use std::cmp::Ordering::Equal;
 use std::sync::Arc;
 
 use druid::im::Vector;
-use druid::kurbo::Line;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
-use druid::widget::{Flex, Padding, Scroll, TextBox};
+use druid::widget::{Flex, Padding, TextBox};
 use druid::{
     Color, Command, Data, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Rect, RenderContext, Selector, Size,
-    Target, UnitPoint, Widget, WidgetExt, WidgetId,
+    Target, Widget, WidgetExt, WidgetId,
 };
 
 use sublime_fuzzy::best_match;
 
 use crate::commands::{self, UICommandType};
-use crate::theme::{SIDE_BAR_BACKGROUND, THEME};
+use crate::theme::THEME;
 
-use super::editor_view::{ScrollBar, ScrollBarDirection};
 use super::Extension;
 
 const FILTER: Selector<()> = Selector::new("nonepad.editor.palette.filter");
@@ -89,7 +87,7 @@ impl PaletteListState {
         }
     }
     fn next(&mut self) {
-        if (self.selected_idx < self.visible_list.len() - 1) {
+        if self.selected_idx < self.visible_list.len() - 1 {
             self.selected_idx += 1;
         }
     }
@@ -99,7 +97,6 @@ pub struct Palette {
     inner: Flex<PaletteListState>,
     textbox_id: WidgetId,
     action: Option<UICommandType>,
-    emmeter: Option<WidgetId>,
 }
 
 impl Palette {
@@ -109,7 +106,6 @@ impl Palette {
             inner: build(textbox_id),
             textbox_id,
             action: None,
-            emmeter: None,
         }
     }
     pub fn init(&mut self, data: &mut PaletteListState, list: Vector<Item>, action: UICommandType) {
@@ -227,32 +223,32 @@ impl Widget<PaletteListState> for Palette {
 struct PaletteList;
 
 impl Widget<PaletteListState> for PaletteList {
-    fn event(&mut self, ctx: &mut druid::EventCtx, event: &Event, data: &mut PaletteListState, env: &druid::Env) {}
+    fn event(&mut self, _ctx: &mut druid::EventCtx, _event: &Event, _data: &mut PaletteListState, _env: &druid::Env) {}
 
     fn lifecycle(
         &mut self,
-        ctx: &mut druid::LifeCycleCtx,
-        event: &druid::LifeCycle,
-        data: &PaletteListState,
-        env: &druid::Env,
+        _ctx: &mut druid::LifeCycleCtx,
+        _event: &druid::LifeCycle,
+        _data: &PaletteListState,
+        _env: &druid::Env,
     ) {
     }
 
     fn update(
         &mut self,
-        ctx: &mut druid::UpdateCtx,
-        old_data: &PaletteListState,
-        data: &PaletteListState,
-        env: &druid::Env,
+        _ctx: &mut druid::UpdateCtx,
+        _old_data: &PaletteListState,
+        _data: &PaletteListState,
+        _env: &druid::Env,
     ) {
     }
 
     fn layout(
         &mut self,
-        ctx: &mut druid::LayoutCtx,
+        _ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
-        data: &PaletteListState,
-        env: &druid::Env,
+        _data: &PaletteListState,
+        _env: &druid::Env,
     ) -> Size {
         bc.max()
     }
@@ -286,7 +282,7 @@ impl Widget<PaletteListState> for PaletteList {
 
 struct EmptyWidget;
 impl<T> Widget<T> for EmptyWidget {
-    fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &druid::Env) {
         match event {
             Event::MouseDown(_) => {
                 ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
@@ -295,15 +291,15 @@ impl<T> Widget<T> for EmptyWidget {
         }
     }
 
-    fn lifecycle(&mut self, ctx: &mut druid::LifeCycleCtx, event: &LifeCycle, data: &T, env: &druid::Env) {}
+    fn lifecycle(&mut self, _ctx: &mut druid::LifeCycleCtx, _event: &LifeCycle, _data: &T, _env: &druid::Env) {}
 
-    fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &T, data: &T, env: &druid::Env) {}
+    fn update(&mut self, _ctx: &mut druid::UpdateCtx, _old_data: &T, _data: &T, _env: &druid::Env) {}
 
-    fn layout(&mut self, ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, data: &T, env: &druid::Env) -> Size {
+    fn layout(&mut self, _ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, _data: &T, _env: &druid::Env) -> Size {
         bc.max()
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &T, env: &druid::Env) {}
+    fn paint(&mut self, _ctx: &mut druid::PaintCtx, _data: &T, _env: &druid::Env) {}
 }
 
 fn build(id: WidgetId) -> Flex<PaletteListState> {
