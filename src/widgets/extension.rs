@@ -58,7 +58,9 @@ impl TakeFocus {
 impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => ctx.request_focus(),
+            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
+                ctx.request_focus();
+            }
             _ => (),
         }
         child.event(ctx, event, data, env)

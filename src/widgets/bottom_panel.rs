@@ -114,5 +114,5 @@ fn build_palette_panel() -> impl Widget<PaletteListState> {
     //     .lens(PaletteState::s)
     //     .expand_width(),
     // ).with_child(widgets::PaletteList::new().lens(PaletteState::list))
-    widgets::PaletteList::new().focus()
+    widgets::Palette::new().focus()
 }

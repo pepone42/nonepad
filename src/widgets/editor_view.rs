@@ -1340,13 +1340,13 @@ impl Gutter {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum ScrollBarDirection {
+pub enum ScrollBarDirection {
     Horizontal,
     Vertical,
 }
 
 #[derive(Debug)]
-struct ScrollBar {
+pub struct ScrollBar {
     owner_id: WidgetId,
     direction: ScrollBarDirection,
     len: f64,
