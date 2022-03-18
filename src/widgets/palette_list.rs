@@ -1,12 +1,14 @@
 use std::cmp::Ordering::Equal;
+use std::ops::Range;
 use std::sync::Arc;
 
 use druid::im::Vector;
+use druid::kurbo::Shape;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::{Flex, Padding, TextBox};
 use druid::{
     Color, Command, Data, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Rect, RenderContext, Selector, Size,
-    Target, Widget, WidgetExt, WidgetId,
+    Target, Widget, WidgetExt, WidgetId, Point
 };
 
 use sublime_fuzzy::best_match;
@@ -220,7 +222,11 @@ impl Widget<PaletteListState> for Palette {
     }
 }
 
-struct PaletteList;
+#[derive(Default)]
+struct PaletteList {
+    total_height: f64,
+    position: Point,
+}
 
 impl Widget<PaletteListState> for PaletteList {
     fn event(&mut self, _ctx: &mut druid::EventCtx, _event: &Event, _data: &mut PaletteListState, _env: &druid::Env) {}
@@ -245,21 +251,14 @@ impl Widget<PaletteListState> for PaletteList {
 
     fn layout(
         &mut self,
-        _ctx: &mut druid::LayoutCtx,
+        ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
-        _data: &PaletteListState,
-        _env: &druid::Env,
+        data: &PaletteListState,
+        env: &druid::Env,
     ) -> Size {
-        bc.max()
-    }
-
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
-        let size = ctx.size();
-        ctx.clip(Rect::ZERO.with_size(size));
         let mut dy = 2.5;
-        for (i, item) in data.visible_list.iter().enumerate() {
+        for item in data.visible_list.iter() {
             let layout = ctx
-                .render_ctx
                 .text()
                 //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
                 .new_text_layout(item.1.title.clone())
@@ -268,17 +267,108 @@ impl Widget<PaletteListState> for PaletteList {
                 .alignment(druid::TextAlignment::Start).max_width(500.)
                 .build()
                 .unwrap();
-            if i == data.selected_idx {
-                ctx.render_ctx.fill(
-                    Rect::new(2.5, dy, size.width - 4.5, dy + layout.size().height+ 4.5),
-                    &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND)
-                );
-            }
-            ctx.render_ctx.draw_text(&layout, (25.5, dy));
             dy += layout.size().height + 2.;
+        }
+        self.total_height = dy;
+        bc.max()
+    }
+
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
+        let size = ctx.size();
+        ctx.clip(Rect::ZERO.with_size(size));
+        let mut dy = 2.5;
+
+        let mut layouts = Vec::new();
+        let mut selection_rect = Rect::ZERO;
+        
+        for (i, item) in data.visible_list.iter().enumerate() {
+            let layout = ctx
+                .text()
+                //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
+                .new_text_layout(item.1.title.clone())
+                .font(env.get(druid::theme::UI_FONT).family, 14.0)
+                .text_color(env.get(druid::theme::TEXT_COLOR))
+                .alignment(druid::TextAlignment::Start).max_width(500.)
+                .build()
+                .unwrap();
+            let height = layout.size().height;
+            layouts.push((dy,layout));
+            if i == data.selected_idx {
+                selection_rect = Rect::new(2.5, dy, size.width - 4.5, dy + height+ 4.5);
+                
+            }
+            
+            dy += height + 2.;
+        }
+
+        if !(Rect::from_origin_size(self.position,size).contains(Point::new(selection_rect.x0,selection_rect.y0))
+        && Rect::from_origin_size(self.position,size).contains(Point::new(selection_rect.x1,selection_rect.y1))) {
+            let w = selection_rect.y0 .. selection_rect.y1;
+
+        }
+
+        ctx.fill(
+            selection_rect,
+            &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND)
+        );
+        for l in layouts {
+
+            ctx.draw_text(&l.1, (25.5, l.0));
+
         }
     }
 }
+
+// const SCROLLABLE_MOVE_VIEWPORT: Selector<Point> = Selector::new("nonepad.scrollable.move_viewport");
+
+// pub trait Scrollable {
+//     fn update_viewport(&mut self, rect: Rect);
+
+// }
+
+// pub trait ViewportMover {
+//     fn move_viewport(&mut self, point: Point);
+// }
+
+// impl ViewportMover for EventCtx<'_, '_> {
+//     fn move_viewport(&mut self, point: Point) {
+//         self.submit_notification(SCROLLABLE_MOVE_VIEWPORT.with(point));
+//     }
+// }
+
+// struct Scroller<T, W> {
+//     inner: WidgetPod<T, W>
+// }
+// impl <T,W: Scrollable> Widget<T> for Scroller<T, W> {
+//     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &druid::Env) {
+//         match event {
+//             Event::Notification(notif) => if notif.is(SCROLLABLE_MOVE_VIEWPORT) {
+//                 self.inner.widget_mut().update_viewport(Rect::ZERO);
+//                 todo!()
+//             }
+//             _ => (),
+//         }
+
+//     }
+
+//     fn lifecycle(&mut self, ctx: &mut druid::LifeCycleCtx, event: &LifeCycle, data: &T, env: &druid::Env) {
+
+//     }
+
+//     fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &T, data: &T, env: &druid::Env) {
+
+//     }
+
+//     fn layout(&mut self, ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, data: &T, env: &druid::Env) -> Size {
+//         let r= self.inner.widget_mut().layout(ctx,bc,data,env);
+//         self.inner.widget_mut().update_viewport(Rect::ZERO);
+//         bc.max()
+//     }
+
+//     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &T, env: &druid::Env) {
+
+//     }
+// }
 
 struct EmptyWidget;
 impl<T> Widget<T> for EmptyWidget {
@@ -319,7 +409,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                                     .with_id(id)
                                     .lens(PaletteListState::filter),
                             )
-                            .with_child(PaletteList.fix_size(550., 500.)),
+                            .with_child(PaletteList::default().fix_size(550., 500.)),
                     )
                     .background(Color::from_hex_str(&THEME.vscode.colors.side_bar_background).unwrap())
                     .rounded(4.),
