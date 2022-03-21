@@ -1058,11 +1058,10 @@ impl EditorView {
                         if start.is_some() && end.is_some() {
                             if h.style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
                                 layout = layout.range_attribute(
-                                    indices[start.unwrap().index].index..indices[end.unwrap().index].index,
+                                    start.unwrap().index..end.unwrap().index,
                                     TextAttribute::Style(FontStyle::Italic),
                                 );
                             }
-
                             layout = layout.range_attribute(start.unwrap().index..end.unwrap().index, color);
                         }
                     }
