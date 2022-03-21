@@ -7,8 +7,8 @@ use druid::kurbo::Shape;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::{Flex, Padding, TextBox};
 use druid::{
-    Color, Command, Data, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Rect, RenderContext, Selector, Size,
-    Target, Widget, WidgetExt, WidgetId, Point
+    Affine, Color, Command, Data, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Point, Rect, RenderContext,
+    Selector, Size, Target, Widget, WidgetExt, WidgetId,
 };
 
 use sublime_fuzzy::best_match;
@@ -264,7 +264,8 @@ impl Widget<PaletteListState> for PaletteList {
                 .new_text_layout(item.1.title.clone())
                 .font(env.get(druid::theme::UI_FONT).family, 14.0)
                 .text_color(env.get(druid::theme::TEXT_COLOR))
-                .alignment(druid::TextAlignment::Start).max_width(500.)
+                .alignment(druid::TextAlignment::Start)
+                .max_width(500.)
                 .build()
                 .unwrap();
             dy += layout.size().height + 2.;
@@ -280,7 +281,7 @@ impl Widget<PaletteListState> for PaletteList {
 
         let mut layouts = Vec::new();
         let mut selection_rect = Rect::ZERO;
-        
+
         for (i, item) in data.visible_list.iter().enumerate() {
             let layout = ctx
                 .text()
@@ -288,34 +289,38 @@ impl Widget<PaletteListState> for PaletteList {
                 .new_text_layout(item.1.title.clone())
                 .font(env.get(druid::theme::UI_FONT).family, 14.0)
                 .text_color(env.get(druid::theme::TEXT_COLOR))
-                .alignment(druid::TextAlignment::Start).max_width(500.)
+                .alignment(druid::TextAlignment::Start)
+                .max_width(500.)
                 .build()
                 .unwrap();
             let height = layout.size().height;
-            layouts.push((dy,layout));
+            layouts.push((dy, layout));
             if i == data.selected_idx {
-                selection_rect = Rect::new(2.5, dy, size.width - 4.5, dy + height+ 4.5);
-                
+                selection_rect = Rect::new(2.5, dy, size.width - 4.5, dy + height + 4.5);
             }
-            
+
             dy += height + 2.;
         }
 
-        if !(Rect::from_origin_size(self.position,size).contains(Point::new(selection_rect.x0,selection_rect.y0))
-        && Rect::from_origin_size(self.position,size).contains(Point::new(selection_rect.x1,selection_rect.y1))) {
-            let w = selection_rect.y0 .. selection_rect.y1;
-
+        if selection_rect.y0 < self.position.y {
+            self.position.y = selection_rect.y0
+        }
+        if selection_rect.y1 > self.position.y + size.height {
+            self.position.y = selection_rect.y1 - size.height
         }
 
-        ctx.fill(
-            selection_rect,
-            &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND)
-        );
-        for l in layouts {
+        ctx.with_save(|ctx| {
+            ctx.transform(
+                Affine::translate((-self.position.x,-self.position.y)));
 
-            ctx.draw_text(&l.1, (25.5, l.0));
-
-        }
+            ctx.fill(
+                selection_rect,
+                &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND),
+            );
+            for l in layouts {
+                ctx.draw_text(&l.1, (25.5, l.0));
+            }
+        });
     }
 }
 
@@ -385,7 +390,13 @@ impl<T> Widget<T> for EmptyWidget {
 
     fn update(&mut self, _ctx: &mut druid::UpdateCtx, _old_data: &T, _data: &T, _env: &druid::Env) {}
 
-    fn layout(&mut self, _ctx: &mut druid::LayoutCtx, bc: &druid::BoxConstraints, _data: &T, _env: &druid::Env) -> Size {
+    fn layout(
+        &mut self,
+        _ctx: &mut druid::LayoutCtx,
+        bc: &druid::BoxConstraints,
+        _data: &T,
+        _env: &druid::Env,
+    ) -> Size {
         bc.max()
     }
 
