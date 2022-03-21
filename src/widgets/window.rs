@@ -79,8 +79,8 @@ impl Widget<NPWindowState> for NPWindow {
                         items.push_back(Item::new(&c.description, &""));
                     }
                     ctx.show_palette(
+                        "",
                         items,
-                        "Commands",
                         UICommandType::Window(|index, _name, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[index];
                             ui_cmd.exec(ctx, win, data);
@@ -104,7 +104,7 @@ impl Widget<NPWindowState> for NPWindow {
                 self.in_palette = true;
                 ctx.request_layout();
                 let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL); //.clone();
-                self.palette.init(&mut data.palette_state, input.1.clone(), input.2);
+                self.palette.init(&mut data.palette_state, input.1, input.2.clone(), input.3);
                 self.palette.take_focus(ctx);
                 return;
             }

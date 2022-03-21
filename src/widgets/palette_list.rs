@@ -1,13 +1,11 @@
 use std::cmp::Ordering::Equal;
-use std::ops::Range;
 use std::sync::Arc;
 
 use druid::im::Vector;
-use druid::kurbo::Shape;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
-use druid::widget::{Flex, Padding, TextBox};
+use druid::widget::{Flex, Label, Padding, TextBox};
 use druid::{
-    Affine, Color, Command, Data, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Point, Rect, RenderContext,
+    Affine, Color, Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Point, Rect, RenderContext,
     Selector, Size, Target, Widget, WidgetExt, WidgetId,
 };
 
@@ -41,6 +39,7 @@ impl Item {
 
 #[derive(Debug, Data, Lens, Clone, Default)]
 pub struct PaletteListState {
+    title: String,
     filter: String,
     selected_idx: usize,
     list: Vector<Item>,
@@ -110,8 +109,9 @@ impl Palette {
             action: None,
         }
     }
-    pub fn init(&mut self, data: &mut PaletteListState, list: Vector<Item>, action: UICommandType) {
+    pub fn init(&mut self, data: &mut PaletteListState, title: &str, list: Vector<Item>, action: UICommandType) {
         data.list = list.clone();
+        data.title = title.to_owned();
         data.selected_idx = 0;
         data.filter.clear();
         self.action = Some(action);
@@ -310,8 +310,7 @@ impl Widget<PaletteListState> for PaletteList {
         }
 
         ctx.with_save(|ctx| {
-            ctx.transform(
-                Affine::translate((-self.position.x,-self.position.y)));
+            ctx.transform(Affine::translate((-self.position.x, -self.position.y)));
 
             ctx.fill(
                 selection_rect,
@@ -413,6 +412,10 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                         2.,
                         Flex::column()
                             .with_child(
+                                Label::new(|data: &PaletteListState, _env: &Env| format!("{}", data.title))
+                                    .with_text_size(12.0),
+                            )
+                            .with_child(
                                 TextBox::new()
                                     .with_text_size(12.0)
                                     .focus()
@@ -420,7 +423,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                                     .with_id(id)
                                     .lens(PaletteListState::filter),
                             )
-                            .with_child(PaletteList::default().fix_size(550., 500.)),
+                            .with_child(PaletteList::default().fix_size(550., 500.)).cross_axis_alignment(druid::widget::CrossAxisAlignment::Start),
                     )
                     .background(Color::from_hex_str(&THEME.vscode.colors.side_bar_background).unwrap())
                     .rounded(4.),

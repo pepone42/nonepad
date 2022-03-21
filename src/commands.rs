@@ -18,7 +18,7 @@ pub enum UICommandType {
 }
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
-pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, Vector<Item>, UICommandType)> = Selector::new("nonepad.bottom_panel.show_palette");
+pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, &str, Vector<Item>, UICommandType)> = Selector::new("nonepad.bottom_panel.show_palette");
 pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
@@ -115,18 +115,18 @@ macro_rules! uicmd {
 
 uicmd! {
     COMMANDSET = {
-        PALCMD_CHANGE_LANGUAGE = ("Change the language of the file","CtrlShift-l", true,
+        PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
         |_window, ctx, _data| {
             let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
-            ctx.show_palette(languages,&"Please make a choice", UICommandType::Editor(|_idx,name, _ctx, _editor_view, data| {
+            ctx.show_palette("Set Language mode to", languages, UICommandType::Editor(|_idx,name, _ctx, _editor_view, data| {
                 data.file.syntax = SYNTAXSET.find_syntax_by_name(&name).unwrap();
             }));
             true
         });
-        PALCMD_CHANGE_TYPE_TYPE = ("Change indentation type","", true,
+        PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
         |_window, ctx, _data| {
-            let choice: Vector<Item> = ["TAB","SPACE"].iter().map(|t| Item::new(t,&"")).collect();
-            ctx.show_palette(choice,&"", UICommandType::Editor(|idx, _name, _ctx, _editor_view, data| {
+            let choice: Vector<Item> = ["Tabs","Spaces"].iter().map(|t| Item::new(t,&"")).collect();
+            ctx.show_palette("Indent using", choice, UICommandType::Editor(|idx, _name, _ctx, _editor_view, data| {
                 if idx == 0 {
                     data.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
                 } else {
@@ -172,14 +172,14 @@ uicmd! {
 }
 
 pub trait ShowPalette {
-    fn show_palette(&mut self, items: Vector<Item>, description: &'static str, callback: UICommandType);
+    fn show_palette(&mut self, title: &'static str, items: Vector<Item>,  callback: UICommandType);
 }
 
 impl ShowPalette for EventCtx<'_, '_> {
-    fn show_palette(&mut self, items: Vector<Item>, _description: &'static str, callback: UICommandType) {
+    fn show_palette(&mut self, title: &'static str, items: Vector<Item>, callback: UICommandType) {
         self.submit_command(Command::new(
             SHOW_PALETTE_PANEL,
-            (self.widget_id(), items, callback),
+            (self.widget_id(), title, items, callback),
             Target::Auto,
         ));
     }
