@@ -5,9 +5,6 @@ authors = ["Mathieu PEPONAS <m.peponas@gmail.com>"]
 edition = "2018"
 build = "build.rs"
 
-[features]
-noconsole = []
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [target.'cfg(windows)'.build-dependencies]

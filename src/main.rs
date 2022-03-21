@@ -1,5 +1,5 @@
 // "Hello 😊︎ 😐︎ ☹︎ example"
-#![cfg_attr(feature = "noconsole", windows_subsystem = "windows")]
+#![windows_subsystem = "windows"]
 
 mod commands;
 mod seticon;
@@ -58,6 +58,14 @@ impl AppDelegate<NPWindowState> for Delegate {
 }
 
 fn main() -> anyhow::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        use winapi::um::wincon::{AttachConsole, ATTACH_PARENT_PROCESS};
+        unsafe {
+            AttachConsole(ATTACH_PARENT_PROCESS);
+        }
+    }
+
     let app_state = if let Some(filename) = std::env::args().nth(1) {
         NPWindowState::from_file(filename)?
     } else {
