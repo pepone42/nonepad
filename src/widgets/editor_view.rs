@@ -4,19 +4,17 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::commands;
-use crate::commands::SCROLL_TO;
-use crate::syntax::{StateCache, SYNTAXSET, StyledLinesCache};
-
-use crate::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+use crate::commands::{self, SCROLL_TO, UICommandType};
+use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
+use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
     widget::Flex,
-    Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FileDialogOptions,
-    FontWeight, HotKey, KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target,
-    UpdateCtx, Widget, WidgetExt, WidgetId,
+    Affine, Application, BoxConstraints, ClipboardFormat, Color, Command, Env, Event, EventCtx, FontWeight, HotKey,
+    KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx, Widget, WidgetExt,
+    WidgetId,
 };
 use druid::{Data, FontStyle};
 
@@ -225,7 +223,7 @@ impl Widget<EditStack> for EditorView {
                             HighlighterMessage::Update(s, r, start) => {
                                 rope = r;
                                 current_index = start;
-                                // The first chunk is smaller, to repaint quickly with highlight 
+                                // The first chunk is smaller, to repaint quickly with highlight
                                 chunk_len = 100;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                             }
@@ -281,12 +279,18 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn layout(&mut self, layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, _data: &EditStack, _env: &Env) -> Size {
-        self.size = bc.max();
+        self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, bc.max());
+        let h = if bc.max().height < self.metrics.font_height {
+            self.metrics.font_height + 2.
+        } else {
+            bc.max().height
+        };
+        self.size = Size::new(bc.max().width, h);
 
         self.metrics = CommonMetrics::new(layout_ctx.text(), &self.font_name, self.size);
         self.page_len = (self.size.height / self.metrics.font_height).round() as usize;
 
-        bc.max()
+        self.size
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &EditStack, env: &Env) {
@@ -308,7 +312,7 @@ impl EditorView {
             delta_y: 0.0,
             page_len: 0,
 
-            size: Default::default(),
+            size: Size::new(1.0, 1.0),
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
@@ -504,7 +508,6 @@ impl EditorView {
                         let data = clipboard
                             .get_format(format)
                             .expect("I promise not to unwrap in production");
-
                         editor.insert(String::from_utf8_lossy(&data).as_ref());
                     }
 
@@ -537,40 +540,40 @@ impl EditorView {
                     editor.redo();
                     return true;
                 }
-                if HotKey::new(SysMods::Cmd, "o").matches(event) {
-                    if editor.is_dirty()
-                        && !MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Warning)
-                            .set_title("Are you sure?")
-                            .set_description("Discard unsaved change?")
-                            .set_buttons(rfd::MessageButtons::YesNo)
-                            .show()
-                    {
-                        return true;
-                    }
+                // if HotKey::new(SysMods::Cmd, "o").matches(event) {
+                //     if editor.is_dirty()
+                //         && !MessageDialog::new()
+                //             .set_level(rfd::MessageLevel::Warning)
+                //             .set_title("Are you sure?")
+                //             .set_description("Discard unsaved change?")
+                //             .set_buttons(rfd::MessageButtons::YesNo)
+                //             .show()
+                //     {
+                //         return true;
+                //     }
 
-                    let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "s").matches(event) {
-                    //self.save(editor, ctx);
-                    if editor.filename.is_some() {
-                        ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
-                    } else {
-                        let options = FileDialogOptions::new().show_hidden();
-                        ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
-                    }
-                    return true;
-                }
-                if HotKey::new(SysMods::CmdShift, "s").matches(event) {
-                    let options = FileDialogOptions::new().show_hidden();
-                    ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
-                    return true;
-                }
+                //     let options = FileDialogOptions::new().show_hidden();
+                //     ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
+                //     return true;
+                // }
+                // if HotKey::new(SysMods::Cmd, "s").matches(event) {
+                //     //self.save(editor, ctx);
+                //     if editor.filename.is_some() {
+                //         ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
+                //     } else {
+                //         let options = FileDialogOptions::new().show_hidden();
+                //         ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
+                //     }
+                //     return true;
+                // }
+                // if HotKey::new(SysMods::CmdShift, "s").matches(event) {
+                //     let options = FileDialogOptions::new().show_hidden();
+                //     ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
+                //     return true;
+                // }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
-                        crate::commands::SHOW_SEARCH_PANEL,
+                        commands::SHOW_SEARCH_PANEL,
                         editor.main_cursor_selected_text(),
                         Target::Global,
                     ));
@@ -711,8 +714,8 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::REQUEST_NEXT_SEARCH) => {
-                if let Some(data) = cmd.get(crate::commands::REQUEST_NEXT_SEARCH) {
+            Event::Command(cmd) if cmd.is(commands::REQUEST_NEXT_SEARCH) => {
+                if let Some(data) = cmd.get(commands::REQUEST_NEXT_SEARCH) {
                     editor.search_next(data);
                 }
                 true
@@ -726,24 +729,35 @@ impl EditorView {
                 editor.buffer.select_line(line.into(), expand);
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::SCROLL_TO) => {
-                let d = *cmd.get_unchecked(crate::commands::SCROLL_TO);
+            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+                let d = *cmd.get_unchecked(commands::SCROLL_TO);
                 self.delta_x = d.0.unwrap_or(self.delta_x);
                 self.delta_y = d.1.unwrap_or(self.delta_y);
                 true
             }
             Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
                 self.held_state = HeldState::None;
-                true
+                false
             }
             Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
                 let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
-                
-                if self.visible_range().contains(&d.0) || self.visible_range().contains(&d.1) || 
-                (self.visible_range().start >= d.0 && self.visible_range().end <= d.1) {
+
+                if self.visible_range().contains(&d.0)
+                    || self.visible_range().contains(&d.1)
+                    || (self.visible_range().start >= d.0 && self.visible_range().end <= d.1)
+                {
                     ctx.request_paint();
                 }
                 true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
+                
+                if let UICommandType::Editor(action) = item.2 {
+                    (action)(item.0,item.1.clone(),ctx,self,editor);
+                    return true;
+                }
+                false
             }
             _ => false,
         }
@@ -1031,8 +1045,7 @@ impl EditorView {
                 .font(font.clone(), self.metrics.font_size)
                 .text_color(self.fg_color.clone());
             if line_idx < editor.len_lines() {
-                if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx)
-                {
+                if let Some(highlight) = self.highlighted_line.lines.lock().unwrap().get(line_idx) {
                     for h in highlight.iter() {
                         let color = TextAttribute::TextColor(Color::rgba8(
                             h.style.foreground.r,
@@ -1045,11 +1058,10 @@ impl EditorView {
                         if start.is_some() && end.is_some() {
                             if h.style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
                                 layout = layout.range_attribute(
-                                    indices[start.unwrap().index].index..indices[end.unwrap().index].index,
+                                    start.unwrap().index..end.unwrap().index,
                                     TextAttribute::Style(FontStyle::Italic),
                                 );
                             }
-
                             layout = layout.range_attribute(start.unwrap().index..end.unwrap().index, color);
                         }
                     }
@@ -1061,17 +1073,19 @@ impl EditorView {
 
             self.longest_line_len = self.longest_line_len.max(layout.image_bounds().width());
 
-            editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
-                let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
-                ctx.render_ctx.stroke(
-                    Line::new(
-                        (metrics.point.x.ceil(), (self.metrics.font_height + dy).ceil()),
-                        (metrics.point.x.ceil(), dy.ceil()),
-                    ),
-                    &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
-                    2.0,
-                );
-            });
+            if ctx.has_focus() {
+                editor.carets_on_line(position::Line::from(line_idx)).for_each(|c| {
+                    let metrics = layout.hit_test_text_position(indices[c.relative().index].index);
+                    ctx.render_ctx.stroke(
+                        Line::new(
+                            (metrics.point.x.ceil(), (self.metrics.font_height + dy).ceil()),
+                            (metrics.point.x.ceil(), dy.ceil()),
+                        ),
+                        &env.get(crate::theme::EDITOR_CURSOR_FOREGROUND),
+                        2.0,
+                    );
+                });
+            }
 
             dy += self.metrics.font_height;
         }
@@ -1184,7 +1198,6 @@ impl EditorView {
 #[derive(Debug)]
 pub struct Gutter {
     metrics: CommonMetrics,
-    font_name: String,
     page_len: usize,
     size: Size,
     dy: f64,
@@ -1244,7 +1257,12 @@ impl Widget<EditStack> for Gutter {
         }
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {}
+    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
+        match event {
+            LifeCycle::WidgetAdded => ctx.register_for_focus(),
+            _ => (),
+        }
+    }
 
     fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
 
@@ -1265,7 +1283,6 @@ impl Gutter {
     fn new(owner_id: WidgetId) -> Self {
         Gutter {
             metrics: Default::default(),
-            font_name: FONT_NAME.to_string(),
             page_len: 0,
             size: Default::default(),
             dy: 0.0,
@@ -1322,13 +1339,13 @@ impl Gutter {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum ScrollBarDirection {
+pub enum ScrollBarDirection {
     Horizontal,
     Vertical,
 }
 
 #[derive(Debug)]
-struct ScrollBar {
+pub struct ScrollBar {
     owner_id: WidgetId,
     direction: ScrollBarDirection,
     len: f64,
@@ -1430,6 +1447,7 @@ impl Widget<EditStack> for ScrollBar {
             Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
                 self.is_held = false;
                 self.is_hovered = false;
+                ctx.request_paint();
             }
             Event::MouseDown(m) => {
                 if self.rect().contains(Point::new(m.pos.x, m.pos.y)) {

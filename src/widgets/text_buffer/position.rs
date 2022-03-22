@@ -439,7 +439,7 @@ impl Sub<&Line> for &Line {
 
 #[cfg(test)]
 mod tests {
-    use crate::text_buffer::{buffer::Buffer, position::Column};
+    use super::super::{buffer::Buffer, position::Column};
 
     #[test]
     fn grapheme_len() {
