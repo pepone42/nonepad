@@ -21,7 +21,6 @@ use druid::{
 };
 use druid::{Data, FontStyle};
 
-use rfd::MessageDialog;
 use ropey::Rope;
 use syntect::parsing::SyntaxReference;
 
@@ -683,9 +682,11 @@ impl EditorView {
                 if file_info.path().exists()
                 {
                     let choice: Vector<Item> = ["Yes","No"].iter().map(|t| Item::new(t,&"")).collect();
-                    ctx.show_palette("File exists! Overwrite?", choice, UICommandType::Editor(Rc::new(move |idx, _name, ctx, editor_view: &mut EditorView, data: &mut EditStack| {
+                    ctx.show_palette("File exists! Overwrite?", choice, UICommandType::Editor(Rc::new(move |idx, _name, _ctx, editor_view, data| {
                         if idx == 0 {
-                            editor_view.save_as(data,file_info.path());
+                            if let Err(e) = editor_view.save_as(data,file_info.path()) {
+                                println!("Error writing file: {}", e);
+                            }
                         };
                     })));
                     true
@@ -704,7 +705,7 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
-                    if let Err(e) = self.open(editor, file_info.path()) {
+                    if let Err(_) = self.open(editor, file_info.path()) {
                         // MessageDialog::new()
                         //     .set_level(rfd::MessageLevel::Error)
                         //     .set_title("Error")

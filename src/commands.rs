@@ -2,7 +2,6 @@ use std::{borrow::Borrow, sync::Arc, rc::Rc};
 
 use druid::{im::Vector, Command, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target, WidgetId};
 use once_cell::sync::Lazy;
-use rfd::MessageDialog;
 
 use crate::widgets::{
     editor_view::EditorView,
@@ -121,7 +120,7 @@ uicmd! {
         PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
         |_window, ctx, _data| {
             let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
-            ctx.show_palette("Set Language mode to", languages, UICommandType::Editor(Rc::new(|_idx,name, _ctx, _editor_view, data: &mut EditStack| {
+            ctx.show_palette("Set Language mode to", languages, UICommandType::Editor(Rc::new(|_idx,name, _ctx, _editor_view, data| {
                 data.file.syntax = SYNTAXSET.find_syntax_by_name(&name).unwrap();
             })));
             true
@@ -129,7 +128,7 @@ uicmd! {
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
         |_window, ctx, _data| {
             let choice: Vector<Item> = ["Tabs","Spaces"].iter().map(|t| Item::new(t,&"")).collect();
-            ctx.show_palette("Indent using", choice, UICommandType::Editor(Rc::new(|idx, _name, _ctx, _editor_view, data: &mut EditStack| {
+            ctx.show_palette("Indent using", choice, UICommandType::Editor(Rc::new(|idx, _name, _ctx, _editor_view, data| {
                 if idx == 0 {
                     data.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
                 } else {
@@ -142,7 +141,7 @@ uicmd! {
         |_window, ctx, data| {
             if data.editor.is_dirty() {
                 let choice: Vector<Item> = ["Yes","No"].iter().map(|t| Item::new(t,&"")).collect();
-                ctx.show_palette("Discard unsaved change?",choice,UICommandType::Editor(Rc::new(|idx, _name, ctx: &mut EventCtx, _editor_view, data| {
+                ctx.show_palette("Discard unsaved change?",choice,UICommandType::Editor(Rc::new(|idx, _name, ctx, _editor_view, _data| {
                     if idx == 0 {
                         let options = FileDialogOptions::new().show_hidden();
                         ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));

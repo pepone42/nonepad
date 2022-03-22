@@ -1,18 +1,16 @@
 use std::{ffi::OsStr, path::Path, rc::Rc};
 
-use druid::{
-    im::Vector,
-    widget::{Flex, Label, MainAxisAlignment},
-    Color, Command, Data, Env, HotKey, Lens, SysMods, Target, Widget, WidgetExt, EventCtx,
-};
-use rfd::MessageDialog;
-
 use super::{
     bottom_panel::{self, BottonPanelState},
     editor_view,
 };
 use super::{text_buffer::EditStack, Item, Palette, PaletteListState};
 use crate::commands::{self, ShowPalette, UICommandType};
+use druid::{
+    im::Vector,
+    widget::{Flex, Label, MainAxisAlignment},
+    Color, Command, Data, Env, HotKey, Lens, SysMods, Target, Widget, WidgetExt,
+};
 
 pub struct NPWindow {
     inner: Flex<NPWindowState>,
@@ -124,10 +122,14 @@ impl Widget<NPWindowState> for NPWindow {
                     ctx.show_palette(
                         "Discard unsaved change?",
                         choice,
-                        UICommandType::Editor(Rc::new(|idx, _name, ctx:&mut EventCtx, _editor_view, data:&mut EditStack| if idx == 0 {
-                            data.reset_dirty();
-                            ctx.submit_command(druid::commands::CLOSE_WINDOW);
-                        })),
+                        UICommandType::Editor(Rc::new(
+                            |idx, _name, ctx, _editor_view, data| {
+                                if idx == 0 {
+                                    data.reset_dirty();
+                                    ctx.submit_command(druid::commands::CLOSE_WINDOW);
+                                }
+                            },
+                        )),
                     );
                 }
             }
