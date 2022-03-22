@@ -1,11 +1,11 @@
-use std::{ffi::OsStr, path::Path};
+use std::{ffi::OsStr, path::Path, rc::Rc};
 
 use druid::{
     im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
-     Color, Command, Data, Env, HotKey, Lens, SysMods,
-    Target, Widget, WidgetExt,
+    Color, Command, Data, Env, HotKey, Lens, SysMods, Target, Widget, WidgetExt, EventCtx,
 };
+use rfd::MessageDialog;
 
 use super::{
     bottom_panel::{self, BottonPanelState},
@@ -81,10 +81,10 @@ impl Widget<NPWindowState> for NPWindow {
                     ctx.show_palette(
                         "",
                         items,
-                        UICommandType::Window(|index, _name, ctx, win, data| {
+                        UICommandType::Window(Rc::new(|index, _name, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[index];
                             ui_cmd.exec(ctx, win, data);
-                        }),
+                        })),
                     );
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
@@ -94,7 +94,7 @@ impl Widget<NPWindowState> for NPWindow {
             }
             druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
-                if let UICommandType::Window(action) = item.2 {
+                if let UICommandType::Window(action) = &item.2 {
                     (action)(item.0, item.1.clone(), ctx, self, data);
                     ctx.set_handled();
                     return;
@@ -103,8 +103,9 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL); //.clone();
-                self.palette.init(&mut data.palette_state, input.1, input.2.clone(), input.3);
+                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL).clone();
+                self.palette
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3);
                 self.palette.take_focus(ctx);
                 return;
             }
@@ -116,7 +117,20 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_paint();
                 return;
             }
-
+            druid::Event::WindowCloseRequested => {
+                if data.editor.is_dirty() {
+                    ctx.set_handled();
+                    let choice: Vector<Item> = ["Yes", "No"].iter().map(|t| Item::new(t, &"")).collect();
+                    ctx.show_palette(
+                        "Discard unsaved change?",
+                        choice,
+                        UICommandType::Editor(Rc::new(|idx, _name, ctx:&mut EventCtx, _editor_view, data:&mut EditStack| if idx == 0 {
+                            data.reset_dirty();
+                            ctx.submit_command(druid::commands::CLOSE_WINDOW);
+                        })),
+                    );
+                }
+            }
             _ => (),
         }
         if self.in_palette {

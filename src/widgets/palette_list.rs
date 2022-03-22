@@ -149,7 +149,7 @@ impl Widget<PaletteListState> for Palette {
                 KeyEvent { key: KbKey::Enter, .. } => {
                     ctx.resign_focus();
                     ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
-                    if let Some(f) = self.action {
+                    if let Some(f) = self.action.take() {
                         if let Some(item) = data.visible_list.get(data.selected_idx) {
                             ctx.submit_command(Command::new(
                                 commands::PALETTE_CALLBACK,
