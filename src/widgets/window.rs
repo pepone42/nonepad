@@ -74,7 +74,7 @@ impl Widget<NPWindowState> for NPWindow {
                 if HotKey::new(SysMods::CmdShift, "P").matches(event) && !self.in_palette {
                     let mut items = Vector::new();
                     for c in &commands::COMMANDSET.commands {
-                        items.push_back(Item::new(&c.description, &""));
+                        items.push_back(Item::new(&c.description, ""));
                     }
                     Palette::new(items).win_action(
                         |index, _name, ctx, win, data| {
@@ -187,8 +187,7 @@ impl NPWindow {
                     .unwrap_or_default()
                     .file_name()
                     .unwrap_or_else(|| OsStr::new("[Untilted]"))
-                    .to_string_lossy()
-                    .to_string(),
+                    .to_string_lossy(),
                 if data.editor.is_dirty() { "*" } else { "" }
             )
         })

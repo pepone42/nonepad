@@ -10,10 +10,13 @@ use crate::widgets::{
     Item,
 };
 
+type PaletteCallback<W,D> = dyn Fn(usize, Arc<String>, &mut EventCtx, &mut W, &mut D);
+
+
 #[derive(Clone)]
 pub enum UICommandType {
-    Editor(Rc<dyn Fn(usize, Arc<String>, &mut EventCtx, &mut EditorView, &mut EditStack)>),
-    Window(Rc<dyn Fn(usize, Arc<String>, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
+    Editor(Rc<PaletteCallback<EditorView,EditStack>>),
+    Window(Rc<PaletteCallback<NPWindow,NPWindowState>>),
 }
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
@@ -167,13 +170,13 @@ uicmd! {
                 let options = FileDialogOptions::new().show_hidden();
                 ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
             }
-            return true;
+            true
         });
         PALCMD_SAVE_AS = ("Save As","CtrlShift-s",true,
         |_window, ctx, _data| {
             let options = FileDialogOptions::new().show_hidden();
             ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
-            return true;
+            true
         });
     }
 }

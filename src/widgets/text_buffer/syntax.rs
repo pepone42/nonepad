@@ -90,8 +90,8 @@ impl StateCache {
 
         for i in start << 4..(end << 4).min(rope.len_lines()) {
             let h = if let Some(str) = rope.line(i).as_str() {
-                let ops = states.0.parse_line(&str, &SYNTAXSET);
-                let h: Vec<_> = RangedHighlightIterator::new(&mut states.1, &ops, &str, &self.highlighter)
+                let ops = states.0.parse_line(str, &SYNTAXSET);
+                let h: Vec<_> = RangedHighlightIterator::new(&mut states.1, &ops, str, &self.highlighter)
                     .map(|h| SpanStyle::new(h.0, h.2))
                     .collect();
                 StyledLine::new(h)

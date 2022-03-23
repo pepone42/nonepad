@@ -150,7 +150,7 @@ impl HeldState {
         *self != HeldState::None
     }
 }
-
+#[allow(clippy::large_enum_variant)]
 pub enum HighlighterMessage {
     Stop,
     Update(SyntaxReference, Rope, usize),
@@ -209,7 +209,7 @@ impl Widget<EditStack> for EditorView {
             let (tx, rx) = mpsc::channel();
             self.highlight_channel_tx = Some(tx);
             let highlighted_line = self.highlighted_line.clone();
-            let owner_id = self.owner_id.clone();
+            let owner_id = self.owner_id;
             let event_sink = ctx.get_external_handle();
             thread::spawn(move || {
                 let mut syntax = SYNTAXSET.find_syntax_plain_text();
@@ -218,23 +218,22 @@ impl Widget<EditStack> for EditorView {
                 let mut chunk_len = 100;
                 let mut rope = Rope::new();
                 loop {
-                    match rx.try_recv() {
-                        Ok(message) => match message {
-                            HighlighterMessage::Stop => return,
-                            HighlighterMessage::Update(s, r, start) => {
-                                rope = r;
-                                current_index = start;
-                                // The first chunk is smaller, to repaint quickly with highlight
-                                chunk_len = 100;
-                                syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
-                            }
-                        },
-                        _ => (),
+                    if let Ok(message) = rx.try_recv() {
+                        match message {
+                        HighlighterMessage::Stop => return,
+                        HighlighterMessage::Update(s, r, start) => {
+                            rope = r;
+                            current_index = start;
+                            // The first chunk is smaller, to repaint quickly with highlight
+                            chunk_len = 100;
+                            syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
+                        }
+                    }
                     }
                     if current_index < rope.len_lines() {
                         highlight_cache.update_range(
                             highlighted_line.clone(),
-                            &syntax,
+                            syntax,
                             &rope,
                             current_index,
                             current_index + chunk_len,
@@ -301,7 +300,7 @@ impl Widget<EditStack> for EditorView {
 
 impl EditorView {
     pub fn new(owner_id: WidgetId) -> Self {
-        let e = EditorView {
+        EditorView {
             bg_color: Color::BLACK,
             fg_color: Color::WHITE,
             fg_sel_color: Color::BLACK,
@@ -319,9 +318,7 @@ impl EditorView {
             held_state: HeldState::None,
             highlight_channel_tx: None,
             highlighted_line: StyledLinesCache::new(),
-        };
-
-        e
+        }
     }
 
     fn update_highlighter(&self, data: &EditStack, line: usize) {
@@ -674,7 +671,7 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
-                    if let Err(_) = self.open(editor, file_info.path()) {
+                    if self.open(editor, file_info.path()).is_err() {
                         Palette::new(item!["Ok"]).title("Error loading file").show(ctx);
                     }
                 }
@@ -1019,17 +1016,15 @@ impl EditorView {
                             h.style.foreground.b,
                             h.style.foreground.a,
                         ));
-                        let start = indices.get(h.range.start);
-                        let end = indices.get(h.range.end);
-                        if start.is_some() && end.is_some() {
+                        if let (Some(start),Some(end)) = (indices.get(h.range.start),indices.get(h.range.end)) {
                             if h.style.font_style.contains(syntect::highlighting::FontStyle::ITALIC) {
                                 layout = layout.range_attribute(
-                                    start.unwrap().index..end.unwrap().index,
+                                    start.index..end.index,
                                     TextAttribute::Style(FontStyle::Italic),
                                 );
                             }
-                            layout = layout.range_attribute(start.unwrap().index..end.unwrap().index, color);
-                        }
+                            layout = layout.range_attribute(start.index..end.index, color);
+                        } 
                     }
                 }
             }
@@ -1213,9 +1208,8 @@ impl Widget<EditStack> for Gutter {
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
-        match event {
-            LifeCycle::WidgetAdded => ctx.register_for_focus(),
-            _ => (),
+        if let LifeCycle::WidgetAdded = event {
+            ctx.register_for_focus()
         }
     }
 
@@ -1610,8 +1604,8 @@ impl Widget<EditStack> for TextEditor {
             Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
                 // clamp to size
                 let d = *cmd.get_unchecked(commands::SCROLL_TO);
-                let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
-                let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
+                let x = d.0.map(|x| x.clamp(-self.text_width(data), 0.0));
+                let y = d.1.map(|y| y.clamp(-self.text_height(data), 0.0));
                 // dbg!(x,y);
                 ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.editor_id));
                 ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.gutter_id));

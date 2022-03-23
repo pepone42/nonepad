@@ -49,7 +49,7 @@ pub struct PaletteListState {
 
 impl PaletteListState {
     fn apply_filter(&mut self) {
-        if self.filter.len() == 0 {
+        if self.filter.is_empty() {
             for s in self.list.iter_mut() {
                 s.filtered = false;
                 s.score = 0;
@@ -111,7 +111,7 @@ impl PaletteView {
     }
     pub fn init(&mut self, data: &mut PaletteListState, title: String, list: Vector<Item>, action: Option<UICommandType>) {
         data.list = list.clone();
-        data.title = title.to_owned();
+        data.title = title;
         data.selected_idx = 0;
         data.filter.clear();
         self.action = action;
@@ -197,7 +197,7 @@ impl Widget<PaletteListState> for PaletteView {
         data: &PaletteListState,
         env: &druid::Env,
     ) {
-        self.inner.update(ctx, &old_data, data, env);
+        self.inner.update(ctx, old_data, data, env);
 
         if old_data.selected_idx != data.selected_idx || !old_data.filter.same(&data.filter) {
             ctx.request_paint();
@@ -380,11 +380,8 @@ impl Widget<PaletteListState> for PaletteList {
 struct EmptyWidget;
 impl<T> Widget<T> for EmptyWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &druid::Env) {
-        match event {
-            Event::MouseDown(_) => {
-                ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
-            }
-            _ => (),
+        if let Event::MouseDown(_) = event {
+            ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
         }
     }
 
@@ -415,7 +412,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                         2.,
                         Flex::column()
                             .with_child(
-                                Label::new(|data: &PaletteListState, _env: &Env| format!("{}", data.title))
+                                Label::new(|data: &PaletteListState, _env: &Env| data.title.to_string())
                                     .with_text_size(12.0),
                             )
                             .with_child(

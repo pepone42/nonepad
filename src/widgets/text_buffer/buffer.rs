@@ -75,7 +75,7 @@ impl Buffer {
         rel_to_byte: &mut Vec<Relative>,
         byte_to_rel: &mut Vec<Relative>,
     ) {
-        line.displayable_string(&self, self.tabsize, out, rel_to_byte, byte_to_rel);
+        line.displayable_string(self, self.tabsize, out, rel_to_byte, byte_to_rel);
         let l = line
             .grapheme_len(self)
             .index
@@ -124,13 +124,13 @@ impl Buffer {
     where
         P: Position,
     {
-        pos.absolute(&self)
+        pos.absolute(self)
     }
     pub fn position_to_point<P>(&self, pos: P) -> Point
     where
         P: Position,
     {
-        pos.point(&self)
+        pos.point(self)
     }
 
     pub fn len(&self) -> Absolute {
@@ -146,7 +146,7 @@ impl Buffer {
         C: Into<Column>,
         L: Into<Line>,
     {
-        Point::new(col.into(), line.into(), &self)
+        Point::new(col.into(), line.into(), self)
     }
 
     pub fn line(&self, line_index: usize) -> Line {
@@ -172,17 +172,17 @@ impl Buffer {
     }
 
     pub fn word_start<P: Position>(&self, p: P) -> Absolute {
-        Absolute::from(rope_utils::word_start(&self.slice(..), p.absolute(&self)))
+        Absolute::from(rope_utils::word_start(&self.slice(..), p.absolute(self)))
     }
     pub fn word_end<P: Position>(&self, p: P) -> Absolute {
-        Absolute::from(rope_utils::word_end(&self.slice(..), p.absolute(&self)))
+        Absolute::from(rope_utils::word_end(&self.slice(..), p.absolute(self)))
     }
 
     pub fn char<P>(&self, pos: P) -> char
     where
         P: Position,
     {
-        let a = pos.absolute(&self);
+        let a = pos.absolute(self);
         self.rope.char(self.rope.byte_to_char(a.index))
     }
 
@@ -224,7 +224,7 @@ impl Buffer {
     pub fn duplicate_down(&mut self) {
         self.carets.sort_unstable();
 
-        if let Some(c) = self.carets.last().and_then(|c| c.duplicate_down(&self)) {
+        if let Some(c) = self.carets.last().and_then(|c| c.duplicate_down(self)) {
             self.carets.push(c);
         }
         self.carets.merge();
@@ -233,7 +233,7 @@ impl Buffer {
     pub fn duplicate_up(&mut self) {
         self.carets.sort_unstable();
 
-        if let Some(c) = self.carets.first().and_then(|c| c.duplicate_up(&self)) {
+        if let Some(c) = self.carets.first().and_then(|c| c.duplicate_up(self)) {
             self.carets.push(c);
         }
         self.carets.merge();
@@ -332,7 +332,7 @@ impl Buffer {
 
     pub fn tab(&mut self, indentation: Indentation) {
         for i in 0..self.carets.len() {
-            match self.carets[i].selected_lines_range(&self) {
+            match self.carets[i].selected_lines_range(self) {
                 Some(line_range) if line_range.start() != line_range.end() => {
                     // TODO: Find a better way to iterate over line of a selection
                     for line_idx in line_range.start().index..line_range.end().index + 1 {
@@ -369,19 +369,19 @@ impl Buffer {
             return;
         }
         for i in 0..self.carets.len() {
-            match self.carets[i].index.line(&self).index {
+            match self.carets[i].index.line(self).index {
                 0 => (),
                 max if max == self.len_lines() => (),
                 l => {
                     let l = Line::from(l);
-                    let indent = l.prev().unwrap().indentation(&self);
+                    let indent = l.prev().unwrap().indentation(self);
                     let text = match indentation {
                         Indentation::Space(_) => {
                             " ".repeat(indent.into()).to_owned()
                         }
                         Indentation::Tab(_) =>  "\t".repeat(indent.index / indentation.visible_len()).to_owned(),
                     };
-                    self.edit(&Range{start: l.start(&self),end: l.start(&self)}, &text );
+                    self.edit(&Range{start: l.start(self),end: l.start(self)}, &text );
                     let b = self.clone();
                     self.carets[i].set_index(l.start(&b) + Relative::from(text.len()), true, true, &b);
                 }
@@ -461,7 +461,7 @@ impl Buffer {
         if let Some(i) = i {
             if self.carets.iter().any(|c| c.start() == i) {
                 self.carets.sort_unstable();
-                let c = self.last_created_caret().duplicate_to(i, i + s.len(), &self);
+                let c = self.last_created_caret().duplicate_to(i, i + s.len(), self);
                 self.carets.push(c);
             }
         }
@@ -529,7 +529,7 @@ impl Buffer {
                 s.push_str(chuck)
             }
             if multi {
-                s.push_str(&line_feed.to_str())
+                s.push_str(line_feed.to_str())
             }
         }
         s
@@ -566,12 +566,12 @@ impl Buffer {
 
         if !expand_selection {
             self.cancel_selection();
-            self.move_main_caret_to(line.start(&self), false, false);
-            self.move_main_caret_to(line.end(&self), true, false);
+            self.move_main_caret_to(line.start(self), false, false);
+            self.move_main_caret_to(line.end(self), true, false);
         } else if self.main_caret().start() == self.main_caret().index {
-            self.move_main_caret_to(line.start(&self), true, false);
+            self.move_main_caret_to(line.start(self), true, false);
         } else {
-            self.move_main_caret_to(line.end(&self), true, false);
+            self.move_main_caret_to(line.end(self), true, false);
         }
     }
 
