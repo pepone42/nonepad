@@ -242,11 +242,14 @@ impl Widget<PaletteListState> for PaletteList {
 
     fn update(
         &mut self,
-        _ctx: &mut druid::UpdateCtx,
-        _old_data: &PaletteListState,
-        _data: &PaletteListState,
+        ctx: &mut druid::UpdateCtx,
+        old_data: &PaletteListState,
+        data: &PaletteListState,
         _env: &druid::Env,
     ) {
+        if !old_data.list.same(&data.list) {
+            ctx.request_layout();
+        }
     }
 
     fn layout(
@@ -271,7 +274,7 @@ impl Widget<PaletteListState> for PaletteList {
             dy += layout.size().height + 2.;
         }
         self.total_height = dy;
-        bc.max()
+        Size::new(bc.max().width,self.total_height.min(500.))
     }
 
     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
@@ -423,7 +426,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                                     .with_id(id)
                                     .lens(PaletteListState::filter),
                             )
-                            .with_child(PaletteList::default().fix_size(550., 500.)).cross_axis_alignment(druid::widget::CrossAxisAlignment::Start),
+                            .with_child(PaletteList::default()).cross_axis_alignment(druid::widget::CrossAxisAlignment::Start),
                     )
                     .background(Color::from_hex_str(&THEME.vscode.colors.side_bar_background).unwrap())
                     .rounded(4.),
