@@ -1,22 +1,20 @@
 use std::{ffi::OsStr, path::Path};
 
-use druid::{
-    im::Vector,
-    widget::{Flex, Label, MainAxisAlignment},
-     Color, Command, Data, Env, HotKey, Lens, SysMods,
-    Target, Widget, WidgetExt,
-};
-
 use super::{
     bottom_panel::{self, BottonPanelState},
     editor_view,
 };
-use super::{text_buffer::EditStack, Item, Palette, PaletteListState};
-use crate::commands::{self, ShowPalette, UICommandType};
+use super::{text_buffer::EditStack, Item, PaletteListState, PaletteView};
+use crate::commands::{self, item, Palette, UICommandType};
+use druid::{
+    im::Vector,
+    widget::{Flex, Label, MainAxisAlignment},
+    Color, Command, Data, Env, HotKey, Lens, SysMods, Target, Widget, WidgetExt,
+};
 
 pub struct NPWindow {
     inner: Flex<NPWindowState>,
-    palette: Palette,
+    palette: PaletteView,
     in_palette: bool,
 }
 
@@ -78,14 +76,12 @@ impl Widget<NPWindowState> for NPWindow {
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    ctx.show_palette(
-                        "",
-                        items,
-                        UICommandType::Window(|index, _name, ctx, win, data| {
+                    Palette::new(items).win_action(
+                        |index, _name, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[index];
                             ui_cmd.exec(ctx, win, data);
-                        }),
-                    );
+                        }
+                    ).show(ctx);
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
             }
@@ -94,7 +90,7 @@ impl Widget<NPWindowState> for NPWindow {
             }
             druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
-                if let UICommandType::Window(action) = item.2 {
+                if let UICommandType::Window(action) = &item.2 {
                     (action)(item.0, item.1.clone(), ctx, self, data);
                     ctx.set_handled();
                     return;
@@ -103,8 +99,9 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL); //.clone();
-                self.palette.init(&mut data.palette_state, input.1, input.2.clone(), input.3);
+                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL).clone();
+                self.palette
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3);
                 self.palette.take_focus(ctx);
                 return;
             }
@@ -116,7 +113,20 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_paint();
                 return;
             }
-
+            druid::Event::WindowCloseRequested => {
+                if data.editor.is_dirty() {
+                    ctx.set_handled();
+                    Palette::new(item!["Yes", "No"])
+                        .title("Discard unsaved change?")
+                        .editor_action(|idx, _name, ctx, _editor_view, data| {
+                            if idx == 0 {
+                                data.reset_dirty();
+                                ctx.submit_command(druid::commands::CLOSE_WINDOW);
+                            }
+                        })
+                        .show(ctx);
+                }
+            }
             _ => (),
         }
         if self.in_palette {
@@ -213,7 +223,7 @@ impl NPWindow {
                         .background(Color::rgb8(0x1d, 0x1e, 0x22)), // using a Painter cause a redraw every frame
                 )
                 .main_axis_alignment(MainAxisAlignment::Center),
-            palette: Palette::new(),
+            palette: PaletteView::new(),
             in_palette: false,
         }
     }

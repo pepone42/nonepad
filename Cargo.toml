@@ -22,7 +22,6 @@ chardetng = "0.1.3"
 encoding_rs = "0.8.17"
 anyhow = "1.0"
 uuid = { version = "0.8", features = ["v4"] }
-rfd = {version = "0.8.1", default-features = false, features = ["xdg-portal"] }
 once_cell = "1.8"
 syntect = "4.5"
 sublime_fuzzy = "0.7.0"

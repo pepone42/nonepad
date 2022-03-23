@@ -4,10 +4,12 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::commands::{self, SCROLL_TO, UICommandType};
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+use super::Item;
+use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO};
 
+use druid::im::Vector;
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -18,7 +20,6 @@ use druid::{
 };
 use druid::{Data, FontStyle};
 
-use rfd::MessageDialog;
 use ropey::Rope;
 use syntect::parsing::SyntaxReference;
 
@@ -540,37 +541,6 @@ impl EditorView {
                     editor.redo();
                     return true;
                 }
-                // if HotKey::new(SysMods::Cmd, "o").matches(event) {
-                //     if editor.is_dirty()
-                //         && !MessageDialog::new()
-                //             .set_level(rfd::MessageLevel::Warning)
-                //             .set_title("Are you sure?")
-                //             .set_description("Discard unsaved change?")
-                //             .set_buttons(rfd::MessageButtons::YesNo)
-                //             .show()
-                //     {
-                //         return true;
-                //     }
-
-                //     let options = FileDialogOptions::new().show_hidden();
-                //     ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
-                //     return true;
-                // }
-                // if HotKey::new(SysMods::Cmd, "s").matches(event) {
-                //     //self.save(editor, ctx);
-                //     if editor.filename.is_some() {
-                //         ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
-                //     } else {
-                //         let options = FileDialogOptions::new().show_hidden();
-                //         ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
-                //     }
-                //     return true;
-                // }
-                // if HotKey::new(SysMods::CmdShift, "s").matches(event) {
-                //     let options = FileDialogOptions::new().show_hidden();
-                //     ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
-                //     return true;
-                // }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
                         commands::SHOW_SEARCH_PANEL,
@@ -670,30 +640,31 @@ impl EditorView {
                 }
                 false
             }
-            Event::WindowCloseRequested => {
-                if editor.is_dirty()
-                    && !MessageDialog::new()
-                        .set_level(rfd::MessageLevel::Warning)
-                        .set_description("The currently opened editor is not saved. Do you really want to quit?")
-                        .set_title("Not saved")
-                        .set_buttons(rfd::MessageButtons::YesNo)
-                        .show()
-                {
-                    return true;
-                }
-                false
-            }
             Event::WindowDisconnected => {
                 self.stop_highlighter();
                 true
             }
 
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
-                let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS);
-                if let Err(e) = self.save_as(editor, file_info.path()) {
-                    println!("Error writing file: {}", e);
+                let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS).clone();
+                if file_info.path().exists() {
+                    Palette::new(item!["Yes", "No"])
+                        .title("File exists! Overwrite?")
+                        .editor_action(move |idx, _name, _ctx, editor_view, data| {
+                            if idx == 0 {
+                                if let Err(e) = editor_view.save_as(data, file_info.path()) {
+                                    println!("Error writing file: {}", e);
+                                }
+                            };
+                        })
+                        .show(ctx);
+                    true
+                } else {
+                    if let Err(e) = self.save_as(editor, file_info.path()) {
+                        println!("Error writing file: {}", e);
+                    }
+                    true
                 }
-                true
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
@@ -703,13 +674,8 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
-                    if let Err(e) = self.open(editor, file_info.path()) {
-                        MessageDialog::new()
-                            .set_level(rfd::MessageLevel::Error)
-                            .set_title("Error")
-                            .set_description(&format!("Error loading file {}", e))
-                            .set_buttons(rfd::MessageButtons::Ok)
-                            .show();
+                    if let Err(_) = self.open(editor, file_info.path()) {
+                        Palette::new(item!["Ok"]).title("Error loading file").show(ctx);
                     }
                 }
                 true
@@ -752,9 +718,9 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
-                
-                if let UICommandType::Editor(action) = item.2 {
-                    (action)(item.0,item.1.clone(),ctx,self,editor);
+
+                if let UICommandType::Editor(action) = &item.2 {
+                    (action)(item.0, item.1.clone(), ctx, self, editor);
                     return true;
                 }
                 false
@@ -1161,17 +1127,6 @@ impl EditorView {
     where
         P: AsRef<Path>,
     {
-        if filename.as_ref().exists()
-            && MessageDialog::new()
-                .set_level(rfd::MessageLevel::Warning)
-                .set_title("File Exists")
-                .set_description("The given file allready exists, are you sure you want to overwrite it?")
-                .set_buttons(rfd::MessageButtons::YesNo)
-                .show()
-        {
-            return Ok(());
-        }
-
         editor.save(&filename)?;
         editor.filename = Some(filename.as_ref().to_path_buf());
         self.update_highlighter(editor, 0);
