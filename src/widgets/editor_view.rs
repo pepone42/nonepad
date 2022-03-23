@@ -1,14 +1,13 @@
 use std::ops::{Deref, DerefMut, Range};
 use std::path::Path;
-use std::rc::Rc;
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use crate::commands::{self, SCROLL_TO, UICommandType, ShowPalette};
-use super::Item;
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+use super::Item;
+use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO};
 
 use druid::im::Vector;
 use druid::{
@@ -542,37 +541,6 @@ impl EditorView {
                     editor.redo();
                     return true;
                 }
-                // if HotKey::new(SysMods::Cmd, "o").matches(event) {
-                //     if editor.is_dirty()
-                //         && !MessageDialog::new()
-                //             .set_level(rfd::MessageLevel::Warning)
-                //             .set_title("Are you sure?")
-                //             .set_description("Discard unsaved change?")
-                //             .set_buttons(rfd::MessageButtons::YesNo)
-                //             .show()
-                //     {
-                //         return true;
-                //     }
-
-                //     let options = FileDialogOptions::new().show_hidden();
-                //     ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
-                //     return true;
-                // }
-                // if HotKey::new(SysMods::Cmd, "s").matches(event) {
-                //     //self.save(editor, ctx);
-                //     if editor.filename.is_some() {
-                //         ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
-                //     } else {
-                //         let options = FileDialogOptions::new().show_hidden();
-                //         ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
-                //     }
-                //     return true;
-                // }
-                // if HotKey::new(SysMods::CmdShift, "s").matches(event) {
-                //     let options = FileDialogOptions::new().show_hidden();
-                //     ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
-                //     return true;
-                // }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
                         commands::SHOW_SEARCH_PANEL,
@@ -679,23 +647,24 @@ impl EditorView {
 
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS).clone();
-                if file_info.path().exists()
-                {
-                    let choice: Vector<Item> = ["Yes","No"].iter().map(|t| Item::new(t,&"")).collect();
-                    ctx.show_palette("File exists! Overwrite?", choice, UICommandType::Editor(Rc::new(move |idx, _name, _ctx, editor_view, data| {
-                        if idx == 0 {
-                            if let Err(e) = editor_view.save_as(data,file_info.path()) {
-                                println!("Error writing file: {}", e);
-                            }
-                        };
-                    })));
+                if file_info.path().exists() {
+                    Palette::new(item!["Yes", "No"])
+                        .title("File exists! Overwrite?")
+                        .editor_action(move |idx, _name, _ctx, editor_view, data| {
+                            if idx == 0 {
+                                if let Err(e) = editor_view.save_as(data, file_info.path()) {
+                                    println!("Error writing file: {}", e);
+                                }
+                            };
+                        })
+                        .show(ctx);
                     true
                 } else {
-                if let Err(e) = self.save_as(editor, file_info.path()) {
-                    println!("Error writing file: {}", e);
+                    if let Err(e) = self.save_as(editor, file_info.path()) {
+                        println!("Error writing file: {}", e);
+                    }
+                    true
                 }
-                true
-            }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
@@ -706,19 +675,7 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(_) = self.open(editor, file_info.path()) {
-                        // MessageDialog::new()
-                        //     .set_level(rfd::MessageLevel::Error)
-                        //     .set_title("Error")
-                        //     .set_description(&format!("Error loading file {}", e))
-                        //     .set_buttons(rfd::MessageButtons::Ok)
-                        //     .show();
-                        let choice: Vector<Item> = ["ok"].iter().map(|t| Item::new(t, &"")).collect();
-                        //let title = format!("Error loading file {}", e);
-                    ctx.show_palette(
-                        "Error loading file",
-                        choice,
-                        UICommandType::Editor(Rc::new(|_idx, _name, _ctx, _editor_view, _data| ())),
-                    );
+                        Palette::new(item!["Ok"]).title("Error loading file").show(ctx);
                     }
                 }
                 true
@@ -761,9 +718,9 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
-                
+
                 if let UICommandType::Editor(action) = &item.2 {
-                    (action)(item.0,item.1.clone(),ctx,self,editor);
+                    (action)(item.0, item.1.clone(), ctx, self, editor);
                     return true;
                 }
                 false
@@ -1170,13 +1127,10 @@ impl EditorView {
     where
         P: AsRef<Path>,
     {
-
-
         editor.save(&filename)?;
         editor.filename = Some(filename.as_ref().to_path_buf());
         self.update_highlighter(editor, 0);
         Ok(())
-
     }
 
     fn save(&mut self, editor: &mut EditStack) -> anyhow::Result<()> {

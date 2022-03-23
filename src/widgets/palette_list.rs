@@ -94,27 +94,27 @@ impl PaletteListState {
     }
 }
 
-pub struct Palette {
+pub struct PaletteView {
     inner: Flex<PaletteListState>,
     textbox_id: WidgetId,
     action: Option<UICommandType>,
 }
 
-impl Palette {
+impl PaletteView {
     pub fn new() -> Self {
         let textbox_id = WidgetId::next();
-        Palette {
+        PaletteView {
             inner: build(textbox_id),
             textbox_id,
             action: None,
         }
     }
-    pub fn init(&mut self, data: &mut PaletteListState, title: &str, list: Vector<Item>, action: UICommandType) {
+    pub fn init(&mut self, data: &mut PaletteListState, title: String, list: Vector<Item>, action: Option<UICommandType>) {
         data.list = list.clone();
         data.title = title.to_owned();
         data.selected_idx = 0;
         data.filter.clear();
-        self.action = Some(action);
+        self.action = action;
         data.visible_list = list.iter().enumerate().map(|i| (i.0, i.1.clone())).collect()
     }
     pub fn take_focus(&self, ctx: &mut EventCtx) {
@@ -122,7 +122,7 @@ impl Palette {
     }
 }
 
-impl Widget<PaletteListState> for Palette {
+impl Widget<PaletteListState> for PaletteView {
     fn event(
         &mut self,
         ctx: &mut druid::EventCtx,

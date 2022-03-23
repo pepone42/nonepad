@@ -5,11 +5,10 @@ use druid::{
 
 
 use crate::widgets::{EmptyWidget, Extension, PaletteListState};
-use crate::{commands, widgets};
+use crate::commands;
 
 pub const PANEL_CLOSED: usize = 0x0;
 pub const PANEL_SEARCH: usize = 0x1;
-pub const PANEL_PALETTE: usize = 0x2;
 
 pub struct BottomPanel {}
 
@@ -32,7 +31,6 @@ pub fn build() -> impl Widget<BottonPanelState> {
         |selector, _data, _env| match *selector {
             PANEL_CLOSED => Box::new(EmptyWidget::default()),
             PANEL_SEARCH => Box::new(build_search_panel().lens(BottonPanelState::search_state)),
-            PANEL_PALETTE => Box::new(build_palette_panel().lens(BottonPanelState::panel_state)),
             _ => unreachable!(),
         },
     );
@@ -56,14 +54,6 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
                 ctx.submit_command(Command::new(commands::SEND_STRING_DATA, input, id));
                 return;
             }
-            // Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
-            //     data.current = PANEL_PALETTE;
-            //     let id = child.id().unwrap();
-            //     let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL).clone();
-            //     ctx.submit_command(Command::new(commands::SEND_PALETTE_PANEL_DATA, input, id));
-            //     ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
-            //     return;
-            // }
             _ => (),
         }
         child.event(ctx, event, data, env)
@@ -97,22 +87,4 @@ fn build_search_panel() -> impl Widget<SearchState> {
             1.0,
         )
 }
-#[derive(Debug, Clone, Data, Lens, Default)]
-struct PaletteState {
-    s: String,
-    list: PaletteListState
-}
-fn build_palette_panel() -> impl Widget<PaletteListState> {
-    
-    // Flex::column().with_child(
-    //     TextBox::new().with_text_size(12.0)
-    //     .on_enter(|ctx, data: &mut String, _| {
-    //         dbg!(data);
-    //         ctx.submit_command(Command::new(commands::REQUEST_CLOSE_BOTTOM_PANEL, (), Target::Global));
-    //     })
-    //     .focus()
-    //     .lens(PaletteState::s)
-    //     .expand_width(),
-    // ).with_child(widgets::PaletteList::new().lens(PaletteState::list))
-    widgets::Palette::new().focus()
-}
+

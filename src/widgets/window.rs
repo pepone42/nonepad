@@ -1,11 +1,11 @@
-use std::{ffi::OsStr, path::Path, rc::Rc};
+use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
     editor_view,
 };
-use super::{text_buffer::EditStack, Item, Palette, PaletteListState};
-use crate::commands::{self, ShowPalette, UICommandType};
+use super::{text_buffer::EditStack, Item, PaletteListState, PaletteView};
+use crate::commands::{self, item, Palette, UICommandType};
 use druid::{
     im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
@@ -14,7 +14,7 @@ use druid::{
 
 pub struct NPWindow {
     inner: Flex<NPWindowState>,
-    palette: Palette,
+    palette: PaletteView,
     in_palette: bool,
 }
 
@@ -76,14 +76,12 @@ impl Widget<NPWindowState> for NPWindow {
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    ctx.show_palette(
-                        "",
-                        items,
-                        UICommandType::Window(Rc::new(|index, _name, ctx, win, data| {
+                    Palette::new(items).win_action(
+                        |index, _name, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[index];
                             ui_cmd.exec(ctx, win, data);
-                        })),
-                    );
+                        }
+                    ).show(ctx);
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
             }
@@ -118,19 +116,15 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::WindowCloseRequested => {
                 if data.editor.is_dirty() {
                     ctx.set_handled();
-                    let choice: Vector<Item> = ["Yes", "No"].iter().map(|t| Item::new(t, &"")).collect();
-                    ctx.show_palette(
-                        "Discard unsaved change?",
-                        choice,
-                        UICommandType::Editor(Rc::new(
-                            |idx, _name, ctx, _editor_view, data| {
-                                if idx == 0 {
-                                    data.reset_dirty();
-                                    ctx.submit_command(druid::commands::CLOSE_WINDOW);
-                                }
-                            },
-                        )),
-                    );
+                    Palette::new(item!["Yes", "No"])
+                        .title("Discard unsaved change?")
+                        .editor_action(|idx, _name, ctx, _editor_view, data| {
+                            if idx == 0 {
+                                data.reset_dirty();
+                                ctx.submit_command(druid::commands::CLOSE_WINDOW);
+                            }
+                        })
+                        .show(ctx);
                 }
             }
             _ => (),
@@ -229,7 +223,7 @@ impl NPWindow {
                         .background(Color::rgb8(0x1d, 0x1e, 0x22)), // using a Painter cause a redraw every frame
                 )
                 .main_axis_alignment(MainAxisAlignment::Center),
-            palette: Palette::new(),
+            palette: PaletteView::new(),
             in_palette: false,
         }
     }
