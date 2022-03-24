@@ -80,7 +80,7 @@ impl Widget<NPWindowState> for NPWindow {
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    Palette::new(items).win_action(
+                    Palette::new().items(items).win_action(
                         |index, _name, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[index];
                             ui_cmd.exec(ctx, win, data);
@@ -120,7 +120,7 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::WindowCloseRequested => {
                 if data.editor.is_dirty() {
                     ctx.set_handled();
-                    Palette::new(item!["Yes", "No"])
+                    Palette::new().items(item!["Yes", "No"])
                         .title("Discard unsaved change?")
                         .editor_action(|idx, _name, ctx, _editor_view, data| {
                             if idx == 0 {

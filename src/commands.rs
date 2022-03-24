@@ -17,7 +17,7 @@ pub enum UICommandType {
 }
 
 pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
-pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, String, Vector<Item>, Option<UICommandType>)> =
+pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, String, Option<Vector<Item>>, Option<UICommandType>)> =
     Selector::new("nonepad.bottom_panel.show_palette");
 pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
 pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
@@ -121,7 +121,7 @@ uicmd! {
         PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
         |_window, ctx, _data| {
             let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
-            Palette::new(languages)
+            Palette::new().items(languages)
                 .title("Set Language mode to")
                 .editor_action(
                     |_idx,name, _ctx, _editor_view, data| {
@@ -132,7 +132,7 @@ uicmd! {
         });
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
         |_window, ctx, _data| {
-            Palette::new(item!["Tabs","Spaces"])
+            Palette::new().items(item!["Tabs","Spaces"])
                 .title("Indent using")
                 .editor_action(
                     |idx, _name, _ctx, _editor_view, data| {
@@ -148,7 +148,7 @@ uicmd! {
         PALCMD_OPEN = ("Open","Ctrl-o", true,
         |_window, ctx, data| {
             if data.editor.is_dirty() {
-                Palette::new(item!["Yes","No"]).title("Discard unsaved change?").editor_action(
+                Palette::new().items(item!["Yes","No"]).title("Discard unsaved change?").editor_action(
                     |idx, _name, ctx, _editor_view, _data| {
                         if idx == 0 {
                             let options = FileDialogOptions::new().show_hidden();
@@ -182,11 +182,11 @@ uicmd! {
 }
 
 trait ShowPalette {
-    fn show_palette(&mut self, title: String, items: Vector<Item>, callback: Option<UICommandType>);
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<UICommandType>);
 }
 
 impl<'a, 'b, 'c> ShowPalette for EventCtx<'b, 'c> {
-    fn show_palette(&mut self, title: String, items: Vector<Item>, callback: Option<UICommandType>) {
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<UICommandType>) {
         self.submit_command(Command::new(
             SHOW_PALETTE_PANEL,
             (self.widget_id(), title, items, callback),
@@ -208,15 +208,12 @@ pub(crate) use item;
 pub struct Palette {
     title: Option<String>,
     action: Option<UICommandType>,
-    items: Vector<Item>,
+    items: Option<Vector<Item>>,
 }
 
 impl Palette {
-    pub fn new(items: Vector<Item>) -> Self {
-        Palette {
-            items,
-            ..Default::default()
-        }
+    pub fn new() -> Self {
+        Palette::default()
     }
     pub fn title(mut self, title: &str) -> Self {
         self.title = Some(title.to_owned());
@@ -234,6 +231,10 @@ impl Palette {
         action: impl Fn(usize, Arc<String>, &mut EventCtx, &mut EditorView, &mut EditStack) + 'static,
     ) -> Self {
         self.action = Some(UICommandType::Editor(Rc::new(action)));
+        self
+    }
+    pub fn items(mut self, items: Vector<Item>) -> Self {
+        self.items = Some(items);
         self
     }
     pub fn show(self, ctx: &mut EventCtx) {

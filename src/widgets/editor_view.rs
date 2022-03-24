@@ -648,7 +648,7 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS).clone();
                 if file_info.path().exists() {
-                    Palette::new(item!["Yes", "No"])
+                    Palette::new().items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
                         .editor_action(move |idx, _name, _ctx, editor_view, data| {
                             if idx == 0 {
@@ -675,7 +675,7 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(_) = self.open(editor, file_info.path()) {
-                        Palette::new(item!["Ok"]).title("Error loading file").show(ctx);
+                        Palette::new().items(item!["Ok"]).title("Error loading file").show(ctx);
                     }
                 }
                 true
