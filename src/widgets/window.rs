@@ -71,7 +71,11 @@ impl Widget<NPWindowState> for NPWindow {
                 return;
             }
             druid::Event::KeyDown(event) => {
-                if HotKey::new(SysMods::CmdShift, "P").matches(event) && !self.in_palette {
+                #[cfg(target_os = "macos")]
+                let p = "p"
+;                #[cfg(not(target_os = "macos"))]
+                let p = "P";
+                if HotKey::new(SysMods::CmdShift, p).matches(event) && !self.in_palette {
                     let mut items = Vector::new();
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));

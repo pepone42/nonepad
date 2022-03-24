@@ -6,8 +6,8 @@ mod seticon;
 mod theme;
 mod widgets;
 
-use druid::{WindowHandle, Size};
 use druid::{piet::Color, AppDelegate, AppLauncher, Command, DelegateCtx, Env, LocalizedString, Target, WindowDesc};
+use druid::{Data, Menu, Size, WindowHandle, WindowId};
 
 use seticon::set_icon;
 
@@ -57,6 +57,16 @@ impl AppDelegate<NPWindowState> for Delegate {
     }
 }
 
+#[allow(unused_assignments, unused_mut)]
+fn make_menu<T: Data>(_window: Option<WindowId>, _data: &NPWindowState, _env: &Env) -> Menu<T> {
+    let mut base = Menu::empty();
+    #[cfg(target_os = "macos")]
+    {
+        base = base.entry(druid::platform_menus::mac::application::default())
+    }
+    base
+}
+
 fn main() -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
@@ -72,7 +82,10 @@ fn main() -> anyhow::Result<()> {
         NPWindowState::new()
     };
 
-    let win = WindowDesc::new(widgets::window::NPWindow::build()).title(LocalizedString::new("NonePad")).with_min_size(Size::new(500.,500.));
+    let win = WindowDesc::new(widgets::window::NPWindow::build())
+        .title(LocalizedString::new("NonePad"))
+        .with_min_size(Size::new(500., 500.))
+        .menu(make_menu);
     AppLauncher::with_window(win)
         .delegate(Delegate)
         .configure_env(|env, _| {

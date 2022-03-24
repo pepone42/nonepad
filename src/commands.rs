@@ -96,6 +96,9 @@ fn string_to_hotkey(input: &str) -> Option<HotKey> {
         "CtrlAltShift" => SysMods::AltCmdShift,
         _ => SysMods::None,
     };
+    #[cfg(target_os = "macos")]
+    return Some(HotKey::new(mods, t[1]));
+    #[cfg(not(target_os = "macos"))]
     if t[0].contains("Shift") {
         Some(HotKey::new(mods, t[1].to_uppercase().as_str()))
     } else {
