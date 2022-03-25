@@ -178,6 +178,15 @@ uicmd! {
             ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
             return true;
         });
+        PALCMD_GOTO_LINE = ("Navigate to line","Ctrl-g", true,
+        |_window, ctx, _data|{
+            Palette::new().title("Navigate to line").editor_action(|_,line,ctx,ev,editor| {
+                if let Ok(line) = line.parse::<usize>() {
+                    ev.navigate_to_line(ctx,editor,line.into() );
+                }
+            }).show(ctx);
+            return true;
+        });
     }
 }
 

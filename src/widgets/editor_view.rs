@@ -648,7 +648,8 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS).clone();
                 if file_info.path().exists() {
-                    Palette::new().items(item!["Yes", "No"])
+                    Palette::new()
+                        .items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
                         .editor_action(move |idx, _name, _ctx, editor_view, data| {
                             if idx == 0 {
@@ -1121,6 +1122,15 @@ impl EditorView {
             (Some(self.delta_x), Some(self.delta_y)),
             self.owner_id,
         ));
+    }
+
+    pub fn navigate_to_line(&mut self, ctx: &mut EventCtx, editor: &mut EditStack, line: position::Line) {
+        if line.index < editor.len_lines() {
+            let start = line.start(&editor.buffer);
+            editor.cancel_mutli_carets();
+            editor.move_main_caret_to(start, false, false);
+            self.put_caret_in_visible_range(ctx, editor);
+        }
     }
 
     fn save_as<P>(&mut self, editor: &mut EditStack, filename: P) -> anyhow::Result<()>

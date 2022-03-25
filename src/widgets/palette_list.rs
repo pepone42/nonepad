@@ -14,8 +14,6 @@ use sublime_fuzzy::best_match;
 use crate::commands::{self, UICommandType};
 use crate::theme::THEME;
 
-use self::palette_list_state_derived_lenses::visible_list;
-
 use super::Extension;
 
 const FILTER: Selector<()> = Selector::new("nonepad.editor.palette.filter");
