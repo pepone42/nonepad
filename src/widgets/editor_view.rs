@@ -1229,7 +1229,11 @@ impl Widget<EditStack> for Gutter {
         }
     }
 
-    fn update(&mut self, _ctx: &mut UpdateCtx, _old_data: &EditStack, _data: &EditStack, _env: &Env) {}
+    fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
+        if old_data.len_lines() != data.len_lines() {
+            ctx.request_layout();
+        }
+    }
 
     fn layout(&mut self, _layout_ctx: &mut LayoutCtx, bc: &BoxConstraints, data: &EditStack, _env: &Env) -> Size {
         self.metrics = CommonMetrics::from_env(_env);
