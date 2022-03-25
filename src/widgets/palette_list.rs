@@ -42,43 +42,45 @@ pub struct PaletteListState {
     title: String,
     filter: String,
     selected_idx: usize,
-    list: Vector<Item>,
-    visible_list: Vector<(usize, Item)>,
+    list: Option<Vector<Item>>,
+    visible_list: Option<Vector<(usize, Item)>>,
     bbox: Rect,
 }
 
 impl PaletteListState {
     fn apply_filter(&mut self) {
-        if self.filter.len() == 0 {
-            for s in self.list.iter_mut() {
-                s.filtered = false;
-                s.score = 0;
-            }
-            self.visible_list = self.list.iter().enumerate().map(|i| (i.0, i.1.clone())).collect();
-        } else {
-            for s in self.list.iter_mut() {
-                if let Some(m) = best_match(&self.filter, &s.title) {
+        if let Some(l) = &mut self.list {
+            if self.filter.len() == 0 {
+                for s in l.iter_mut() {
                     s.filtered = false;
-                    s.score = m.score();
-                } else {
-                    s.filtered = true;
+                    s.score = 0;
                 }
+                self.visible_list = Some(l.iter().enumerate().map(|i| (i.0, i.1.clone())).collect());
+            } else {
+                for s in l.iter_mut() {
+                    if let Some(m) = best_match(&self.filter, &s.title) {
+                        s.filtered = false;
+                        s.score = m.score();
+                    } else {
+                        s.filtered = true;
+                    }
+                }
+                let mut vl: Vector<(usize, Item)> = l
+                    .iter()
+                    .enumerate()
+                    .filter(|c| !c.1.filtered)
+                    .map(|i| (i.0, i.1.clone()))
+                    .collect();
+                vl.sort_by(|l, r| {
+                    let result = r.1.score.cmp(&l.1.score);
+                    if result == Equal {
+                        l.1.title.cmp(&r.1.title)
+                    } else {
+                        result
+                    }
+                });
+                self.visible_list = Some(vl);
             }
-            self.visible_list = self
-                .list
-                .iter()
-                .enumerate()
-                .filter(|c| !c.1.filtered)
-                .map(|i| (i.0, i.1.clone()))
-                .collect();
-            self.visible_list.sort_by(|l, r| {
-                let result = r.1.score.cmp(&l.1.score);
-                if result == Equal {
-                    l.1.title.cmp(&r.1.title)
-                } else {
-                    result
-                }
-            });
         }
     }
 
@@ -88,8 +90,10 @@ impl PaletteListState {
         }
     }
     fn next(&mut self) {
-        if self.selected_idx < self.visible_list.len() - 1 {
-            self.selected_idx += 1;
+        if let Some(l) = &self.visible_list {
+            if self.selected_idx < l.len() - 1 {
+                self.selected_idx += 1;
+            }
         }
     }
 }
@@ -109,13 +113,19 @@ impl PaletteView {
             action: None,
         }
     }
-    pub fn init(&mut self, data: &mut PaletteListState, title: String, list: Vector<Item>, action: Option<UICommandType>) {
+    pub fn init(
+        &mut self,
+        data: &mut PaletteListState,
+        title: String,
+        list: Option<Vector<Item>>,
+        action: Option<UICommandType>,
+    ) {
         data.list = list.clone();
         data.title = title.to_owned();
         data.selected_idx = 0;
         data.filter.clear();
         self.action = action;
-        data.visible_list = list.iter().enumerate().map(|i| (i.0, i.1.clone())).collect()
+        data.visible_list = list.map(|l| l.iter().enumerate().map(|i| (i.0, i.1.clone())).collect())
     }
     pub fn take_focus(&self, ctx: &mut EventCtx) {
         ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), self.textbox_id));
@@ -149,13 +159,25 @@ impl Widget<PaletteListState> for PaletteView {
                 KeyEvent { key: KbKey::Enter, .. } => {
                     ctx.resign_focus();
                     ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
+
                     if let Some(f) = self.action.take() {
-                        if let Some(item) = data.visible_list.get(data.selected_idx) {
-                            ctx.submit_command(Command::new(
-                                commands::PALETTE_CALLBACK,
-                                (dbg!(item.0), item.1.title.clone(), f),
-                                Target::Global,
-                            ));
+                        match &data.visible_list {
+                            Some(l) => {
+                                if let Some(item) = l.get(data.selected_idx) {
+                                    ctx.submit_command(Command::new(
+                                        commands::PALETTE_CALLBACK,
+                                        (dbg!(item.0), item.1.title.clone(), f),
+                                        Target::Global,
+                                    ));
+                                }
+                            }
+                            None => {
+                                ctx.submit_command(Command::new(
+                                    commands::PALETTE_CALLBACK,
+                                    (0, Arc::new(data.filter.clone()), f),
+                                    Target::Global,
+                                ));
+                            }
                         }
                     }
 
@@ -260,69 +282,73 @@ impl Widget<PaletteListState> for PaletteList {
         env: &druid::Env,
     ) -> Size {
         let mut dy = 2.5;
-        for item in data.visible_list.iter() {
-            let layout = ctx
-                .text()
-                //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
-                .new_text_layout(item.1.title.clone())
-                .font(env.get(druid::theme::UI_FONT).family, 14.0)
-                .text_color(env.get(druid::theme::TEXT_COLOR))
-                .alignment(druid::TextAlignment::Start)
-                .max_width(500.)
-                .build()
-                .unwrap();
-            dy += layout.size().height + 2.;
+        if let Some(l) = &data.visible_list {
+            for item in l.iter() {
+                let layout = ctx
+                    .text()
+                    //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
+                    .new_text_layout(item.1.title.clone())
+                    .font(env.get(druid::theme::UI_FONT).family, 14.0)
+                    .text_color(env.get(druid::theme::TEXT_COLOR))
+                    .alignment(druid::TextAlignment::Start)
+                    .max_width(500.)
+                    .build()
+                    .unwrap();
+                dy += layout.size().height + 2.;
+            }
         }
         self.total_height = dy;
-        Size::new(bc.max().width,self.total_height.min(500.))
+        Size::new(bc.max().width, self.total_height.min(500.))
     }
 
     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
-        let size = ctx.size();
-        ctx.clip(Rect::ZERO.with_size(size));
-        let mut dy = 2.5;
+        if data.visible_list.is_some() {
+            let size = ctx.size();
+            ctx.clip(Rect::ZERO.with_size(size));
+            let mut dy = 2.5;
 
-        let mut layouts = Vec::new();
-        let mut selection_rect = Rect::ZERO;
+            let mut layouts = Vec::new();
+            let mut selection_rect = Rect::ZERO;
 
-        for (i, item) in data.visible_list.iter().enumerate() {
-            let layout = ctx
-                .text()
-                //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
-                .new_text_layout(item.1.title.clone())
-                .font(env.get(druid::theme::UI_FONT).family, 14.0)
-                .text_color(env.get(druid::theme::TEXT_COLOR))
-                .alignment(druid::TextAlignment::Start)
-                .max_width(500.)
-                .build()
-                .unwrap();
-            let height = layout.size().height;
-            layouts.push((dy, layout));
-            if i == data.selected_idx {
-                selection_rect = Rect::new(2.5, dy, size.width - 4.5, dy + height + 4.5);
+            for (i, item) in data.visible_list.clone().unwrap().iter().enumerate() {
+                let layout = ctx
+                    .text()
+                    //.new_text_layout(format!("{} {}", item.1.title.clone(), item.1.score))
+                    .new_text_layout(item.1.title.clone())
+                    .font(env.get(druid::theme::UI_FONT).family, 14.0)
+                    .text_color(env.get(druid::theme::TEXT_COLOR))
+                    .alignment(druid::TextAlignment::Start)
+                    .max_width(500.)
+                    .build()
+                    .unwrap();
+                let height = layout.size().height;
+                layouts.push((dy, layout));
+                if i == data.selected_idx {
+                    selection_rect = Rect::new(2.5, dy, size.width - 4.5, dy + height + 4.5);
+                }
+
+                dy += height + 2.;
             }
 
-            dy += height + 2.;
-        }
-
-        if selection_rect.y0 < self.position.y {
-            self.position.y = selection_rect.y0
-        }
-        if selection_rect.y1 > self.position.y + size.height {
-            self.position.y = selection_rect.y1 - size.height
-        }
-
-        ctx.with_save(|ctx| {
-            ctx.transform(Affine::translate((-self.position.x, -self.position.y)));
-
-            ctx.fill(
-                selection_rect,
-                &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND),
-            );
-            for l in layouts {
-                ctx.draw_text(&l.1, (25.5, l.0));
+            if selection_rect.y0 < self.position.y {
+                self.position.y = selection_rect.y0
             }
-        });
+            if selection_rect.y1 > self.position.y + size.height {
+                self.position.y = selection_rect.y1 - size.height
+            }
+
+            ctx.with_save(|ctx| {
+                ctx.transform(Affine::translate((-self.position.x, -self.position.y)));
+
+                ctx.fill(
+                    selection_rect,
+                    &env.get(crate::theme::SIDE_BAR_SECTION_HEADER_BACKGROUND),
+                );
+                for l in layouts {
+                    ctx.draw_text(&l.1, (25.5, l.0));
+                }
+            });
+        }
     }
 }
 
@@ -426,7 +452,8 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                                     .with_id(id)
                                     .lens(PaletteListState::filter),
                             )
-                            .with_child(PaletteList::default()).cross_axis_alignment(druid::widget::CrossAxisAlignment::Start),
+                            .with_child(PaletteList::default())
+                            .cross_axis_alignment(druid::widget::CrossAxisAlignment::Start),
                     )
                     .background(Color::from_hex_str(&THEME.vscode.colors.side_bar_background).unwrap())
                     .rounded(4.),
