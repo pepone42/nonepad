@@ -5,12 +5,36 @@ use super::{
     rope_utils, SelectionLineRange,
 };
 use druid::Data;
+use once_cell::sync::Lazy;
 use ropey::{Rope, RopeSlice};
 use std::{
     cell::Cell,
+    collections::HashMap,
     ops::{Bound, Range, RangeBounds},
 };
 use uuid::Uuid;
+
+static AUTO_INSERT_CHARMAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
+    let mut m = HashMap::new();
+    m.insert("{", "}");
+    m.insert("(", ")");
+    m.insert("<", ">");
+    m.insert("[", "]");
+    m.insert("\"", "\"");
+    m
+});
+
+#[derive(Debug, Clone)]
+enum EditStateMachine {
+    Idle,
+    InsertPair(String),
+}
+
+impl Default for EditStateMachine {
+    fn default() -> Self {
+        EditStateMachine::Idle
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Buffer {
@@ -19,6 +43,7 @@ pub struct Buffer {
     pub(super) tabsize: usize,
     uuid: Uuid,
     max_visible_line_grapheme_len: Cell<usize>,
+    edit_state_machine: EditStateMachine,
 }
 
 impl Data for Buffer {
@@ -41,6 +66,7 @@ impl Buffer {
             uuid: Uuid::new_v4(),
             tabsize,
             max_visible_line_grapheme_len: Cell::new(0),
+            edit_state_machine: Default::default(),
         }
     }
 
@@ -55,6 +81,7 @@ impl Buffer {
             uuid: Uuid::new_v4(),
             tabsize,
             max_visible_line_grapheme_len: Cell::new(0),
+            edit_state_machine: Default::default(),
         };
         for line in 0..100.min(b.len_lines()) {
             let l = b
@@ -65,6 +92,10 @@ impl Buffer {
             b.max_visible_line_grapheme_len.set(l);
         }
         b
+    }
+
+    pub fn rope_slice(&self, range: &Range<Absolute>) -> RopeSlice {
+        self.rope.byte_slice(range.start.index..range.end.index)
     }
 
     /// Construct a string with tab replaced as space
@@ -186,17 +217,22 @@ impl Buffer {
         self.rope.char(self.rope.byte_to_char(a.index))
     }
 
+    pub fn reset_edit_state_machine(&mut self) {
+        self.edit_state_machine = EditStateMachine::Idle;
+    }
+
     pub fn backward(&mut self, expand_selection: bool, word_boundary: bool) {
+        self.reset_edit_state_machine();
         let b = self.clone();
         for s in &mut self.carets.iter_mut() {
             // TODO: Found a way to not clone, even if it's cheap
             s.move_backward(expand_selection, word_boundary, &b);
         }
-
         self.carets.merge();
     }
 
     pub fn forward(&mut self, expand_selection: bool, word_boundary: bool) {
+        self.reset_edit_state_machine();
         let b = self.clone();
         for s in &mut self.carets.iter_mut() {
             s.move_forward(expand_selection, word_boundary, &b);
@@ -206,6 +242,7 @@ impl Buffer {
     }
 
     pub fn up(&mut self, expand_selection: bool) {
+        self.reset_edit_state_machine();
         let b = self.clone();
         for s in &mut self.carets.iter_mut() {
             s.move_up(expand_selection, &b);
@@ -214,6 +251,7 @@ impl Buffer {
         self.carets.merge();
     }
     pub fn down(&mut self, expand_selection: bool) {
+        self.reset_edit_state_machine();
         let b = self.clone();
         for s in &mut self.carets.iter_mut() {
             s.move_down(expand_selection, &b);
@@ -222,6 +260,7 @@ impl Buffer {
         self.carets.merge();
     }
     pub fn duplicate_down(&mut self) {
+        self.reset_edit_state_machine();
         self.carets.sort_unstable();
 
         if let Some(c) = self.carets.last().and_then(|c| c.duplicate_down(&self)) {
@@ -231,6 +270,7 @@ impl Buffer {
     }
 
     pub fn duplicate_up(&mut self) {
+        self.reset_edit_state_machine();
         self.carets.sort_unstable();
 
         if let Some(c) = self.carets.first().and_then(|c| c.duplicate_up(&self)) {
@@ -244,6 +284,7 @@ impl Buffer {
     }
 
     pub fn end(&mut self, expand_selection: bool) {
+        self.reset_edit_state_machine();
         let b = self.clone();
         for s in &mut self.carets.iter_mut() {
             s.move_end(expand_selection, &b);
@@ -253,14 +294,14 @@ impl Buffer {
     }
 
     pub fn home(&mut self, expand_selection: bool) {
+        self.reset_edit_state_machine();
         let b = self.clone();
         for s in &mut self.carets.iter_mut() {
             s.move_home(expand_selection, &b);
         }
         self.carets.merge();
     }
-
-    pub fn insert(&mut self, text: &str, expand_selection: bool) {
+    fn insert_text(&mut self, text: &str, expand_selection: bool) {
         for i in 0..self.carets.len() {
             let r = self.carets[i].range();
             self.edit(&r, text);
@@ -268,6 +309,43 @@ impl Buffer {
             self.carets[i].set_index(r.start + text.len(), !expand_selection, true, &b);
         }
         self.carets.merge();
+    }
+    pub fn insert(&mut self, text: &str, line_feed: LineFeed, indentation: Indentation) {
+
+        let s = match self.edit_state_machine.clone() {
+            EditStateMachine::Idle => match text {
+                lf if lf == line_feed.to_str() => {
+                    self.insert_text(text, false);
+                    self.indent(indentation);
+                    EditStateMachine::Idle
+                }
+                s if AUTO_INSERT_CHARMAP.get(s).is_some() => {
+                    let inner_text = self.selected_text(line_feed);
+
+                    self.insert_text(s, false);
+                    self.insert_text(AUTO_INSERT_CHARMAP[text], false);
+                    self.backward(false, false);
+                    self.insert_text(&inner_text, true);
+
+                    EditStateMachine::InsertPair(s.to_owned())
+                }
+                _ => {
+                    self.insert_text(text, false);
+                    EditStateMachine::Idle
+                }
+            },
+            EditStateMachine::InsertPair(t) => {
+                if text == *AUTO_INSERT_CHARMAP.get(t.as_str()).unwrap_or(&"") {
+                    self.forward(false, false);
+                    EditStateMachine::Idle
+                } else {
+                    self.insert_text(text, false);
+                    EditStateMachine::InsertPair(t)
+                }
+            }
+            _ => EditStateMachine::Idle,
+        };
+        self.edit_state_machine = s;
     }
 
     pub fn backspace(&mut self) -> bool {
@@ -285,6 +363,17 @@ impl Buffer {
                 // delete the preceding grapheme
                 let r = rope_utils::prev_grapheme_boundary(&self.rope.slice(..), self.carets[i].index).into()
                     ..self.carets[i].index;
+                let removed_text = self.slice(r.clone()).to_string();
+
+                self.edit_state_machine = match self.edit_state_machine.clone() {
+                    EditStateMachine::InsertPair(t) if t == removed_text => {
+                        self.delete();
+                        EditStateMachine::Idle
+                    }
+                    EditStateMachine::InsertPair(t) => EditStateMachine::InsertPair(t),
+                    _ => EditStateMachine::Idle
+                };
+
                 self.edit(&r, "");
                 let b = self.clone();
                 self.carets[i].set_index(r.start, true, true, &b);
@@ -302,6 +391,7 @@ impl Buffer {
     }
 
     pub fn delete(&mut self) -> bool {
+        self.reset_edit_state_machine();
         let mut did_nothing = true;
         for i in 0..self.carets.len() {
             if !self.carets[i].selection_is_empty() {
@@ -334,6 +424,7 @@ impl Buffer {
         for i in 0..self.carets.len() {
             match self.carets[i].selected_lines_range(&self) {
                 Some(line_range) if line_range.start() != line_range.end() => {
+                    self.reset_edit_state_machine();
                     // TODO: Find a better way to iterate over line of a selection
                     for line_idx in line_range.start().index..line_range.end().index + 1 {
                         let line_start: Absolute = self.rope.line_to_byte(line_idx).into();
@@ -376,16 +467,19 @@ impl Buffer {
                     let l = Line::from(l);
                     let indent = l.prev().unwrap().indentation(&self);
                     let text = match indentation {
-                        Indentation::Space(_) => {
-                            " ".repeat(indent.into()).to_owned()
-                        }
-                        Indentation::Tab(_) =>  "\t".repeat(indent.index / indentation.visible_len()).to_owned(),
+                        Indentation::Space(_) => " ".repeat(indent.into()).to_owned(),
+                        Indentation::Tab(_) => "\t".repeat(indent.index / indentation.visible_len()).to_owned(),
                     };
-                    self.edit(&Range{start: l.start(&self),end: l.start(&self)}, &text );
+                    self.edit(
+                        &Range {
+                            start: l.start(&self),
+                            end: l.start(&self),
+                        },
+                        &text,
+                    );
                     let b = self.clone();
                     self.carets[i].set_index(l.start(&b) + Relative::from(text.len()), true, true, &b);
                 }
-
             }
         }
     }
@@ -412,6 +506,7 @@ impl Buffer {
     }
 
     pub fn cancel_mutli_carets(&mut self) {
+        self.reset_edit_state_machine();
         self.carets.retain(|c| !c.is_clone);
         self.carets.merge();
     }
@@ -424,7 +519,7 @@ impl Buffer {
         let end = end_bound_to_num(r.end_bound()).unwrap_or_else(|| self.len());
 
         self.rope
-            .slice(self.rope.byte_to_char(start.index)..self.rope.byte_to_char(end.index))
+            .byte_slice(start.index..end.index)
     }
 
     fn search_next_in_range(&self, s: &str, r: Range<Absolute>) -> Option<Absolute> {
@@ -472,10 +567,7 @@ impl Buffer {
     }
 
     pub fn first_caret(&self) -> &Caret {
-        self.carets
-            .iter()
-            .min_by_key(|c| c.start())
-            .expect("No cursor found!")
+        self.carets.iter().min_by_key(|c| c.start()).expect("No cursor found!")
     }
 
     pub fn last_created_caret(&self) -> &Caret {

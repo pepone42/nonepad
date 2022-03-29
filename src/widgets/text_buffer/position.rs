@@ -1,7 +1,7 @@
 use super::buffer::Buffer;
 use super::rope_utils::{next_graphem_len, prev_grapheme_boundary};
 use druid::Data;
-use std::ops::Add;
+use std::ops::{Add, Range};
 use std::ops::{AddAssign, Sub, SubAssign};
 
 pub trait Position {
@@ -439,12 +439,14 @@ impl Sub<&Line> for &Line {
 
 #[cfg(test)]
 mod tests {
+    use crate::widgets::text_buffer::{file::LineFeed, Indentation};
+
     use super::super::{buffer::Buffer, position::Column};
 
     #[test]
     fn grapheme_len() {
         let mut input = Buffer::new(4);
-        input.insert("Hello 😊︎ 😐︎ ☹︎ example", false);
+        input.insert("Hello 😊︎ 😐︎ ☹︎ example", LineFeed::CrLf, Indentation::Space(4));
         assert_eq!(input.line(0).grapheme_len(&input), Column::from(19));
     }
 }

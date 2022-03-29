@@ -151,6 +151,7 @@ impl HeldState {
     }
 }
 
+
 pub enum HighlighterMessage {
     Stop,
     Update(SyntaxReference, Rope, usize),
@@ -558,13 +559,17 @@ impl EditorView {
                 }
 
                 if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
+                    #[cfg(target_os = "macos")]
+                    if event.mods.ctrl() || event.mods.meta() {
+                        return false;
+                    }
+                    #[cfg(not(target_os = "macos"))]
                     if event.mods.ctrl() || event.mods.alt() || event.mods.meta() {
                         return false;
                     }
                     if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
                         return false;
                     }
-
                     editor.insert(&text);
                     return true;
                 }

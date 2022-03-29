@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use super::buffer::Buffer;
 use super::file::TextFileInfo;
+use super::rope_utils;
 use druid::Data;
-use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Default)]
 pub struct EditStack {
@@ -26,16 +26,6 @@ impl Data for EditStack {
             && self.dirty == other.dirty
     }
 }
-
-static AUTO_INSERT_CHARMAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
-    let mut m = HashMap::new();
-    m.insert("{", "{}");
-    m.insert("(", "()");
-    m.insert("<", "<>");
-    m.insert("[", "[]");
-    m.insert("\"", "\"\"");
-    m
-});
 
 
 impl EditStack {
@@ -99,6 +89,8 @@ impl EditStack {
         if self.undo_stack.is_empty() {
             self.dirty = false;
         }
+        // reset state
+        self.reset_edit_state_machine();
     }
 
     pub fn redo(&mut self) {
@@ -107,6 +99,8 @@ impl EditStack {
             self.undo_stack.push(b);
             self.buffer = buffer;
         }
+        // reset state
+        self.reset_edit_state_machine();
     }
 
     fn push_edit(&mut self, buffer: Buffer) {
@@ -120,22 +114,23 @@ impl EditStack {
     pub fn insert(&mut self, text: &str) {
         let mut buf = self.buffer.clone();
 
-        match text {
-            linefeed if linefeed == self.file.linefeed.to_str() => {
-                buf.insert(text, false);
-                buf.indent(self.file.indentation);
-            }
-            s if AUTO_INSERT_CHARMAP.get(s).is_some()  => {
-                let inner_text = buf.selected_text(self.file.linefeed);
-                buf.insert(AUTO_INSERT_CHARMAP[text], false);
-                buf.backward(false, false);
-                buf.insert(&inner_text, true);
-            }
-            _ => {
-                buf.insert(text, false);
-            }
-        }
-
+        
+        // match text {
+        //     linefeed if linefeed == self.file.linefeed.to_str() => {
+        //         buf.insert(text, false);
+        //         buf.indent(self.file.indentation);
+        //     }
+        //     s if AUTO_INSERT_CHARMAP.get(s).is_some()  => {
+        //         let inner_text = buf.selected_text(self.file.linefeed);
+        //         buf.insert(AUTO_INSERT_CHARMAP[text], false);
+        //         buf.backward(false, false);
+        //         buf.insert(&inner_text, true);
+        //     }
+        //     _ => {
+        //         buf.insert(text, false);
+        //     }
+        // }
+        buf.insert(text, self.file.linefeed, self.file.indentation);
         self.push_edit(buf);
     }
 
@@ -150,7 +145,8 @@ impl EditStack {
 
     pub fn delete(&mut self) {
         let mut buf = self.buffer.clone();
-
+        // reset state
+        self.reset_edit_state_machine();
         if buf.delete() {
             self.push_edit(buf);
         }
@@ -158,6 +154,7 @@ impl EditStack {
 
     pub fn tab(&mut self) {
         let mut buf = self.buffer.clone();
+        self.reset_edit_state_machine();
         buf.tab(self.file.indentation);
         self.push_edit(buf);
     }
