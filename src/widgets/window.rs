@@ -9,7 +9,7 @@ use crate::commands::{self, item, Palette, UICommandType};
 use druid::{
     im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
-    Color, Command, Data, Env, HotKey, Lens, SysMods, Target, Widget, WidgetExt,
+    Color, Command, Data, Env, HotKey, Lens, LifeCycle, SysMods, Target, Widget, WidgetExt,
 };
 
 pub struct NPWindow {
@@ -72,20 +72,21 @@ impl Widget<NPWindowState> for NPWindow {
             }
             druid::Event::KeyDown(event) => {
                 #[cfg(target_os = "macos")]
-                let p = "p"
-;                #[cfg(not(target_os = "macos"))]
+                let p = "p";
+                #[cfg(not(target_os = "macos"))]
                 let p = "P";
                 if HotKey::new(SysMods::CmdShift, p).matches(event) && !self.in_palette {
                     let mut items = Vector::new();
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    Palette::new().items(items).win_action(
-                        |index, _name, ctx, win, data| {
+                    Palette::new()
+                        .items(items)
+                        .win_action(|index, _name, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[index];
                             ui_cmd.exec(ctx, win, data);
-                        }
-                    ).show(ctx);
+                        })
+                        .show(ctx);
                 }
                 commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
             }
@@ -120,7 +121,8 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::WindowCloseRequested => {
                 if data.editor.is_dirty() {
                     ctx.set_handled();
-                    Palette::new().items(item!["Yes", "No"])
+                    Palette::new()
+                        .items(item!["Yes", "No"])
                         .title("Discard unsaved change?")
                         .editor_action(|idx, _name, ctx, _editor_view, data| {
                             if idx == 0 {
@@ -147,14 +149,26 @@ impl Widget<NPWindowState> for NPWindow {
         data: &NPWindowState,
         env: &druid::Env,
     ) {
-        self.inner.lifecycle(ctx, event, data, env);
-        self.palette.lifecycle(ctx, event, &data.palette_state, env);
+        match event {
+            LifeCycle::WidgetAdded => {
+                self.palette.lifecycle(ctx, event, &data.palette_state, env);
+                self.inner.lifecycle(ctx, event, data, env);
+            }
+            _ => {
+                if self.in_palette {
+                    self.palette.lifecycle(ctx, event, &data.palette_state, env);
+                }
+                self.inner.lifecycle(ctx, event, data, env);
+            }
+        }
     }
 
     fn update(&mut self, ctx: &mut druid::UpdateCtx, old_data: &NPWindowState, data: &NPWindowState, env: &druid::Env) {
         self.inner.update(ctx, old_data, data, env);
-        self.palette
-            .update(ctx, &old_data.palette_state, &data.palette_state, env)
+        if self.in_palette {
+            self.palette
+                .update(ctx, &old_data.palette_state, &data.palette_state, env)
+        }
     }
 
     fn layout(

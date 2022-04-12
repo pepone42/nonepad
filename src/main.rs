@@ -76,6 +76,14 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    #[cfg(debug_assertions)]
+    {
+    let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::TRACE).finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
+    }
+
     let app_state = if let Some(filename) = std::env::args().nth(1) {
         NPWindowState::from_file(filename)?
     } else {
