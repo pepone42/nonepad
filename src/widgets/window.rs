@@ -128,10 +128,15 @@ impl Widget<NPWindowState> for NPWindow {
                             if idx == 0 {
                                 data.reset_dirty();
                                 ctx.submit_command(druid::commands::CLOSE_WINDOW);
+                                
                             }
                         })
                         .show(ctx);
                 }
+            }
+            druid::Event::WindowDisconnected => {
+                #[cfg(target_os = "macos")]
+                ctx.submit_command(druid::commands::QUIT_APP);
             }
             _ => (),
         }
