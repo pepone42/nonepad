@@ -7,7 +7,7 @@ mod theme;
 mod widgets;
 
 use druid::{piet::Color, AppDelegate, AppLauncher, Command, DelegateCtx, Env, LocalizedString, Target, WindowDesc};
-use druid::{Data, Menu, Size, WindowHandle, WindowId, MenuItem, SysMods};
+use druid::{Data, Menu, Size, WindowHandle, WindowId};
 
 use seticon::set_icon;
 
@@ -61,16 +61,16 @@ impl AppDelegate<NPWindowState> for Delegate {
 fn make_menu<T: Data>(_window: Option<WindowId>, _data: &NPWindowState, _env: &Env) -> Menu<T> {
     #[cfg(target_os = "macos")]
     /// The 'About App' menu item.
-    pub fn about<T: Data>() -> MenuItem<T> {
-        MenuItem::new("About NonePad")
+    pub fn about<T: Data>() -> druid::MenuItem<T> {
+        druid::MenuItem::new("About NonePad")
             .command(druid::commands::SHOW_ABOUT)
     }
     #[cfg(target_os = "macos")]
     /// The 'Quit' menu item.
-    pub fn quit<T: Data>() -> MenuItem<T> {
-        MenuItem::new("Quit")
+    pub fn quit<T: Data>() -> druid::MenuItem<T> {
+        druid::MenuItem::new("Quit")
             .command(druid::commands::QUIT_APP)
-            .hotkey(SysMods::Cmd, "q")
+            .hotkey(druid::SysMods::Cmd, "q")
     }
     #[cfg(target_os = "macos")]
     {
