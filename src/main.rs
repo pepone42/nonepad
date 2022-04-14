@@ -59,12 +59,13 @@ impl AppDelegate<NPWindowState> for Delegate {
 
 #[allow(unused_assignments, unused_mut)]
 fn make_menu<T: Data>(_window: Option<WindowId>, _data: &NPWindowState, _env: &Env) -> Menu<T> {
+    #[cfg(target_os = "macos")]
     /// The 'About App' menu item.
     pub fn about<T: Data>() -> MenuItem<T> {
         MenuItem::new("About NonePad")
             .command(druid::commands::SHOW_ABOUT)
     }
-
+    #[cfg(target_os = "macos")]
     /// The 'Quit' menu item.
     pub fn quit<T: Data>() -> MenuItem<T> {
         MenuItem::new("Quit")
@@ -80,7 +81,7 @@ fn make_menu<T: Data>(_window: Option<WindowId>, _data: &NPWindowState, _env: &E
     }
     #[cfg(not(target_os = "macos"))]
     {
-        Menu.empty()
+        Menu::empty()
     }
 }
 
