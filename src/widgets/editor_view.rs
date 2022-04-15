@@ -1,5 +1,5 @@
 use std::ops::{Deref, DerefMut, Range};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
@@ -154,6 +154,8 @@ impl HeldState {
 pub enum HighlighterMessage {
     Stop,
     Update(SyntaxReference, Rope, usize),
+    WatchFile(PathBuf),
+    UnwatchFile(PathBuf),
 }
 
 #[derive(Debug)]
@@ -217,6 +219,7 @@ impl Widget<EditStack> for EditorView {
                 let mut current_index = 0;
                 let mut chunk_len = 100;
                 let mut rope = Rope::new();
+                let mut hotwatch = hotwatch::Hotwatch::new().unwrap();
                 loop {
                     match rx.try_recv() {
                         Ok(message) => match message {
@@ -228,6 +231,17 @@ impl Widget<EditStack> for EditorView {
                                 chunk_len = 100;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                             }
+                            HighlighterMessage::WatchFile(p) => {
+                                let es = event_sink.clone();
+                                dbg!("watch",&p);
+                                hotwatch.watch(p, move |e| {
+                                    dbg!("event",&e);
+                                    if let hotwatch::Event::Write(_) = e {
+                                        let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
+                                    }
+                                });
+                            }
+                            HighlighterMessage::UnwatchFile(p) => {}
                         },
                         _ => (),
                     }
@@ -260,6 +274,13 @@ impl Widget<EditStack> for EditorView {
 
             ctx.register_for_focus();
             self.update_highlighter(editor, 0);
+            // start notify
+            if let Some(f) = dbg!(&editor.filename) {
+                if let Some(tx) = self.highlight_channel_tx.clone() {
+                    tx.send(HighlighterMessage::WatchFile(f.clone()));
+                    dbg!(f.clone());
+                }
+            }
         }
     }
 
@@ -276,6 +297,23 @@ impl Widget<EditStack> for EditorView {
         }
         if !old_data.same(data) {
             ctx.request_paint();
+        }
+        match (&old_data.filename, &data.filename) {
+            (None, None) => (),
+            (None, Some(f)) => {
+                if let Some(tx) = self.highlight_channel_tx.clone() {
+                    tx.send(HighlighterMessage::WatchFile(f.clone()));
+                    dbg!(f.clone());
+                }
+            }
+            (_, None) => (), // should never happens
+            (Some(l), Some(r)) if l != r => {
+                if let Some(tx) = self.highlight_channel_tx.clone() {
+                    tx.send(HighlighterMessage::WatchFile(r.clone()));
+                    dbg!(r.clone());
+                }
+            }
+            _ => (),
         }
     }
 
@@ -725,6 +763,23 @@ impl EditorView {
                     return true;
                 }
                 false
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::RELOAD_FROM_DISK) => {
+                if editor.is_dirty() {
+                    ctx.set_handled();
+                    Palette::new()
+                        .items(item!["Yes", "No"])
+                        .title("File was modified outside of NonePad\nDiscard unsaved change and reload?")
+                        .editor_action(|idx, _name, _ctx, _editor_view, data| {
+                            if idx == 0 {
+                                data.reload();
+                            }
+                        })
+                        .show(ctx);
+                } else {
+                    editor.reload();
+                }
+                true
             }
             _ => false,
         }

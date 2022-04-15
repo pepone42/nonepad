@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::buffer::Buffer;
 use super::file::TextFileInfo;
+use druid::piet::Error;
 use druid::Data;
 use once_cell::sync::Lazy;
 
@@ -36,7 +37,6 @@ static AUTO_INSERT_CHARMAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     m.insert("\"", "\"\"");
     m
 });
-
 
 impl EditStack {
     pub fn new() -> Self {
@@ -71,6 +71,15 @@ impl EditStack {
         let editor = EditStack::from_file(path)?;
         let _ = std::mem::replace(self, editor);
         Ok(())
+    }
+
+    pub fn reload(&mut self) -> Result<()> {
+        if let Some(f) = &self.filename.clone() {
+            self.open(f)
+        } else {
+            // unreachable?
+            Ok(())
+        }
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -125,7 +134,7 @@ impl EditStack {
                 buf.insert(text, false);
                 buf.indent(self.file.indentation);
             }
-            s if AUTO_INSERT_CHARMAP.get(s).is_some()  => {
+            s if AUTO_INSERT_CHARMAP.get(s).is_some() => {
                 let inner_text = buf.selected_text(self.file.linefeed);
                 buf.insert(AUTO_INSERT_CHARMAP[text], false);
                 buf.backward(false, false);

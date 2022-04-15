@@ -30,6 +30,8 @@ pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.hi
 pub const PALETTE_CALLBACK: Selector<(usize, Arc<String>, UICommandType)> =
     Selector::new("nonepad.editor.execute_command");
 pub const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
+pub const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
+
 pub struct UICommand {
     pub description: String,
     pub show_in_palette: bool,
