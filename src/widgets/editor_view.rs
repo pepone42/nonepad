@@ -151,9 +151,9 @@ impl HeldState {
     }
 }
 
-pub enum HighlighterMessage {
+pub enum BackgroundWorkerMessage {
     Stop,
-    Update(SyntaxReference, Rope, usize),
+    UpdateBuffer(SyntaxReference, Rope, usize),
     WatchFile(PathBuf),
     UnwatchFile(PathBuf),
 }
@@ -178,7 +178,7 @@ pub struct EditorView {
 
     held_state: HeldState,
 
-    highlight_channel_tx: Option<Sender<HighlighterMessage>>,
+    bgworker_channel_tx: Option<Sender<BackgroundWorkerMessage>>,
     highlighted_line: StyledLinesCache,
 }
 
@@ -209,7 +209,7 @@ impl Widget<EditStack> for EditorView {
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, editor: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
             let (tx, rx) = mpsc::channel();
-            self.highlight_channel_tx = Some(tx);
+            self.bgworker_channel_tx = Some(tx);
             let highlighted_line = self.highlighted_line.clone();
             let owner_id = self.owner_id.clone();
             let event_sink = ctx.get_external_handle();
@@ -223,15 +223,15 @@ impl Widget<EditStack> for EditorView {
                 loop {
                     match rx.try_recv() {
                         Ok(message) => match message {
-                            HighlighterMessage::Stop => return,
-                            HighlighterMessage::Update(s, r, start) => {
+                            BackgroundWorkerMessage::Stop => return,
+                            BackgroundWorkerMessage::UpdateBuffer(s, r, start) => {
                                 rope = r;
                                 current_index = start;
                                 // The first chunk is smaller, to repaint quickly with highlight
                                 chunk_len = 100;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                             }
-                            HighlighterMessage::WatchFile(p) => {
+                            BackgroundWorkerMessage::WatchFile(p) => {
                                 let es = event_sink.clone();
                                 let _ = hotwatch.watch(p, move |e| {
                                     match e {
@@ -242,7 +242,7 @@ impl Widget<EditStack> for EditorView {
                                 }
                                 });
                             }
-                            HighlighterMessage::UnwatchFile(p) => {
+                            BackgroundWorkerMessage::UnwatchFile(p) => {
                                 let _ = hotwatch.unwatch(p);
                             }
                         },
@@ -350,7 +350,7 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
-            highlight_channel_tx: None,
+            bgworker_channel_tx: None,
             highlighted_line: StyledLinesCache::new(),
         };
 
@@ -358,37 +358,37 @@ impl EditorView {
     }
 
     fn update_highlighter(&self, data: &EditStack, line: usize) {
-        if let Some(tx) = self.highlight_channel_tx.clone() {
-            match tx.send(HighlighterMessage::Update(
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            match tx.send(BackgroundWorkerMessage::UpdateBuffer(
                 data.file.syntax.clone(),
                 data.buffer.rope.clone(),
                 line,
             )) {
                 Ok(()) => (),
                 Err(_e) => {
-                    tracing::error!("Error sending data to highlighter!");
+                    tracing::error!("Error sending data to the background worker!");
                 }
             }
         }
     }
 
     fn start_watching_file(&mut self, path: &PathBuf) {
-        if let Some(tx) = self.highlight_channel_tx.clone() {
-            let _ = tx.send(HighlighterMessage::WatchFile(path.clone()));
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            let _ = tx.send(BackgroundWorkerMessage::WatchFile(path.clone()));
         }
     }
     fn stop_watching_file(&mut self, path: &PathBuf) {
-        if let Some(tx) = self.highlight_channel_tx.clone() {
-            let _ = tx.send(HighlighterMessage::UnwatchFile(path.clone()));
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            let _ = tx.send(BackgroundWorkerMessage::UnwatchFile(path.clone()));
         }
     }
 
-    fn stop_highlighter(&self) {
-        if let Some(tx) = self.highlight_channel_tx.clone() {
-            match tx.send(HighlighterMessage::Stop) {
+    fn stop_background_worker(&self) {
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            match tx.send(BackgroundWorkerMessage::Stop) {
                 Ok(()) => (),
                 Err(_e) => {
-                    tracing::error!("Error stopping the highlighter!");
+                    tracing::error!("Error stopping the background worker!");
                 }
             }
         }
@@ -685,7 +685,7 @@ impl EditorView {
                 false
             }
             Event::WindowDisconnected => {
-                self.stop_highlighter();
+                self.stop_background_worker();
                 true
             }
 
