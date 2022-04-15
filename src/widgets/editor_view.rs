@@ -219,7 +219,7 @@ impl Widget<EditStack> for EditorView {
                 let mut current_index = 0;
                 let mut chunk_len = 100;
                 let mut rope = Rope::new();
-                let mut hotwatch = hotwatch::Hotwatch::new().unwrap();
+                let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crach the highlighter if hotwatch couldn't be initialized
                 loop {
                     match rx.try_recv() {
                         Ok(message) => match message {
@@ -234,14 +234,16 @@ impl Widget<EditStack> for EditorView {
                             HighlighterMessage::WatchFile(p) => {
                                 let es = event_sink.clone();
                                 dbg!("watch",&p);
-                                hotwatch.watch(p, move |e| {
+                                let _ = hotwatch.watch(p, move |e| {
                                     dbg!("event",&e);
                                     if let hotwatch::Event::Write(_) = e {
                                         let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
                                     }
                                 });
                             }
-                            HighlighterMessage::UnwatchFile(p) => {}
+                            HighlighterMessage::UnwatchFile(p) => {
+                                let _ = hotwatch.unwatch(p);
+                            }
                         },
                         _ => (),
                     }
@@ -277,7 +279,7 @@ impl Widget<EditStack> for EditorView {
             // start notify
             if let Some(f) = dbg!(&editor.filename) {
                 if let Some(tx) = self.highlight_channel_tx.clone() {
-                    tx.send(HighlighterMessage::WatchFile(f.clone()));
+                    let _ = tx.send(HighlighterMessage::WatchFile(f.clone()));
                     dbg!(f.clone());
                 }
             }
@@ -302,14 +304,15 @@ impl Widget<EditStack> for EditorView {
             (None, None) => (),
             (None, Some(f)) => {
                 if let Some(tx) = self.highlight_channel_tx.clone() {
-                    tx.send(HighlighterMessage::WatchFile(f.clone()));
+                    let _ = tx.send(HighlighterMessage::WatchFile(f.clone()));
                     dbg!(f.clone());
                 }
             }
             (_, None) => (), // should never happens
             (Some(l), Some(r)) if l != r => {
                 if let Some(tx) = self.highlight_channel_tx.clone() {
-                    tx.send(HighlighterMessage::WatchFile(r.clone()));
+                    let _ = tx.send(HighlighterMessage::UnwatchFile(l.clone()));
+                    let _ = tx.send(HighlighterMessage::WatchFile(r.clone()));
                     dbg!(r.clone());
                 }
             }

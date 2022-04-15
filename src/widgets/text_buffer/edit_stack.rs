@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 use super::buffer::Buffer;
 use super::file::TextFileInfo;
-use druid::piet::Error;
 use druid::Data;
 use once_cell::sync::Lazy;
 
