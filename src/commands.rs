@@ -251,4 +251,9 @@ impl Palette {
     pub fn show(self, ctx: &mut EventCtx) {
         ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
     }
+
+    pub fn alert(title: &str) -> Self {
+        Palette::new().title(title).items(item!["Ok"])
+    }
 }
+

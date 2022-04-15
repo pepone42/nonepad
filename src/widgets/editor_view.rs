@@ -233,12 +233,13 @@ impl Widget<EditStack> for EditorView {
                             }
                             HighlighterMessage::WatchFile(p) => {
                                 let es = event_sink.clone();
-                                dbg!("watch",&p);
                                 let _ = hotwatch.watch(p, move |e| {
-                                    dbg!("event",&e);
-                                    if let hotwatch::Event::Write(_) = e {
+                                    match e {
+                                    hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
                                         let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
                                     }
+                                    _ => {}
+                                }
                                 });
                             }
                             HighlighterMessage::UnwatchFile(p) => {
@@ -277,11 +278,8 @@ impl Widget<EditStack> for EditorView {
             ctx.register_for_focus();
             self.update_highlighter(editor, 0);
             // start notify
-            if let Some(f) = dbg!(&editor.filename) {
-                if let Some(tx) = self.highlight_channel_tx.clone() {
-                    let _ = tx.send(HighlighterMessage::WatchFile(f.clone()));
-                    dbg!(f.clone());
-                }
+            if let Some(f) = &editor.filename {
+                self.start_watching_file(f);
             }
         }
     }
@@ -303,18 +301,12 @@ impl Widget<EditStack> for EditorView {
         match (&old_data.filename, &data.filename) {
             (None, None) => (),
             (None, Some(f)) => {
-                if let Some(tx) = self.highlight_channel_tx.clone() {
-                    let _ = tx.send(HighlighterMessage::WatchFile(f.clone()));
-                    dbg!(f.clone());
-                }
+                self.start_watching_file(f);
             }
             (_, None) => (), // should never happens
             (Some(l), Some(r)) if l != r => {
-                if let Some(tx) = self.highlight_channel_tx.clone() {
-                    let _ = tx.send(HighlighterMessage::UnwatchFile(l.clone()));
-                    let _ = tx.send(HighlighterMessage::WatchFile(r.clone()));
-                    dbg!(r.clone());
-                }
+                self.stop_watching_file(l);
+                self.start_watching_file(r);
             }
             _ => (),
         }
@@ -374,9 +366,20 @@ impl EditorView {
             )) {
                 Ok(()) => (),
                 Err(_e) => {
-                    dbg!("Error sending data to highlighter!");
+                    tracing::error!("Error sending data to highlighter!");
                 }
             }
+        }
+    }
+
+    fn start_watching_file(&mut self, path: &PathBuf) {
+        if let Some(tx) = self.highlight_channel_tx.clone() {
+            let _ = tx.send(HighlighterMessage::WatchFile(path.clone()));
+        }
+    }
+    fn stop_watching_file(&mut self, path: &PathBuf) {
+        if let Some(tx) = self.highlight_channel_tx.clone() {
+            let _ = tx.send(HighlighterMessage::UnwatchFile(path.clone()));
         }
     }
 
@@ -385,7 +388,7 @@ impl EditorView {
             match tx.send(HighlighterMessage::Stop) {
                 Ok(()) => (),
                 Err(_e) => {
-                    dbg!("Error stopping the highlighter!");
+                    tracing::error!("Error stopping the highlighter!");
                 }
             }
         }
@@ -773,14 +776,18 @@ impl EditorView {
                     Palette::new()
                         .items(item!["Yes", "No"])
                         .title("File was modified outside of NonePad\nDiscard unsaved change and reload?")
-                        .editor_action(|idx, _name, _ctx, _editor_view, data| {
+                        .editor_action(|idx, _name, ctx, _editor_view, data| {
                             if idx == 0 {
-                                data.reload();
+                                if let Err(e) = data.reload() {
+                                    Palette::alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                                }
                             }
                         })
                         .show(ctx);
                 } else {
-                    editor.reload();
+                    if let Err(e) = editor.reload() {
+                        Palette::alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                    }
                 }
                 true
             }
