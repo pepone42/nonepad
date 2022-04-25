@@ -89,6 +89,10 @@ impl EditStack {
         self.dirty = false;
     }
 
+    pub fn set_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         self.file.save_as(&self.buffer, &path)?;
         self.filename = Some(path.as_ref().to_path_buf());

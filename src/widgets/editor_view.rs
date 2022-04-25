@@ -219,7 +219,7 @@ impl Widget<EditStack> for EditorView {
                 let mut current_index = 0;
                 let mut chunk_len = 100;
                 let mut rope = Rope::new();
-                let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crach the highlighter if hotwatch couldn't be initialized
+                let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crash the highlighter if hotwatch couldn't be initialized
                 loop {
                     match rx.try_recv() {
                         Ok(message) => match message {
@@ -238,7 +238,12 @@ impl Widget<EditStack> for EditorView {
                                     hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
                                         let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
                                     }
-                                    _ => {}
+                                    hotwatch::Event::Remove(_) => {
+                                        let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
+                                    }
+                                    _ => {
+
+                                    }
                                 }
                                 });
                             }
@@ -780,6 +785,8 @@ impl EditorView {
                             if idx == 0 {
                                 if let Err(e) = data.reload() {
                                     Palette::alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                                } else {
+                                    data.reset_dirty();
                                 }
                             }
                         })
@@ -789,6 +796,10 @@ impl EditorView {
                         Palette::alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
                     }
                 }
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::FILE_REMOVED) => {
+                editor.set_dirty();
                 true
             }
             _ => false,
