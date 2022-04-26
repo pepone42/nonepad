@@ -1,5 +1,5 @@
 use std::ops::{Deref, DerefMut, Range};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
@@ -151,9 +151,11 @@ impl HeldState {
     }
 }
 
-pub enum HighlighterMessage {
+pub enum BackgroundWorkerMessage {
     Stop,
-    Update(SyntaxReference, Rope, usize),
+    UpdateBuffer(SyntaxReference, Rope, usize),
+    WatchFile(PathBuf),
+    UnwatchFile(PathBuf),
 }
 
 #[derive(Debug)]
@@ -176,7 +178,7 @@ pub struct EditorView {
 
     held_state: HeldState,
 
-    highlight_channel_tx: Option<Sender<HighlighterMessage>>,
+    bgworker_channel_tx: Option<Sender<BackgroundWorkerMessage>>,
     highlighted_line: StyledLinesCache,
 }
 
@@ -207,7 +209,7 @@ impl Widget<EditStack> for EditorView {
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, editor: &EditStack, env: &Env) {
         if let LifeCycle::WidgetAdded = event {
             let (tx, rx) = mpsc::channel();
-            self.highlight_channel_tx = Some(tx);
+            self.bgworker_channel_tx = Some(tx);
             let highlighted_line = self.highlighted_line.clone();
             let owner_id = self.owner_id.clone();
             let event_sink = ctx.get_external_handle();
@@ -217,16 +219,36 @@ impl Widget<EditStack> for EditorView {
                 let mut current_index = 0;
                 let mut chunk_len = 100;
                 let mut rope = Rope::new();
+                let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crash the highlighter if hotwatch couldn't be initialized
                 loop {
                     match rx.try_recv() {
                         Ok(message) => match message {
-                            HighlighterMessage::Stop => return,
-                            HighlighterMessage::Update(s, r, start) => {
+                            BackgroundWorkerMessage::Stop => return,
+                            BackgroundWorkerMessage::UpdateBuffer(s, r, start) => {
                                 rope = r;
                                 current_index = start;
                                 // The first chunk is smaller, to repaint quickly with highlight
                                 chunk_len = 100;
                                 syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
+                            }
+                            BackgroundWorkerMessage::WatchFile(p) => {
+                                let es = event_sink.clone();
+                                let _ = hotwatch.watch(p, move |e| {
+                                    match e {
+                                    hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
+                                        let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
+                                    }
+                                    hotwatch::Event::Remove(_) => {
+                                        let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
+                                    }
+                                    _ => {
+
+                                    }
+                                }
+                                });
+                            }
+                            BackgroundWorkerMessage::UnwatchFile(p) => {
+                                let _ = hotwatch.unwatch(p);
                             }
                         },
                         _ => (),
@@ -260,6 +282,10 @@ impl Widget<EditStack> for EditorView {
 
             ctx.register_for_focus();
             self.update_highlighter(editor, 0);
+            // start notify
+            if let Some(f) = &editor.filename {
+                self.start_watching_file(f);
+            }
         }
     }
 
@@ -276,6 +302,18 @@ impl Widget<EditStack> for EditorView {
         }
         if !old_data.same(data) {
             ctx.request_paint();
+        }
+        match (&old_data.filename, &data.filename) {
+            (None, None) => (),
+            (None, Some(f)) => {
+                self.start_watching_file(f);
+            }
+            (_, None) => (), // should never happens
+            (Some(l), Some(r)) if l != r => {
+                self.stop_watching_file(l);
+                self.start_watching_file(r);
+            }
+            _ => (),
         }
     }
 
@@ -317,7 +355,7 @@ impl EditorView {
             owner_id,
             longest_line_len: 0.,
             held_state: HeldState::None,
-            highlight_channel_tx: None,
+            bgworker_channel_tx: None,
             highlighted_line: StyledLinesCache::new(),
         };
 
@@ -325,26 +363,37 @@ impl EditorView {
     }
 
     fn update_highlighter(&self, data: &EditStack, line: usize) {
-        if let Some(tx) = self.highlight_channel_tx.clone() {
-            match tx.send(HighlighterMessage::Update(
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            match tx.send(BackgroundWorkerMessage::UpdateBuffer(
                 data.file.syntax.clone(),
                 data.buffer.rope.clone(),
                 line,
             )) {
                 Ok(()) => (),
                 Err(_e) => {
-                    dbg!("Error sending data to highlighter!");
+                    tracing::error!("Error sending data to the background worker!");
                 }
             }
         }
     }
 
-    fn stop_highlighter(&self) {
-        if let Some(tx) = self.highlight_channel_tx.clone() {
-            match tx.send(HighlighterMessage::Stop) {
+    fn start_watching_file(&mut self, path: &PathBuf) {
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            let _ = tx.send(BackgroundWorkerMessage::WatchFile(path.clone()));
+        }
+    }
+    fn stop_watching_file(&mut self, path: &PathBuf) {
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            let _ = tx.send(BackgroundWorkerMessage::UnwatchFile(path.clone()));
+        }
+    }
+
+    fn stop_background_worker(&self) {
+        if let Some(tx) = self.bgworker_channel_tx.clone() {
+            match tx.send(BackgroundWorkerMessage::Stop) {
                 Ok(()) => (),
                 Err(_e) => {
-                    dbg!("Error stopping the highlighter!");
+                    tracing::error!("Error stopping the background worker!");
                 }
             }
         }
@@ -641,7 +690,7 @@ impl EditorView {
                 false
             }
             Event::WindowDisconnected => {
-                self.stop_highlighter();
+                self.stop_background_worker();
                 true
             }
 
@@ -651,10 +700,10 @@ impl EditorView {
                     Palette::new()
                         .items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
-                        .editor_action(move |idx, _name, _ctx, editor_view, data| {
+                        .editor_action(move |idx, _name, ctx, editor_view, data| {
                             if idx == 0 {
                                 if let Err(e) = editor_view.save_as(data, file_info.path()) {
-                                    println!("Error writing file: {}", e);
+                                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                                 }
                             };
                         })
@@ -662,21 +711,21 @@ impl EditorView {
                     true
                 } else {
                     if let Err(e) = self.save_as(editor, file_info.path()) {
-                        println!("Error writing file: {}", e);
+                        Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                     }
                     true
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
-                    println!("Error writing file: {}", e);
+                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                 }
                 true
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(_) = self.open(editor, file_info.path()) {
-                        Palette::new().items(item!["Ok"]).title("Error loading file").show(ctx);
+                        Palette::alert("Error loading file").show(ctx);
                     }
                 }
                 true
@@ -725,6 +774,33 @@ impl EditorView {
                     return true;
                 }
                 false
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::RELOAD_FROM_DISK) => {
+                if editor.is_dirty() {
+                    ctx.set_handled();
+                    Palette::new()
+                        .items(item!["Yes", "No"])
+                        .title("File was modified outside of NonePad\nDiscard unsaved change and reload?")
+                        .editor_action(|idx, _name, ctx, _editor_view, data| {
+                            if idx == 0 {
+                                if let Err(e) = data.reload() {
+                                    Palette::alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                                } else {
+                                    data.reset_dirty();
+                                }
+                            }
+                        })
+                        .show(ctx);
+                } else {
+                    if let Err(e) = editor.reload() {
+                        Palette::alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                    }
+                }
+                true
+            }
+            Event::Command(cmd) if cmd.is(crate::commands::FILE_REMOVED) => {
+                editor.set_dirty();
+                true
             }
             _ => false,
         }

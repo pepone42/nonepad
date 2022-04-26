@@ -30,6 +30,9 @@ pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.hi
 pub const PALETTE_CALLBACK: Selector<(usize, Arc<String>, UICommandType)> =
     Selector::new("nonepad.editor.execute_command");
 pub const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
+pub const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
+pub const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
+
 pub struct UICommand {
     pub description: String,
     pub show_in_palette: bool,
@@ -249,4 +252,9 @@ impl Palette {
     pub fn show(self, ctx: &mut EventCtx) {
         ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
     }
+
+    pub fn alert(title: &str) -> Self {
+        Palette::new().title(title).items(item!["Ok"])
+    }
 }
+

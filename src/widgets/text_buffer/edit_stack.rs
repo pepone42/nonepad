@@ -37,7 +37,6 @@ static AUTO_INSERT_CHARMAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     m
 });
 
-
 impl EditStack {
     pub fn new() -> Self {
         Default::default()
@@ -73,12 +72,25 @@ impl EditStack {
         Ok(())
     }
 
+    pub fn reload(&mut self) -> Result<()> {
+        if let Some(f) = &self.filename.clone() {
+            self.open(f)
+        } else {
+            // unreachable?
+            Ok(())
+        }
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
 
     pub fn reset_dirty(&mut self) {
         self.dirty = false;
+    }
+
+    pub fn set_dirty(&mut self) {
+        self.dirty = true;
     }
 
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
@@ -125,7 +137,7 @@ impl EditStack {
                 buf.insert(text, false);
                 buf.indent(self.file.indentation);
             }
-            s if AUTO_INSERT_CHARMAP.get(s).is_some()  => {
+            s if AUTO_INSERT_CHARMAP.get(s).is_some() => {
                 let inner_text = buf.selected_text(self.file.linefeed);
                 buf.insert(AUTO_INSERT_CHARMAP[text], false);
                 buf.backward(false, false);
