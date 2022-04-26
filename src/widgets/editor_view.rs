@@ -700,10 +700,10 @@ impl EditorView {
                     Palette::new()
                         .items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
-                        .editor_action(move |idx, _name, _ctx, editor_view, data| {
+                        .editor_action(move |idx, _name, ctx, editor_view, data| {
                             if idx == 0 {
                                 if let Err(e) = editor_view.save_as(data, file_info.path()) {
-                                    println!("Error writing file: {}", e);
+                                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                                 }
                             };
                         })
@@ -711,21 +711,21 @@ impl EditorView {
                     true
                 } else {
                     if let Err(e) = self.save_as(editor, file_info.path()) {
-                        println!("Error writing file: {}", e);
+                        Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                     }
                     true
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
-                    println!("Error writing file: {}", e);
+                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                 }
                 true
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(_) = self.open(editor, file_info.path()) {
-                        Palette::new().items(item!["Ok"]).title("Error loading file").show(ctx);
+                        Palette::alert("Error loading file").show(ctx);
                     }
                 }
                 true
