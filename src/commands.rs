@@ -298,6 +298,29 @@ impl<R, W, D> Palette<R, W, D> {
     
 }
 
+pub trait PaletteBuilder<D> {
+    fn palette(&mut self) -> Palette<PaletteResult, Self, D> where Self: Sized;
+    fn dialog(&mut self) -> Palette<DialogResult, Self, D> where Self: Sized;
+}
+
+impl PaletteBuilder<EditStack> for EditorView {
+    fn palette(&mut self) -> Palette<PaletteResult, EditorView, EditStack> {
+        Palette::<PaletteResult, EditorView, EditStack>::new()
+    }
+    fn dialog(&mut self) -> Palette<DialogResult, EditorView, EditStack> {
+        Palette::<DialogResult, EditorView, EditStack>::new().items(item!["Ok","Cancel"])
+    }
+}
+
+impl PaletteBuilder<NPWindowState> for NPWindow {
+    fn palette(&mut self) -> Palette<PaletteResult, NPWindow, NPWindowState> {
+        Palette::<PaletteResult, NPWindow, NPWindowState>::new()
+    }
+    fn dialog(&mut self) -> Palette<DialogResult, NPWindow, NPWindowState> {
+        Palette::<DialogResult, NPWindow, NPWindowState>::new().items(item!["Ok","Cancel"])
+    }
+}
+
 impl Palette<PaletteResult, EditorView, EditStack> {
     pub fn show(self, ctx: &mut EventCtx) {
         ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);

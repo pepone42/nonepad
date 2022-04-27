@@ -7,7 +7,7 @@ use std::time::Duration;
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 use super::Item;
-use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO, DialogResult, PaletteResult};
+use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO, DialogResult, PaletteResult, PaletteBuilder};
 
 use druid::im::Vector;
 use druid::{
@@ -398,7 +398,7 @@ impl EditorView {
             }
         }
     }
-    
+
     fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
         match event {
             Event::WindowConnected => {
@@ -697,10 +697,10 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS).clone();
                 if file_info.path().exists() {
-                    Palette::new()
-                        .items(item!["Yes", "No"])
+                    self.dialog()
+                        //.items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
-                        .on_select(move |result: DialogResult, ctx, editor_view: &mut EditorView, data: &mut EditStack| {
+                        .on_select(move |result, ctx, editor_view, data| {
                             if result == DialogResult::Ok {
                                 if let Err(e) = editor_view.save_as(data, file_info.path()) {
                                     Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
