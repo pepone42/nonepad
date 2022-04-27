@@ -5,7 +5,7 @@ use super::{
     editor_view,
 };
 use super::{text_buffer::EditStack, Item, PaletteListState, PaletteView};
-use crate::commands::{self, item, Palette, UICommandType};
+use crate::commands::{self, item, Palette, UICommandType, PaletteResult, DialogResult};
 use druid::{
     im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
@@ -82,8 +82,8 @@ impl Widget<NPWindowState> for NPWindow {
                     }
                     Palette::new()
                         .items(items)
-                        .win_action(|index, _name, ctx, win, data| {
-                            let ui_cmd = &commands::COMMANDSET.commands[index];
+                        .on_select(|result: PaletteResult, ctx, win: &mut NPWindow, data: &mut NPWindowState| {
+                            let ui_cmd = &commands::COMMANDSET.commands[result.index];
                             ui_cmd.exec(ctx, win, data);
                         })
                         .show(ctx);
@@ -95,18 +95,54 @@ impl Widget<NPWindowState> for NPWindow {
             }
             druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
-                if let UICommandType::Window(action) = &item.2 {
-                    (action)(item.0, item.1.clone(), ctx, self, data);
-                    ctx.set_handled();
-                    return;
+                match &item.1 {
+                    UICommandType::Window(action) => {
+                        (action)(item.0.clone(), ctx, self, data);
+                        ctx.set_handled();
+                        return;
+                    }
+                    UICommandType::DialogWindow(action) => {
+                        let dialog_result = if item.0.index == 0 { DialogResult::Ok} else {DialogResult::Cancel};
+                        (action)(dialog_result, ctx, self, data);
+                        ctx.set_handled();
+                        return;
+                    }
+                    _ => (),
                 }
             }
-            druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_PANEL) => {
+            druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_FOR_WINDOW) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_PALETTE_PANEL).clone();
+                let input = cmd.get_unchecked(commands::SHOW_PALETTE_FOR_WINDOW).clone();
                 self.palette
-                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3);
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::Window(f)));
+                self.palette.take_focus(ctx);
+                return;
+            }
+            druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_FOR_EDITOR) => {
+                self.in_palette = true;
+                ctx.request_layout();
+                let input = cmd.get_unchecked(commands::SHOW_PALETTE_FOR_EDITOR).clone();
+                self.palette
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::Editor(f)));
+                self.palette.take_focus(ctx);
+                return;
+            }
+            druid::Event::Command(cmd) if cmd.is(commands::SHOW_DIALOG_FOR_WINDOW) => {
+                self.in_palette = true;
+                ctx.request_layout();
+                let input = cmd.get_unchecked(commands::SHOW_DIALOG_FOR_WINDOW).clone();
+                self.palette
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::DialogWindow(f)));
+                self.palette.take_focus(ctx);
+                return;
+            }
+            druid::Event::Command(cmd) if cmd.is(commands::SHOW_DIALOG_FOR_EDITOR) => {
+                self.in_palette = true;
+                ctx.request_layout();
+                let input = cmd.get_unchecked(commands::SHOW_DIALOG_FOR_EDITOR).clone();
+                self.palette
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::DialogEditor(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
@@ -124,8 +160,8 @@ impl Widget<NPWindowState> for NPWindow {
                     Palette::new()
                         .items(item!["Yes", "No"])
                         .title("Discard unsaved change?")
-                        .editor_action(|idx, _name, ctx, _editor_view, data| {
-                            if idx == 0 {
+                        .on_select(|result: DialogResult, ctx, _editor_view, data: &mut EditStack| {
+                            if result == DialogResult::Ok {
                                 data.reset_dirty();
                                 ctx.submit_command(druid::commands::CLOSE_WINDOW);
                                 

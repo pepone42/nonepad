@@ -11,7 +11,7 @@ use druid::{
 
 use sublime_fuzzy::best_match;
 
-use crate::commands::{self, UICommandType};
+use crate::commands::{self, UICommandType, PaletteResult};
 use crate::theme::THEME;
 
 use super::Extension;
@@ -166,7 +166,7 @@ impl Widget<PaletteListState> for PaletteView {
                                 if let Some(item) = l.get(data.selected_idx) {
                                     ctx.submit_command(Command::new(
                                         commands::PALETTE_CALLBACK,
-                                        (dbg!(item.0), item.1.title.clone(), f),
+                                        (PaletteResult { index: item.0, name: item.1.title.clone() }, f),
                                         Target::Global,
                                     ));
                                 }
@@ -174,7 +174,7 @@ impl Widget<PaletteListState> for PaletteView {
                             None => {
                                 ctx.submit_command(Command::new(
                                     commands::PALETTE_CALLBACK,
-                                    (0, Arc::new(data.filter.clone()), f),
+                                    (PaletteResult { index: 0, name : Arc::new(data.filter.clone())}, f),
                                     Target::Global,
                                 ));
                             }

@@ -7,7 +7,7 @@ use std::time::Duration;
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 use super::Item;
-use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO};
+use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO, DialogResult, PaletteResult};
 
 use druid::im::Vector;
 use druid::{
@@ -398,7 +398,7 @@ impl EditorView {
             }
         }
     }
-
+    
     fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
         match event {
             Event::WindowConnected => {
@@ -700,8 +700,8 @@ impl EditorView {
                     Palette::new()
                         .items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
-                        .editor_action(move |idx, _name, ctx, editor_view, data| {
-                            if idx == 0 {
+                        .on_select(move |result: DialogResult, ctx, editor_view: &mut EditorView, data: &mut EditStack| {
+                            if result == DialogResult::Ok {
                                 if let Err(e) = editor_view.save_as(data, file_info.path()) {
                                     Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
                                 }
@@ -769,9 +769,17 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
 
-                if let UICommandType::Editor(action) = &item.2 {
-                    (action)(item.0, item.1.clone(), ctx, self, editor);
-                    return true;
+                match &item.1 {
+                    UICommandType::Editor(action) => {
+                        (action)(item.0.clone(), ctx, self, editor);
+                        return true;
+                    }
+                    UICommandType::DialogEditor(action) => {
+                        let dialog_result = if item.0.index == 0 { DialogResult::Ok} else {DialogResult::Cancel};
+                        (action)(dialog_result, ctx, self, editor);
+                        return true;
+                    }
+                    _ => (),
                 }
                 false
             }
@@ -781,8 +789,8 @@ impl EditorView {
                     Palette::new()
                         .items(item!["Yes", "No"])
                         .title("File was modified outside of NonePad\nDiscard unsaved change and reload?")
-                        .editor_action(|idx, _name, ctx, _editor_view, data| {
-                            if idx == 0 {
+                        .on_select(|result: DialogResult, ctx, _editor_view: &mut EditorView, data: &mut EditStack| {
+                            if result == DialogResult::Ok {
                                 if let Err(e) = data.reload() {
                                     Palette::alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
                                 } else {
