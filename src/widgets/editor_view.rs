@@ -6,10 +6,9 @@ use std::time::Duration;
 
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
-use super::Item;
-use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO, DialogResult, PaletteResult, PaletteBuilder};
 
-use druid::im::Vector;
+use crate::commands::{self, UICommandType, SCROLL_TO, DialogResult, PaletteBuilder};
+
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -703,7 +702,7 @@ impl EditorView {
                         .on_select(move |result, ctx, editor_view, data| {
                             if result == DialogResult::Ok {
                                 if let Err(e) = editor_view.save_as(data, file_info.path()) {
-                                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
+                                    editor_view.alert(&format!("Error writing file: {}", e)).show(ctx);
                                 }
                             };
                         })
@@ -711,21 +710,21 @@ impl EditorView {
                     true
                 } else {
                     if let Err(e) = self.save_as(editor, file_info.path()) {
-                        Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
+                        self.alert(&format!("Error writing file: {}", e)).show(ctx);
                     }
                     true
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
-                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
+                    self.alert(&format!("Error writing file: {}", e)).show(ctx);
                 }
                 true
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(_) = self.open(editor, file_info.path()) {
-                        Palette::alert("Error loading file").show(ctx);
+                        self.alert("Error loading file").show(ctx);
                     }
                 }
                 true
@@ -786,13 +785,13 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(crate::commands::RELOAD_FROM_DISK) => {
                 if editor.is_dirty() {
                     ctx.set_handled();
-                    Palette::new()
-                        .items(item!["Yes", "No"])
+                    self.dialog()
+                        //.items(item!["Yes", "No"])
                         .title("File was modified outside of NonePad\nDiscard unsaved change and reload?")
-                        .on_select(|result: DialogResult, ctx, _editor_view: &mut EditorView, data: &mut EditStack| {
+                        .on_select(|result, ctx, editor_view, data| {
                             if result == DialogResult::Ok {
                                 if let Err(e) = data.reload() {
-                                    Palette::alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                                    editor_view.alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
                                 } else {
                                     data.reset_dirty();
                                 }
@@ -801,7 +800,7 @@ impl EditorView {
                         .show(ctx);
                 } else {
                     if let Err(e) = editor.reload() {
-                        Palette::alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                        self.alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
                     }
                 }
                 true

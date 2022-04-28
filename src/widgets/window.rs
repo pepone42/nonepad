@@ -5,7 +5,7 @@ use super::{
     editor_view,
 };
 use super::{text_buffer::EditStack, Item, PaletteListState, PaletteView};
-use crate::commands::{self, item, Palette, UICommandType, PaletteResult, DialogResult};
+use crate::commands::{self, UICommandType, DialogResult, PaletteBuilder};
 use druid::{
     im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
@@ -80,9 +80,9 @@ impl Widget<NPWindowState> for NPWindow {
                     for c in &commands::COMMANDSET.commands {
                         items.push_back(Item::new(&c.description, &""));
                     }
-                    Palette::new()
+                    self.palette()
                         .items(items)
-                        .on_select(|result: PaletteResult, ctx, win: &mut NPWindow, data: &mut NPWindowState| {
+                        .on_select(|result, ctx, win, data| {
                             let ui_cmd = &commands::COMMANDSET.commands[result.index];
                             ui_cmd.exec(ctx, win, data);
                         })
@@ -157,12 +157,12 @@ impl Widget<NPWindowState> for NPWindow {
             druid::Event::WindowCloseRequested => {
                 if data.editor.is_dirty() {
                     ctx.set_handled();
-                    Palette::new()
-                        .items(item!["Yes", "No"])
+                    self.dialog()
+                        //.items(item!["Yes", "No"])
                         .title("Discard unsaved change?")
-                        .on_select(|result: DialogResult, ctx, _editor_view, data: &mut EditStack| {
+                        .on_select(|result, ctx, _, data| {
                             if result == DialogResult::Ok {
-                                data.reset_dirty();
+                                data.editor.reset_dirty();
                                 ctx.submit_command(druid::commands::CLOSE_WINDOW);
                                 
                             }

@@ -127,27 +127,27 @@ macro_rules! uicmd {
 uicmd! {
     COMMANDSET = {
         PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
-        |_window, ctx, _data| {
+        |window, ctx, _data| {
             let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
-            Palette::new().items(languages)
+            window.palette().items(languages)
                 .title("Set Language mode to")
                 .on_select(
-                    |result: PaletteResult, _ctx, _editor_view, data: &mut EditStack| {
-                        data.file.syntax = SYNTAXSET.find_syntax_by_name(&result.name).unwrap();
+                    |result: PaletteResult, _ctx, _win, data| {
+                        data.editor.file.syntax = SYNTAXSET.find_syntax_by_name(&result.name).unwrap();
                     }
                 ).show(ctx);
             true
         });
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
-        |_window, ctx, _data| {
-            Palette::new().items(item!["Tabs","Spaces"])
+        |window, ctx, _data| {
+            window.palette().items(item!["Tabs","Spaces"])
                 .title("Indent using")
                 .on_select(
-                    |result: PaletteResult, _ctx, _editor_view, data: &mut EditStack| {
+                    |result: PaletteResult, _ctx, _win, data| {
                         if result.index == 0 {
-                            data.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
+                            data.editor.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
                         } else {
-                            data.file.indentation = crate::widgets::text_buffer::Indentation::Space(4);
+                            data.editor.file.indentation = crate::widgets::text_buffer::Indentation::Space(4);
                         }
                     } 
                 ).show(ctx);
@@ -277,7 +277,7 @@ impl<R, W, D> Default for Palette<R, W, D> {
 }
 
 impl<R, W, D> Palette<R, W, D> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Palette::default()
     }
     pub fn title(mut self, title: &str) -> Self {
@@ -299,25 +299,32 @@ impl<R, W, D> Palette<R, W, D> {
 }
 
 pub trait PaletteBuilder<D> {
-    fn palette(&mut self) -> Palette<PaletteResult, Self, D> where Self: Sized;
-    fn dialog(&mut self) -> Palette<DialogResult, Self, D> where Self: Sized;
+    fn palette(&self) -> Palette<PaletteResult, Self, D> where Self: Sized;
+    fn dialog(&self) -> Palette<DialogResult, Self, D> where Self: Sized;
+    fn alert(&self,title: &str) -> Palette<PaletteResult, Self, D> where Self: Sized;
 }
 
 impl PaletteBuilder<EditStack> for EditorView {
-    fn palette(&mut self) -> Palette<PaletteResult, EditorView, EditStack> {
+    fn palette(&self) -> Palette<PaletteResult, EditorView, EditStack> {
         Palette::<PaletteResult, EditorView, EditStack>::new()
     }
-    fn dialog(&mut self) -> Palette<DialogResult, EditorView, EditStack> {
+    fn dialog(&self) -> Palette<DialogResult, EditorView, EditStack> {
         Palette::<DialogResult, EditorView, EditStack>::new().items(item!["Ok","Cancel"])
+    }
+    fn alert(&self,title: &str) -> Palette<PaletteResult, EditorView, EditStack> {
+        Palette::new().title(title).items(item!["Ok"])
     }
 }
 
 impl PaletteBuilder<NPWindowState> for NPWindow {
-    fn palette(&mut self) -> Palette<PaletteResult, NPWindow, NPWindowState> {
+    fn palette(&self) -> Palette<PaletteResult, NPWindow, NPWindowState> {
         Palette::<PaletteResult, NPWindow, NPWindowState>::new()
     }
-    fn dialog(&mut self) -> Palette<DialogResult, NPWindow, NPWindowState> {
+    fn dialog(&self) -> Palette<DialogResult, NPWindow, NPWindowState> {
         Palette::<DialogResult, NPWindow, NPWindowState>::new().items(item!["Ok","Cancel"])
+    }
+    fn alert(&self,title: &str) -> Palette<PaletteResult, NPWindow, NPWindowState> {
+        Palette::new().title(title).items(item!["Ok"])
     }
 }
 
@@ -325,9 +332,7 @@ impl Palette<PaletteResult, EditorView, EditStack> {
     pub fn show(self, ctx: &mut EventCtx) {
         ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
     }
-    pub fn alert(title: &str) -> Self {
-        Palette::new().title(title).items(item!["Ok"])
-    }
+
 }
 
 impl Palette<PaletteResult, NPWindow, NPWindowState> {
