@@ -1,4 +1,5 @@
 use std::cmp::Ordering::Equal;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use druid::im::Vector;
@@ -11,10 +12,13 @@ use druid::{
 
 use sublime_fuzzy::best_match;
 
-use crate::commands::{self, UICommandType, PaletteResult};
+use crate::commands::{self, UICommandType};
 use crate::theme::THEME;
 
 use super::Extension;
+use super::editor_view::EditorView;
+use super::text_buffer::EditStack;
+use super::window::{NPWindow, NPWindowState};
 
 const FILTER: Selector<()> = Selector::new("nonepad.editor.palette.filter");
 
@@ -37,8 +41,18 @@ impl Item {
     }
 }
 
+
+macro_rules! item {
+    ($($n : expr), + $(,) ?) => {{
+        let mut v = Vector::new();
+        $(v.push_back(Item::new($n,"") );)+
+        v
+    }};
+}
+pub(crate) use item;
+
 #[derive(Debug, Data, Lens, Clone, Default)]
-pub struct PaletteListState {
+pub struct PaletteViewState {
     title: String,
     filter: String,
     selected_idx: usize,
@@ -47,7 +61,7 @@ pub struct PaletteListState {
     bbox: Rect,
 }
 
-impl PaletteListState {
+impl PaletteViewState {
     fn apply_filter(&mut self) {
         if let Some(l) = &mut self.list {
             if self.filter.len() == 0 {
@@ -99,7 +113,7 @@ impl PaletteListState {
 }
 
 pub struct PaletteView {
-    inner: Flex<PaletteListState>,
+    inner: Flex<PaletteViewState>,
     textbox_id: WidgetId,
     action: Option<UICommandType>,
 }
@@ -115,7 +129,7 @@ impl PaletteView {
     }
     pub fn init(
         &mut self,
-        data: &mut PaletteListState,
+        data: &mut PaletteViewState,
         title: String,
         list: Option<Vector<Item>>,
         action: Option<UICommandType>,
@@ -132,12 +146,12 @@ impl PaletteView {
     }
 }
 
-impl Widget<PaletteListState> for PaletteView {
+impl Widget<PaletteViewState> for PaletteView {
     fn event(
         &mut self,
         ctx: &mut druid::EventCtx,
         event: &druid::Event,
-        data: &mut PaletteListState,
+        data: &mut PaletteViewState,
         env: &druid::Env,
     ) {
         match event {
@@ -206,7 +220,7 @@ impl Widget<PaletteListState> for PaletteView {
         &mut self,
         ctx: &mut druid::LifeCycleCtx,
         event: &druid::LifeCycle,
-        data: &PaletteListState,
+        data: &PaletteViewState,
         env: &druid::Env,
     ) {
         self.inner.lifecycle(ctx, event, data, env);
@@ -215,8 +229,8 @@ impl Widget<PaletteListState> for PaletteView {
     fn update(
         &mut self,
         ctx: &mut druid::UpdateCtx,
-        old_data: &PaletteListState,
-        data: &PaletteListState,
+        old_data: &PaletteViewState,
+        data: &PaletteViewState,
         env: &druid::Env,
     ) {
         self.inner.update(ctx, &old_data, data, env);
@@ -233,13 +247,13 @@ impl Widget<PaletteListState> for PaletteView {
         &mut self,
         ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
-        data: &PaletteListState,
+        data: &PaletteViewState,
         env: &druid::Env,
     ) -> druid::Size {
         self.inner.layout(ctx, bc, data, env)
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteViewState, env: &druid::Env) {
         self.inner.paint(ctx, data, env);
     }
 }
@@ -250,14 +264,14 @@ struct PaletteList {
     position: Point,
 }
 
-impl Widget<PaletteListState> for PaletteList {
-    fn event(&mut self, _ctx: &mut druid::EventCtx, _event: &Event, _data: &mut PaletteListState, _env: &druid::Env) {}
+impl Widget<PaletteViewState> for PaletteList {
+    fn event(&mut self, _ctx: &mut druid::EventCtx, _event: &Event, _data: &mut PaletteViewState, _env: &druid::Env) {}
 
     fn lifecycle(
         &mut self,
         _ctx: &mut druid::LifeCycleCtx,
         _event: &druid::LifeCycle,
-        _data: &PaletteListState,
+        _data: &PaletteViewState,
         _env: &druid::Env,
     ) {
     }
@@ -265,8 +279,8 @@ impl Widget<PaletteListState> for PaletteList {
     fn update(
         &mut self,
         ctx: &mut druid::UpdateCtx,
-        old_data: &PaletteListState,
-        data: &PaletteListState,
+        old_data: &PaletteViewState,
+        data: &PaletteViewState,
         _env: &druid::Env,
     ) {
         if !old_data.list.same(&data.list) {
@@ -278,7 +292,7 @@ impl Widget<PaletteListState> for PaletteList {
         &mut self,
         ctx: &mut druid::LayoutCtx,
         bc: &druid::BoxConstraints,
-        data: &PaletteListState,
+        data: &PaletteViewState,
         env: &druid::Env,
     ) -> Size {
         let mut dy = 2.5;
@@ -301,7 +315,7 @@ impl Widget<PaletteListState> for PaletteList {
         Size::new(bc.max().width, self.total_height.min(500.))
     }
 
-    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteListState, env: &druid::Env) {
+    fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &PaletteViewState, env: &druid::Env) {
         if data.visible_list.is_some() {
             let size = ctx.size();
             ctx.clip(Rect::ZERO.with_size(size));
@@ -431,7 +445,7 @@ impl<T> Widget<T> for EmptyWidget {
     fn paint(&mut self, _ctx: &mut druid::PaintCtx, _data: &T, _env: &druid::Env) {}
 }
 
-fn build(id: WidgetId) -> Flex<PaletteListState> {
+fn build(id: WidgetId) -> Flex<PaletteViewState> {
     Flex::row()
         .with_flex_child(EmptyWidget, 0.5)
         .with_child(
@@ -441,7 +455,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                         2.,
                         Flex::column()
                             .with_child(
-                                Label::new(|data: &PaletteListState, _env: &Env| format!("{}", data.title))
+                                Label::new(|data: &PaletteViewState, _env: &Env| format!("{}", data.title))
                                     .with_text_size(12.0),
                             )
                             .with_child(
@@ -450,7 +464,7 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                                     .focus()
                                     .fix_width(550.)
                                     .with_id(id)
-                                    .lens(PaletteListState::filter),
+                                    .lens(PaletteViewState::filter),
                             )
                             .with_child(PaletteList::default())
                             .cross_axis_alignment(druid::widget::CrossAxisAlignment::Start),
@@ -462,4 +476,155 @@ fn build(id: WidgetId) -> Flex<PaletteListState> {
                 .fix_width(550.),
         )
         .with_flex_child(EmptyWidget, 0.5)
+}
+
+pub const SHOW_PALETTE_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.palette.show_for_editor");
+pub const SHOW_PALETTE_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.palette.show_for_window");
+pub const SHOW_DIALOG_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.dialog.show_for_editor");
+pub const SHOW_DIALOG_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.dialog.show_for_window");
+
+
+trait ShowPalette<R, W, D> {
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(R, &mut EventCtx, &mut W, &mut D)>>);
+}
+
+impl<'a, 'b, 'c> ShowPalette<PaletteResult, EditorView, EditStack> for EventCtx<'b, 'c> {
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>) {
+        self.submit_command(Command::new(
+            SHOW_PALETTE_FOR_EDITOR,
+            (self.widget_id(), title, items, callback),
+            Target::Auto,
+        ));
+    }
+}
+
+impl<'a, 'b, 'c> ShowPalette<PaletteResult, NPWindow, NPWindowState> for EventCtx<'b, 'c> {
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>) {
+        self.submit_command(Command::new(
+            SHOW_PALETTE_FOR_WINDOW,
+            (self.widget_id(), title, items, callback),
+            Target::Auto,
+        ));
+    }
+}
+
+impl<'a, 'b, 'c> ShowPalette<DialogResult, EditorView, EditStack> for EventCtx<'b, 'c> {
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>) {
+        self.submit_command(Command::new(
+            SHOW_DIALOG_FOR_EDITOR,
+            (self.widget_id(), title, items, callback),
+            Target::Auto,
+        ));
+    }
+}
+
+impl<'a, 'b, 'c> ShowPalette<DialogResult, NPWindow, NPWindowState> for EventCtx<'b, 'c> {
+    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>) {
+        self.submit_command(Command::new(
+            SHOW_DIALOG_FOR_WINDOW,
+            (self.widget_id(), title, items, callback),
+            Target::Auto,
+        ));
+    }
+}
+
+#[derive(Debug,PartialEq,Eq,Clone, Copy)]
+pub enum DialogResult {
+    Ok,
+    Cancel,
+}
+#[derive(Debug,Clone)]
+pub struct PaletteResult {
+    pub index: usize,
+    pub name: Arc<String>,
+}
+
+pub struct Palette<R, W, D> {
+    title: Option<String>,
+    action: Option<Rc<dyn Fn(R, &mut EventCtx, &mut W, &mut D)>>,
+    items: Option<Vector<Item>>,
+}
+
+
+impl<R, W, D> Default for Palette<R, W, D> {
+    fn default() -> Self {
+        Self { title: Default::default(), action: Default::default(), items: Default::default() }
+    }
+}
+
+impl<R, W, D> Palette<R, W, D> {
+    fn new() -> Self {
+        Palette::default()
+    }
+    pub fn title(mut self, title: &str) -> Self {
+        self.title = Some(title.to_owned());
+        self
+    }
+    pub fn on_select(
+        mut self,
+        action: impl Fn(R, &mut EventCtx, &mut W, &mut D) + 'static,
+    ) -> Self {
+        self.action = Some(Rc::new(action));
+        self
+    }
+    pub fn items(mut self, items: Vector<Item>) -> Self {
+        self.items = Some(items);
+        self
+    }
+    
+}
+
+pub trait PaletteBuilder<D> {
+    fn palette(&self) -> Palette<PaletteResult, Self, D> where Self: Sized;
+    fn dialog(&self) -> Palette<DialogResult, Self, D> where Self: Sized;
+    fn alert(&self,title: &str) -> Palette<PaletteResult, Self, D> where Self: Sized;
+}
+
+impl PaletteBuilder<EditStack> for EditorView {
+    fn palette(&self) -> Palette<PaletteResult, EditorView, EditStack> {
+        Palette::<PaletteResult, EditorView, EditStack>::new()
+    }
+    fn dialog(&self) -> Palette<DialogResult, EditorView, EditStack> {
+        Palette::<DialogResult, EditorView, EditStack>::new().items(item!["Ok","Cancel"])
+    }
+    fn alert(&self,title: &str) -> Palette<PaletteResult, EditorView, EditStack> {
+        Palette::new().title(title).items(item!["Ok"])
+    }
+}
+
+impl PaletteBuilder<NPWindowState> for NPWindow {
+    fn palette(&self) -> Palette<PaletteResult, NPWindow, NPWindowState> {
+        Palette::<PaletteResult, NPWindow, NPWindowState>::new()
+    }
+    fn dialog(&self) -> Palette<DialogResult, NPWindow, NPWindowState> {
+        Palette::<DialogResult, NPWindow, NPWindowState>::new().items(item!["Ok","Cancel"])
+    }
+    fn alert(&self,title: &str) -> Palette<PaletteResult, NPWindow, NPWindowState> {
+        Palette::new().title(title).items(item!["Ok"])
+    }
+}
+
+impl Palette<PaletteResult, EditorView, EditStack> {
+    pub fn show(self, ctx: &mut EventCtx) {
+        ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
+    }
+
+}
+
+impl Palette<PaletteResult, NPWindow, NPWindowState> {
+    pub fn show(self, ctx: &mut EventCtx) {
+        ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
+    }
+}
+
+impl Palette<DialogResult, EditorView, EditStack> {
+    pub fn show(self, ctx: &mut EventCtx) {
+        ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
+    }
+}
+
+impl Palette<DialogResult, NPWindow, NPWindowState> {
+    pub fn show(self, ctx: &mut EventCtx) {
+        ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
+    }
 }

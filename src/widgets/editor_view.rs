@@ -7,8 +7,8 @@ use std::time::Duration;
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
-use crate::commands::{self, UICommandType, SCROLL_TO, DialogResult, PaletteBuilder};
-
+use crate::commands::{self, UICommandType, SCROLL_TO, UICommandEventHandler};
+use crate::widgets::{DialogResult, PaletteBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -399,6 +399,10 @@ impl EditorView {
     }
 
     fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
+        commands::CommandSet.event(ctx, event, self, editor);
+        if ctx.is_handled() {
+            return true;
+        }
         match event {
             Event::WindowConnected => {
                 ctx.request_focus();

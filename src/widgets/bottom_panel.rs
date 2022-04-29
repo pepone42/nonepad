@@ -4,7 +4,7 @@ use druid::{
 };
 
 
-use crate::widgets::{EmptyWidget, Extension, PaletteListState};
+use crate::widgets::{EmptyWidget, Extension, PaletteViewState};
 use crate::commands;
 
 pub const PANEL_CLOSED: usize = 0x0;
@@ -16,7 +16,7 @@ pub struct BottomPanel {}
 pub struct BottonPanelState {
     pub current: usize,
     search_state: SearchState,
-    panel_state: PaletteListState,
+    panel_state: PaletteViewState,
 }
 
 impl BottonPanelState {

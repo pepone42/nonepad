@@ -2,10 +2,11 @@ use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view,
+    editor_view::{self, EditorView},
 };
-use super::{text_buffer::EditStack, Item, PaletteListState, PaletteView};
-use crate::commands::{self, UICommandType, DialogResult, PaletteBuilder};
+use super::{text_buffer::EditStack, Item, PaletteViewState, PaletteView, DialogResult, PaletteBuilder};
+use crate::commands::{self, UICommandType, UICommandEventHandler};
+
 use druid::{
     im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
@@ -24,7 +25,7 @@ pub struct NPWindowState {
     //pub editor2: EditStack,
     status: String,
     bottom_panel: BottonPanelState,
-    palette_state: PaletteListState,
+    palette_state: PaletteViewState,
 }
 
 impl Default for NPWindowState {
@@ -34,7 +35,7 @@ impl Default for NPWindowState {
             //editor2: EditStack::default(),
             status: "Untilted".to_owned(),
             bottom_panel: BottonPanelState::default(),
-            palette_state: PaletteListState::default(),
+            palette_state: PaletteViewState::default(),
         }
     }
 }
@@ -55,12 +56,16 @@ impl NPWindowState {
                 .to_string_lossy()
                 .to_string(),
             bottom_panel: BottonPanelState::default(),
-            palette_state: PaletteListState::default(),
+            palette_state: PaletteViewState::default(),
         })
     }
 }
 impl Widget<NPWindowState> for NPWindow {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut NPWindowState, env: &druid::Env) {
+        commands::CommandSet.event(ctx, event, self, data);
+        if ctx.is_handled() {
+            return;
+        }
         match event {
             druid::Event::KeyDown(druid::KeyEvent {
                 key: druid::KbKey::Escape,
@@ -70,26 +75,26 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.set_handled();
                 return;
             }
-            druid::Event::KeyDown(event) => {
-                #[cfg(target_os = "macos")]
-                let p = "p";
-                #[cfg(not(target_os = "macos"))]
-                let p = "P";
-                if HotKey::new(SysMods::CmdShift, p).matches(event) && !self.in_palette {
-                    let mut items = Vector::new();
-                    for c in &commands::COMMANDSET.commands {
-                        items.push_back(Item::new(&c.description, &""));
-                    }
-                    self.palette()
-                        .items(items)
-                        .on_select(|result, ctx, win, data| {
-                            let ui_cmd = &commands::COMMANDSET.commands[result.index];
-                            ui_cmd.exec(ctx, win, data);
-                        })
-                        .show(ctx);
-                }
-                commands::COMMANDSET.hotkey_submit(ctx, event, self, data);
-            }
+            // druid::Event::KeyDown(event) => {
+            //     // #[cfg(target_os = "macos")]
+            //     // let p = "p";
+            //     // #[cfg(not(target_os = "macos"))]
+            //     // let p = "P";
+            //     // if HotKey::new(SysMods::CmdShift, p).matches(event) && !self.in_palette {
+            //     //     let mut items = Vector::new();
+            //     //     for c in &commands::WINCOMMANDSET.commands {
+            //     //         items.push_back(Item::new(&c.description, &""));
+            //     //     }
+            //     //     self.palette()
+            //     //         .items(items)
+            //     //         .on_select(|result, ctx, win, data| {
+            //     //             let ui_cmd = &commands::WINCOMMANDSET.commands[result.index];
+            //     //             ui_cmd.exec(ctx, win, data);
+            //     //         })
+            //     //         .show(ctx);
+            //     // }
+                
+            // }
             druid::Event::MouseUp(_) => {
                 ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
             }
@@ -110,37 +115,37 @@ impl Widget<NPWindowState> for NPWindow {
                     _ => (),
                 }
             }
-            druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_FOR_WINDOW) => {
+            druid::Event::Command(cmd) if cmd.is(super::SHOW_PALETTE_FOR_WINDOW) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_PALETTE_FOR_WINDOW).clone();
+                let input = cmd.get_unchecked(super::SHOW_PALETTE_FOR_WINDOW).clone();
                 self.palette
                     .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::Window(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
-            druid::Event::Command(cmd) if cmd.is(commands::SHOW_PALETTE_FOR_EDITOR) => {
+            druid::Event::Command(cmd) if cmd.is(super::SHOW_PALETTE_FOR_EDITOR) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_PALETTE_FOR_EDITOR).clone();
+                let input = cmd.get_unchecked(super::SHOW_PALETTE_FOR_EDITOR).clone();
                 self.palette
                     .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::Editor(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
-            druid::Event::Command(cmd) if cmd.is(commands::SHOW_DIALOG_FOR_WINDOW) => {
+            druid::Event::Command(cmd) if cmd.is(super::SHOW_DIALOG_FOR_WINDOW) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_DIALOG_FOR_WINDOW).clone();
+                let input = cmd.get_unchecked(super::SHOW_DIALOG_FOR_WINDOW).clone();
                 self.palette
                     .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::DialogWindow(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
-            druid::Event::Command(cmd) if cmd.is(commands::SHOW_DIALOG_FOR_EDITOR) => {
+            druid::Event::Command(cmd) if cmd.is(super::SHOW_DIALOG_FOR_EDITOR) => {
                 self.in_palette = true;
                 ctx.request_layout();
-                let input = cmd.get_unchecked(commands::SHOW_DIALOG_FOR_EDITOR).clone();
+                let input = cmd.get_unchecked(super::SHOW_DIALOG_FOR_EDITOR).clone();
                 self.palette
                     .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::DialogEditor(f)));
                 self.palette.take_focus(ctx);
