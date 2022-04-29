@@ -74,26 +74,6 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.set_handled();
                 return;
             }
-            // druid::Event::KeyDown(event) => {
-            //     // #[cfg(target_os = "macos")]
-            //     // let p = "p";
-            //     // #[cfg(not(target_os = "macos"))]
-            //     // let p = "P";
-            //     // if HotKey::new(SysMods::CmdShift, p).matches(event) && !self.in_palette {
-            //     //     let mut items = Vector::new();
-            //     //     for c in &commands::WINCOMMANDSET.commands {
-            //     //         items.push_back(Item::new(&c.description, &""));
-            //     //     }
-            //     //     self.palette()
-            //     //         .items(items)
-            //     //         .on_select(|result, ctx, win, data| {
-            //     //             let ui_cmd = &commands::WINCOMMANDSET.commands[result.index];
-            //     //             ui_cmd.exec(ctx, win, data);
-            //     //         })
-            //     //         .show(ctx);
-            //     // }
-                
-            // }
             druid::Event::MouseUp(_) => {
                 ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
             }

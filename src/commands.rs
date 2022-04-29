@@ -66,26 +66,6 @@ impl UICommand {
     }
 }
 
-// pub trait UICommandExecutor<W, D> {
-//     fn exec(&self, ctx: &mut EventCtx, widget: &mut W, state: &mut D);
-// }
-
-// impl UICommandExecutor<NPWindow, NPWindowState> for UICommand {
-//     fn exec(&self, ctx: &mut EventCtx, win: &mut NPWindow, win_state: &mut NPWindowState) {
-//         if let UICommandCallback::Window(c) = self.exec {
-//             c(win, ctx, win_state);
-//         }
-//     }
-// }
-
-// impl UICommandExecutor<EditorView, EditStack> for UICommand {
-//     fn exec(&self, ctx: &mut EventCtx, editor_view: &mut EditorView, editor: &mut EditStack) {
-//         if let UICommandCallback::EditView(c) = self.exec {
-//             c(editor_view, ctx, editor);
-//         }
-//     }
-// }
-
 struct UICommandSet {
     commands: Vec<UICommand>,
 }
@@ -213,13 +193,11 @@ wincmd! {
                 .on_select(move |result, ctx, _, _| {
                     if result.index>=viewcmd_start_index {
                         if let Some(ui_cmd) = &VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index - viewcmd_start_index) {
-                            // TODO: Find a more elegent way
                             // TODO: Send command to current editor target, not global
                             ctx.submit_command(Command::new(UICOMMAND_CALLBACK, ui_cmd.exec.clone(), Target::Global));
                         }
                     } else {
                         if let Some(ui_cmd) = &WINCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index) {
-                            //ui_cmd.exec(ctx, win, data);
                             ctx.submit_command(Command::new(UICOMMAND_CALLBACK, ui_cmd.exec.clone(), Target::Global));
                         }
                     }
