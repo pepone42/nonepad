@@ -12,7 +12,7 @@ use druid::{
 
 use sublime_fuzzy::best_match;
 
-use crate::commands::{self, UICommandType};
+use crate::commands;
 use crate::theme::THEME;
 
 use super::Extension;
@@ -115,11 +115,11 @@ impl PaletteViewState {
 pub struct PaletteView {
     inner: Flex<PaletteViewState>,
     textbox_id: WidgetId,
-    action: Option<UICommandType>,
+    action: Option<PaletteCommandType>,
 }
 
 impl PaletteView {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         let textbox_id = WidgetId::next();
         PaletteView {
             inner: build(textbox_id),
@@ -127,12 +127,12 @@ impl PaletteView {
             action: None,
         }
     }
-    pub fn init(
+    pub(super) fn init(
         &mut self,
         data: &mut PaletteViewState,
         title: String,
         list: Option<Vector<Item>>,
-        action: Option<UICommandType>,
+        action: Option<PaletteCommandType>,
     ) {
         data.list = list.clone();
         data.title = title.to_owned();
@@ -142,7 +142,9 @@ impl PaletteView {
         data.visible_list = list.map(|l| l.iter().enumerate().map(|i| (i.0, i.1.clone())).collect())
     }
     pub fn take_focus(&self, ctx: &mut EventCtx) {
-        ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), self.textbox_id));
+        println!("take focus {:?} {:?}",ctx.widget_id(),self.textbox_id);
+        ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), ctx.widget_id()));
+        //ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), self.textbox_id));
     }
 }
 
@@ -172,14 +174,14 @@ impl Widget<PaletteViewState> for PaletteView {
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
                     ctx.resign_focus();
-                    ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
+                    ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
 
                     if let Some(f) = self.action.take() {
                         match &data.visible_list {
                             Some(l) => {
                                 if let Some(item) = l.get(data.selected_idx) {
                                     ctx.submit_command(Command::new(
-                                        commands::PALETTE_CALLBACK,
+                                        PALETTE_CALLBACK,
                                         (PaletteResult { index: item.0, name: item.1.title.clone() }, f),
                                         Target::Global,
                                     ));
@@ -187,7 +189,7 @@ impl Widget<PaletteViewState> for PaletteView {
                             }
                             None => {
                                 ctx.submit_command(Command::new(
-                                    commands::PALETTE_CALLBACK,
+                                    PALETTE_CALLBACK,
                                     (PaletteResult { index: 0, name : Arc::new(data.filter.clone())}, f),
                                     Target::Global,
                                 ));
@@ -199,16 +201,19 @@ impl Widget<PaletteViewState> for PaletteView {
                 }
                 KeyEvent { key: KbKey::Escape, .. } => {
                     ctx.resign_focus();
-                    ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
+                    ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
                     ctx.set_handled();
                 }
-                _ => (),
+                _ => {
+                    self.inner.event(ctx, event, data, env);
+                },
             },
             Event::Command(c) if c.is(FILTER) => {
                 dbg!(&data.filter);
                 data.apply_filter();
                 data.selected_idx = 0;
                 ctx.request_paint();
+                ctx.set_handled();
             }
             _ => {
                 self.inner.event(ctx, event, data, env);
@@ -422,7 +427,7 @@ impl<T> Widget<T> for EmptyWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &druid::Env) {
         match event {
             Event::MouseDown(_) => {
-                ctx.submit_command(Command::new(commands::CLOSE_PALETTE, (), Target::Global));
+                ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
             }
             _ => (),
         }
@@ -478,11 +483,23 @@ fn build(id: WidgetId) -> Flex<PaletteViewState> {
         .with_flex_child(EmptyWidget, 0.5)
 }
 
-pub const SHOW_PALETTE_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.palette.show_for_editor");
-pub const SHOW_PALETTE_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.palette.show_for_window");
-pub const SHOW_DIALOG_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.dialog.show_for_editor");
-pub const SHOW_DIALOG_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.dialog.show_for_window");
 
+#[derive(Clone)]
+pub(super) enum PaletteCommandType {
+    Editor(Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>),
+    Window(Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
+    DialogEditor(Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>),
+    DialogWindow(Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
+}
+
+pub(super) const SHOW_PALETTE_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.palette.show_for_editor");
+pub(super) const SHOW_PALETTE_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.palette.show_for_window");
+pub(super) const SHOW_DIALOG_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.dialog.show_for_editor");
+pub(super) const SHOW_DIALOG_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.dialog.show_for_window");
+
+
+pub(super) const PALETTE_CALLBACK: Selector<(PaletteResult, PaletteCommandType)> = Selector::new("nonepad.editor.execute_command");
+pub(super) const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
 
 trait ShowPalette<R, W, D> {
     fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(R, &mut EventCtx, &mut W, &mut D)>>);

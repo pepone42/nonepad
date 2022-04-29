@@ -1,6 +1,6 @@
 use druid::{
     widget::{Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId,
+    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, Selector,
 };
 
 
@@ -9,6 +9,10 @@ use crate::commands;
 
 pub const PANEL_CLOSED: usize = 0x0;
 pub const PANEL_SEARCH: usize = 0x1;
+
+pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
+pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
+pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 
 pub struct BottomPanel {}
 
@@ -41,17 +45,17 @@ pub fn build() -> impl Widget<BottonPanelState> {
 impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPanel {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut BottonPanelState, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(commands::CLOSE_BOTTOM_PANEL) => {
+            Event::Command(cmd) if cmd.is(CLOSE_BOTTOM_PANEL) => {
                 data.current = PANEL_CLOSED;
                 ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
                 return;
             }
-            Event::Command(cmd) if cmd.is(commands::SHOW_SEARCH_PANEL) => {
+            Event::Command(cmd) if cmd.is(SHOW_SEARCH_PANEL) => {
                 data.current = PANEL_SEARCH;
                 let id = child.id().unwrap();
-                let input = cmd.get_unchecked(commands::SHOW_SEARCH_PANEL).clone();
+                let input = cmd.get_unchecked(SHOW_SEARCH_PANEL).clone();
                 ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
-                ctx.submit_command(Command::new(commands::SEND_STRING_DATA, input, id));
+                ctx.submit_command(Command::new(SEND_STRING_DATA, input, id));
                 return;
             }
             _ => (),
@@ -73,7 +77,7 @@ fn build_search_panel() -> impl Widget<SearchState> {
                 .with_text_size(12.0)
                 .on_enter(|ctx, data: &mut String, _| {
                     ctx.submit_command(Command::new(
-                        commands::REQUEST_NEXT_SEARCH,
+                        super::editor_view::REQUEST_NEXT_SEARCH,
                         data.clone(),
                         Target::Global,
                     ))

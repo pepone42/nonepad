@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, rc::Rc};
+use std::borrow::Borrow;
 
 use druid::{
     im::Vector, Command, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target,
@@ -13,28 +13,19 @@ use crate::widgets::{
     DialogResult, Item, PaletteBuilder, PaletteResult,
 };
 
-#[derive(Clone)]
-pub enum UICommandType {
-    Editor(Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>),
-    Window(Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
-    DialogEditor(Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>),
-    DialogWindow(Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
-}
 
-pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
-
-pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
-pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
-pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
-pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
-pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
+
+pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
+
+pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
-pub const PALETTE_CALLBACK: Selector<(PaletteResult, UICommandType)> = Selector::new("nonepad.editor.execute_command");
-pub const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
 pub const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
 pub const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
+
+
+
 const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
 
 

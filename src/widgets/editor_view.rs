@@ -4,10 +4,11 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
+use super::{PALETTE_CALLBACK, PaletteCommandType};
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 
-use crate::commands::{self, UICommandType, SCROLL_TO, UICommandEventHandler};
+use crate::commands::{self, SCROLL_TO, UICommandEventHandler};
 use crate::widgets::{DialogResult, PaletteBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
@@ -17,7 +18,7 @@ use druid::{
     KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx, Widget, WidgetExt,
     WidgetId,
 };
-use druid::{Data, FontStyle};
+use druid::{Data, FontStyle, Selector};
 
 use ropey::Rope;
 use syntect::parsing::SyntaxReference;
@@ -42,6 +43,9 @@ pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 pub const EDITOR_LEFT_PADDING: f64 = 2.;
 pub const SCROLLBAR_X_PADDING: f64 = 2.;
+
+pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
+
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -183,6 +187,7 @@ pub struct EditorView {
 
 impl Widget<EditStack> for EditorView {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
+        if let Event::Command(e) = event { dbg!(&e); }
         let old_dx = self.delta_x;
         let old_dy = self.delta_y;
         let old_editor = editor.clone();
@@ -595,7 +600,7 @@ impl EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
-                        commands::SHOW_SEARCH_PANEL,
+                        super::bottom_panel::SHOW_SEARCH_PANEL,
                         editor.main_cursor_selected_text(),
                         Target::Global,
                     ));
@@ -733,13 +738,14 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(commands::REQUEST_NEXT_SEARCH) => {
-                if let Some(data) = cmd.get(commands::REQUEST_NEXT_SEARCH) {
+            Event::Command(cmd) if cmd.is(REQUEST_NEXT_SEARCH) => {
+                if let Some(data) = cmd.get(REQUEST_NEXT_SEARCH) {
                     editor.search_next(data);
                 }
                 true
             }
             Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
+                println!("widget {:?} get Focus!",ctx.widget_id());
                 ctx.request_focus();
                 true
             }
@@ -769,15 +775,15 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
-                let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
+            Event::Command(cmd) if cmd.is(PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(PALETTE_CALLBACK);
 
                 match &item.1 {
-                    UICommandType::Editor(action) => {
+                    PaletteCommandType::Editor(action) => {
                         (action)(item.0.clone(), ctx, self, editor);
                         return true;
                     }
-                    UICommandType::DialogEditor(action) => {
+                    PaletteCommandType::DialogEditor(action) => {
                         let dialog_result = if item.0.index == 0 { DialogResult::Ok} else {DialogResult::Cancel};
                         (action)(dialog_result, ctx, self, editor);
                         return true;

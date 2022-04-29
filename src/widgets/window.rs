@@ -2,10 +2,10 @@ use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view,
+    editor_view, PaletteCommandType,
 };
 use super::{text_buffer::EditStack, PaletteViewState, PaletteView, DialogResult, PaletteBuilder};
-use crate::commands::{self, UICommandType, UICommandEventHandler};
+use crate::commands::{self, UICommandEventHandler};
 
 use druid::{
     widget::{Flex, Label, MainAxisAlignment},
@@ -61,6 +61,8 @@ impl NPWindowState {
 }
 impl Widget<NPWindowState> for NPWindow {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut NPWindowState, env: &druid::Env) {
+        //if let druid::Event::Command(e) = event { dbg!(&e); }
+        
         commands::CommandSet.event(ctx, event, self, data);
         if ctx.is_handled() {
             return;
@@ -70,22 +72,22 @@ impl Widget<NPWindowState> for NPWindow {
                 key: druid::KbKey::Escape,
                 ..
             }) if data.bottom_panel.is_open() => {
-                ctx.submit_command(Command::new(commands::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
+                ctx.submit_command(Command::new(bottom_panel::CLOSE_BOTTOM_PANEL, (), druid::Target::Global));
                 ctx.set_handled();
                 return;
             }
             druid::Event::MouseUp(_) => {
                 ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
             }
-            druid::Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
-                let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
+            druid::Event::Command(cmd) if cmd.is(super::PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(super::PALETTE_CALLBACK);
                 match &item.1 {
-                    UICommandType::Window(action) => {
+                    PaletteCommandType::Window(action) => {
                         (action)(item.0.clone(), ctx, self, data);
                         ctx.set_handled();
                         return;
                     }
-                    UICommandType::DialogWindow(action) => {
+                    PaletteCommandType::DialogWindow(action) => {
                         let dialog_result = if item.0.index == 0 { DialogResult::Ok} else {DialogResult::Cancel};
                         (action)(dialog_result, ctx, self, data);
                         ctx.set_handled();
@@ -99,7 +101,7 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_layout();
                 let input = cmd.get_unchecked(super::SHOW_PALETTE_FOR_WINDOW).clone();
                 self.palette
-                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::Window(f)));
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| PaletteCommandType::Window(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
@@ -108,7 +110,7 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_layout();
                 let input = cmd.get_unchecked(super::SHOW_PALETTE_FOR_EDITOR).clone();
                 self.palette
-                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::Editor(f)));
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| PaletteCommandType::Editor(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
@@ -117,7 +119,7 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_layout();
                 let input = cmd.get_unchecked(super::SHOW_DIALOG_FOR_WINDOW).clone();
                 self.palette
-                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::DialogWindow(f)));
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| PaletteCommandType::DialogWindow(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
@@ -126,11 +128,11 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.request_layout();
                 let input = cmd.get_unchecked(super::SHOW_DIALOG_FOR_EDITOR).clone();
                 self.palette
-                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| UICommandType::DialogEditor(f)));
+                    .init(&mut data.palette_state, input.1, input.2.clone(), input.3.map(|f| PaletteCommandType::DialogEditor(f)));
                 self.palette.take_focus(ctx);
                 return;
             }
-            druid::Event::Command(cmd) if cmd.is(commands::CLOSE_PALETTE) => {
+            druid::Event::Command(cmd) if cmd.is(super::CLOSE_PALETTE) => {
                 // ctx.request_focus don't work. I guess it needs to be delayed
                 // TODO: send focus to the last focused editor
                 ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
