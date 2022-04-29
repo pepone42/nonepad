@@ -1,7 +1,7 @@
-use std::{borrow::{Borrow, BorrowMut}, rc::Rc, sync::Arc};
+use std::{borrow::Borrow, rc::Rc};
 
 use druid::{
-    im::Vector, Command, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target, WidgetId,
+    im::Vector, Command, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target,
 };
 use once_cell::sync::Lazy;
 
@@ -10,7 +10,7 @@ use crate::widgets::{
     item,
     text_buffer::{syntax::SYNTAXSET, EditStack},
     window::{NPWindow, NPWindowState},
-    DialogResult, Item, Palette, PaletteBuilder, PaletteResult,
+    DialogResult, Item, PaletteBuilder, PaletteResult,
 };
 
 #[derive(Clone)]
@@ -48,7 +48,6 @@ struct UICommand {
     pub description: String,
     pub show_in_palette: bool,
     shortcut: Option<druid::HotKey>,
-    //exec: fn(&mut NPWindow, &mut EventCtx, &mut NPWindowState) -> bool,
     exec: UICommandCallback,
 }
 
@@ -211,7 +210,7 @@ wincmd! {
             }
             win.palette()
                 .items(items)
-                .on_select(move |result, ctx, win, data| {
+                .on_select(move |result, ctx, _, _| {
                     if result.index>=viewcmd_start_index {
                         if let Some(ui_cmd) = &VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index - viewcmd_start_index) {
                             // TODO: Find a more elegent way

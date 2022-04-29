@@ -2,15 +2,14 @@ use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view::{self, EditorView},
+    editor_view,
 };
-use super::{text_buffer::EditStack, Item, PaletteViewState, PaletteView, DialogResult, PaletteBuilder};
+use super::{text_buffer::EditStack, PaletteViewState, PaletteView, DialogResult, PaletteBuilder};
 use crate::commands::{self, UICommandType, UICommandEventHandler};
 
 use druid::{
-    im::Vector,
     widget::{Flex, Label, MainAxisAlignment},
-    Color, Command, Data, Env, HotKey, Lens, LifeCycle, SysMods, Target, Widget, WidgetExt,
+    Color, Command, Data, Env, Lens, LifeCycle, Target, Widget, WidgetExt,
 };
 
 pub struct NPWindow {
