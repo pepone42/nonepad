@@ -59,8 +59,6 @@ impl NPWindowState {
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            // bottom_panel: BottonPanelState::default(),
-            // palette_state: PaletteViewState::default(),
             ..Default::default()
         })
     }

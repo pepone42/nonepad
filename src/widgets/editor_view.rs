@@ -193,10 +193,6 @@ impl Widget<EditStack> for EditorView {
 
         let handled = self.handle_event(event, ctx, editor);
         if handled {
-            //let id = ctx.widget_id();
-
-            //ctx.submit_command(Command::new(crate::commands::HIGHLIGHT, (), Target::Widget(id)));
-
             ctx.set_handled();
         }
         if !old_editor.buffer.same(&editor.buffer) {

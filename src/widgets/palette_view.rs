@@ -169,7 +169,6 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
-                    //ctx.resign_focus();
                     ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
 
                     if let Some(f) = self.action.take() {
@@ -196,7 +195,6 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Escape, .. } => {
-                    //ctx.resign_focus();
                     ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
                     ctx.set_handled();
                 }
@@ -461,7 +459,6 @@ fn build(id: WidgetId) -> Flex<PaletteViewState> {
                             .with_child(
                                 TextBox::new()
                                     .with_text_size(12.0)
-                                    //.focus()
                                     .fix_width(550.)
                                     .with_id(id)
                                     .lens(PaletteViewState::filter),
