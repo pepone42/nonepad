@@ -4,12 +4,12 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
+use super::{PALETTE_CALLBACK, PaletteCommandType};
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
-use super::Item;
-use crate::commands::{self, item, Palette, UICommandType, SCROLL_TO};
 
-use druid::im::Vector;
+use crate::commands::{self, SCROLL_TO, UICommandEventHandler};
+use crate::widgets::{DialogResult, PaletteBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
@@ -18,7 +18,7 @@ use druid::{
     KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, Target, UpdateCtx, Widget, WidgetExt,
     WidgetId,
 };
-use druid::{Data, FontStyle};
+use druid::{Data, FontStyle, Selector};
 
 use ropey::Rope;
 use syntect::parsing::SyntaxReference;
@@ -43,6 +43,9 @@ pub const FONT_SIZE: f64 = 14.;
 pub const FONT_WEIGTH: FontWeight = FontWeight::SEMI_BOLD;
 pub const EDITOR_LEFT_PADDING: f64 = 2.;
 pub const SCROLLBAR_X_PADDING: f64 = 2.;
+
+pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
+
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -190,10 +193,6 @@ impl Widget<EditStack> for EditorView {
 
         let handled = self.handle_event(event, ctx, editor);
         if handled {
-            //let id = ctx.widget_id();
-
-            //ctx.submit_command(Command::new(crate::commands::HIGHLIGHT, (), Target::Widget(id)));
-
             ctx.set_handled();
         }
         if !old_editor.buffer.same(&editor.buffer) {
@@ -207,86 +206,93 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, editor: &EditStack, env: &Env) {
-        if let LifeCycle::WidgetAdded = event {
-            let (tx, rx) = mpsc::channel();
-            self.bgworker_channel_tx = Some(tx);
-            let highlighted_line = self.highlighted_line.clone();
-            let owner_id = self.owner_id.clone();
-            let event_sink = ctx.get_external_handle();
-            thread::spawn(move || {
-                let mut syntax = SYNTAXSET.find_syntax_plain_text();
-                let mut highlight_cache = StateCache::new();
-                let mut current_index = 0;
-                let mut chunk_len = 100;
-                let mut rope = Rope::new();
-                let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crash the highlighter if hotwatch couldn't be initialized
-                loop {
-                    match rx.try_recv() {
-                        Ok(message) => match message {
-                            BackgroundWorkerMessage::Stop => return,
-                            BackgroundWorkerMessage::UpdateBuffer(s, r, start) => {
-                                rope = r;
-                                current_index = start;
-                                // The first chunk is smaller, to repaint quickly with highlight
-                                chunk_len = 100;
-                                syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
-                            }
-                            BackgroundWorkerMessage::WatchFile(p) => {
-                                let es = event_sink.clone();
-                                let _ = hotwatch.watch(p, move |e| {
-                                    match e {
-                                    hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
-                                        let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
-                                    }
-                                    hotwatch::Event::Remove(_) => {
-                                        let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
-                                    }
-                                    _ => {
-
-                                    }
+        match event {
+            LifeCycle::WidgetAdded => {
+                let (tx, rx) = mpsc::channel();
+                self.bgworker_channel_tx = Some(tx);
+                let highlighted_line = self.highlighted_line.clone();
+                let owner_id = self.owner_id.clone();
+                let event_sink = ctx.get_external_handle();
+                thread::spawn(move || {
+                    let mut syntax = SYNTAXSET.find_syntax_plain_text();
+                    let mut highlight_cache = StateCache::new();
+                    let mut current_index = 0;
+                    let mut chunk_len = 100;
+                    let mut rope = Rope::new();
+                    let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crash the highlighter if hotwatch couldn't be initialized
+                    loop {
+                        match rx.try_recv() {
+                            Ok(message) => match message {
+                                BackgroundWorkerMessage::Stop => return,
+                                BackgroundWorkerMessage::UpdateBuffer(s, r, start) => {
+                                    rope = r;
+                                    current_index = start;
+                                    // The first chunk is smaller, to repaint quickly with highlight
+                                    chunk_len = 100;
+                                    syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                                 }
-                                });
-                            }
-                            BackgroundWorkerMessage::UnwatchFile(p) => {
-                                let _ = hotwatch.unwatch(p);
-                            }
-                        },
-                        _ => (),
+                                BackgroundWorkerMessage::WatchFile(p) => {
+                                    let es = event_sink.clone();
+                                    let _ = hotwatch.watch(p, move |e| {
+                                        match e {
+                                        hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
+                                            let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
+                                        }
+                                        hotwatch::Event::Remove(_) => {
+                                            let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
+                                        }
+                                        _ => {
+
+                                        }
+                                    }
+                                    });
+                                }
+                                BackgroundWorkerMessage::UnwatchFile(p) => {
+                                    let _ = hotwatch.unwatch(p);
+                                }
+                            },
+                            _ => (),
+                        }
+                        if current_index < rope.len_lines() {
+                            highlight_cache.update_range(
+                                highlighted_line.clone(),
+                                &syntax,
+                                &rope,
+                                current_index,
+                                current_index + chunk_len,
+                            );
+                            let _ = event_sink.submit_command(
+                                crate::commands::HIGHLIGHT,
+                                (current_index, current_index + chunk_len),
+                                owner_id,
+                            );
+                            current_index += chunk_len;
+                            // subsequent chunck are bigger, for better performance
+                            chunk_len = 1000;
+                        } else {
+                            thread::sleep(Duration::from_millis(1));
+                        }
                     }
-                    if current_index < rope.len_lines() {
-                        highlight_cache.update_range(
-                            highlighted_line.clone(),
-                            &syntax,
-                            &rope,
-                            current_index,
-                            current_index + chunk_len,
-                        );
-                        let _ = event_sink.submit_command(
-                            crate::commands::HIGHLIGHT,
-                            (current_index, current_index + chunk_len),
-                            owner_id,
-                        );
-                        current_index += chunk_len;
-                        // subsequent chunck are bigger, for better performance
-                        chunk_len = 1000;
-                    } else {
-                        thread::sleep(Duration::from_millis(1));
-                    }
+                });
+
+                self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
+                self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
+                self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
+                self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
+
+    
+                self.update_highlighter(editor, 0);
+                // start notify
+                if let Some(f) = &editor.filename {
+                    self.start_watching_file(f);
                 }
-            });
-
-            self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
-            self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
-            self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
-            self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
-
-            ctx.register_for_focus();
-            self.update_highlighter(editor, 0);
-            // start notify
-            if let Some(f) = &editor.filename {
-                self.start_watching_file(f);
             }
+            LifeCycle::BuildFocusChain => {
+                ctx.register_for_focus();
+            }
+            _ => (),
         }
+
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
@@ -400,6 +406,10 @@ impl EditorView {
     }
 
     fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
+        commands::CommandSet.event(ctx, event, self, editor);
+        if ctx.is_handled() {
+            return true;
+        }
         match event {
             Event::WindowConnected => {
                 ctx.request_focus();
@@ -592,7 +602,7 @@ impl EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
                     ctx.submit_command(Command::new(
-                        commands::SHOW_SEARCH_PANEL,
+                        super::bottom_panel::SHOW_SEARCH_PANEL,
                         editor.main_cursor_selected_text(),
                         Target::Global,
                     ));
@@ -697,13 +707,13 @@ impl EditorView {
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE_AS) => {
                 let file_info = cmd.get_unchecked(druid::commands::SAVE_FILE_AS).clone();
                 if file_info.path().exists() {
-                    Palette::new()
-                        .items(item!["Yes", "No"])
+                    self.dialog()
+                        //.items(item!["Yes", "No"])
                         .title("File exists! Overwrite?")
-                        .editor_action(move |idx, _name, ctx, editor_view, data| {
-                            if idx == 0 {
+                        .on_select(move |result, ctx, editor_view, data| {
+                            if result == DialogResult::Ok {
                                 if let Err(e) = editor_view.save_as(data, file_info.path()) {
-                                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
+                                    editor_view.alert(&format!("Error writing file: {}", e)).show(ctx);
                                 }
                             };
                         })
@@ -711,33 +721,29 @@ impl EditorView {
                     true
                 } else {
                     if let Err(e) = self.save_as(editor, file_info.path()) {
-                        Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
+                        self.alert(&format!("Error writing file: {}", e)).show(ctx);
                     }
                     true
                 }
             }
             Event::Command(cmd) if cmd.is(druid::commands::SAVE_FILE) => {
                 if let Err(e) = self.save(editor) {
-                    Palette::alert(&format!("Error writing file: {}", e)).show(ctx);
+                    self.alert(&format!("Error writing file: {}", e)).show(ctx);
                 }
                 true
             }
             Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
                     if let Err(_) = self.open(editor, file_info.path()) {
-                        Palette::alert("Error loading file").show(ctx);
+                        self.alert("Error loading file").show(ctx);
                     }
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(commands::REQUEST_NEXT_SEARCH) => {
-                if let Some(data) = cmd.get(commands::REQUEST_NEXT_SEARCH) {
+            Event::Command(cmd) if cmd.is(REQUEST_NEXT_SEARCH) => {
+                if let Some(data) = cmd.get(REQUEST_NEXT_SEARCH) {
                     editor.search_next(data);
                 }
-                true
-            }
-            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
-                ctx.request_focus();
                 true
             }
             Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
@@ -766,25 +772,33 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::PALETTE_CALLBACK) => {
-                let item = cmd.get_unchecked(crate::commands::PALETTE_CALLBACK);
+            Event::Command(cmd) if cmd.is(PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(PALETTE_CALLBACK);
 
-                if let UICommandType::Editor(action) = &item.2 {
-                    (action)(item.0, item.1.clone(), ctx, self, editor);
-                    return true;
+                match &item.1 {
+                    PaletteCommandType::Editor(action) => {
+                        (action)(item.0.clone(), ctx, self, editor);
+                        return true;
+                    }
+                    PaletteCommandType::DialogEditor(action) => {
+                        let dialog_result = if item.0.index == 0 { DialogResult::Ok} else {DialogResult::Cancel};
+                        (action)(dialog_result, ctx, self, editor);
+                        return true;
+                    }
+                    _ => (),
                 }
                 false
             }
             Event::Command(cmd) if cmd.is(crate::commands::RELOAD_FROM_DISK) => {
                 if editor.is_dirty() {
                     ctx.set_handled();
-                    Palette::new()
-                        .items(item!["Yes", "No"])
+                    self.dialog()
+                        //.items(item!["Yes", "No"])
                         .title("File was modified outside of NonePad\nDiscard unsaved change and reload?")
-                        .editor_action(|idx, _name, ctx, _editor_view, data| {
-                            if idx == 0 {
+                        .on_select(|result, ctx, editor_view, data| {
+                            if result == DialogResult::Ok {
                                 if let Err(e) = data.reload() {
-                                    Palette::alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                                    editor_view.alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
                                 } else {
                                     data.reset_dirty();
                                 }
@@ -793,7 +807,7 @@ impl EditorView {
                         .show(ctx);
                 } else {
                     if let Err(e) = editor.reload() {
-                        Palette::alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                        self.alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
                     }
                 }
                 true
@@ -1298,11 +1312,7 @@ impl Widget<EditStack> for Gutter {
         }
     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
-        match event {
-            LifeCycle::WidgetAdded => ctx.register_for_focus(),
-            _ => (),
-        }
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
@@ -1655,7 +1665,7 @@ impl TextEditor {
     pub fn text_width(&self, data: &EditStack) -> f64 {
         data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
     }
-}
+}   
 
 impl Default for TextEditor {
     fn default() -> Self {
@@ -1664,6 +1674,7 @@ impl Default for TextEditor {
         let editor_id = WidgetId::next();
         let vscroll_id = WidgetId::next();
         let hscroll_id = WidgetId::next();
+
         TextEditor {
             gutter_id,
             editor_id,

@@ -1,6 +1,6 @@
 use druid::{
     widget::{Controller, ControllerHost},
-    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget,
+    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, Selector,
 };
 
 pub struct OnEnter<T> {
@@ -39,8 +39,8 @@ impl<T: Data> SendData<T> {
 impl<T: Data, W: Widget<T>> Controller<T, W> for SendData<T> {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, state: &mut T, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(crate::commands::SEND_STRING_DATA) => {
-                let data = cmd.get_unchecked(crate::commands::SEND_STRING_DATA);
+            Event::Command(cmd) if cmd.is(super::bottom_panel::SEND_STRING_DATA) => {
+                let data = cmd.get_unchecked(super::bottom_panel::SEND_STRING_DATA);
                 (self.action)(ctx, state, data, env);
             }
             _ => (),
@@ -48,6 +48,8 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for SendData<T> {
         child.event(ctx, event, state, env)
     }
 }
+
+const AUTO_FOCUS: Selector<()> = Selector::new("nonepad.extension.autofocus");
 
 pub struct TakeFocus;
 impl TakeFocus {
@@ -58,8 +60,9 @@ impl TakeFocus {
 impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
+            Event::Command(cmd) if cmd.is(AUTO_FOCUS) => {
                 ctx.request_focus();
+                ctx.set_handled();
             }
             _ => (),
         }
@@ -74,7 +77,7 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
         env: &Env,
     ) {
         if let druid::LifeCycle::WidgetAdded = event {
-            ctx.submit_command(Command::new(crate::commands::GIVE_FOCUS, (), ctx.widget_id()));
+            ctx.submit_command(Command::new(AUTO_FOCUS, (), ctx.widget_id()));
         }
         child.lifecycle(ctx, event, data, env)
     }

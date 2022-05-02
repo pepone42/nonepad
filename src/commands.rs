@@ -1,52 +1,47 @@
-use std::{borrow::Borrow, rc::Rc, sync::Arc};
+use std::borrow::Borrow;
 
-use druid::{im::Vector, Command, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target, WidgetId};
+use druid::{
+    im::Vector, Command, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target,
+};
 use once_cell::sync::Lazy;
 
 use crate::widgets::{
     editor_view::EditorView,
+    item,
     text_buffer::{syntax::SYNTAXSET, EditStack},
     window::{NPWindow, NPWindowState},
-    Item,
+    DialogResult, Item, PaletteBuilder, PaletteResult,
 };
 
-#[derive(Clone)]
-pub enum UICommandType {
-    Editor(Rc<dyn Fn(usize, Arc<String>, &mut EventCtx, &mut EditorView, &mut EditStack)>),
-    Window(Rc<dyn Fn(usize, Arc<String>, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
-}
 
-pub const SHOW_SEARCH_PANEL: Selector<String> = Selector::new("nonepad.bottom_panel.show_search");
-pub const SHOW_PALETTE_PANEL: Selector<(WidgetId, String, Option<Vector<Item>>, Option<UICommandType>)> =
-    Selector::new("nonepad.bottom_panel.show_palette");
-pub const SEND_STRING_DATA: Selector<String> = Selector::new("nonepad.all.send_data");
-pub const CLOSE_BOTTOM_PANEL: Selector<()> = Selector::new("nonepad.bottom_panel.close");
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
-pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
-pub const GIVE_FOCUS: Selector<()> = Selector::new("nonepad.all.give_focus");
-pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
+
+pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
 pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
-pub const PALETTE_CALLBACK: Selector<(usize, Arc<String>, UICommandType)> =
-    Selector::new("nonepad.editor.execute_command");
-pub const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
 pub const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
 pub const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
 
-pub struct UICommand {
+
+
+const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
+
+
+#[derive(Clone)]
+enum UICommandCallback {
+    Window(fn(&mut NPWindow, &mut EventCtx, &mut NPWindowState) -> bool),
+    EditView(fn(&mut EditorView, &mut EventCtx, &mut EditStack) -> bool),
+}
+
+struct UICommand {
     pub description: String,
     pub show_in_palette: bool,
     shortcut: Option<druid::HotKey>,
-    exec: fn(&mut NPWindow, &mut EventCtx, &mut NPWindowState) -> bool,
+    exec: UICommandCallback,
 }
 
 impl UICommand {
-    pub fn new(
-        description: &str,
-        show_in_palette: bool,
-        shortcut: Option<druid::HotKey>,
-        exec: fn(&mut NPWindow, &mut EventCtx, &mut NPWindowState) -> bool,
-    ) -> Self {
+    fn new(description: &str, show_in_palette: bool, shortcut: Option<druid::HotKey>, exec: UICommandCallback) -> Self {
         Self {
             description: description.to_owned(),
             show_in_palette,
@@ -54,34 +49,73 @@ impl UICommand {
             exec,
         }
     }
-    pub fn exec(&self, ctx: &mut EventCtx, editor_view: &mut NPWindow, editor: &mut NPWindowState) {
-        (self.exec)(editor_view, ctx, editor);
-    }
+
     fn matches(&self, event: &KeyEvent) -> bool {
         self.shortcut.clone().map(|s| s.matches(event)).unwrap_or(false)
     }
 }
 
-pub struct UICommandSet {
-    pub commands: Vec<UICommand>,
+struct UICommandSet {
+    commands: Vec<UICommand>,
 }
 
 impl UICommandSet {
     pub fn new() -> Self {
         Self { commands: Vec::new() }
     }
+}
 
-    pub fn hotkey_submit(
-        &self,
-        ctx: &mut EventCtx,
-        event: impl Borrow<KeyEvent>,
-        window: &mut NPWindow,
-        editor: &mut NPWindowState,
-    ) {
-        for c in &COMMANDSET.commands {
-            if c.matches(event.borrow()) {
-                (c.exec)(window, ctx, editor);
+pub struct CommandSet;
+
+pub trait UICommandEventHandler<W, D> {
+    fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut W, editor: &mut D);
+}
+
+impl UICommandEventHandler<NPWindow, NPWindowState> for CommandSet {
+    fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut NPWindow, editor: &mut NPWindowState) {
+        match event {
+            Event::KeyDown(event) => {
+                for c in &WINCOMMANDSET.commands {
+                    if c.matches(event.borrow()) {
+                        if let UICommandCallback::Window(c) = c.exec {
+                            c(window, ctx, editor);
+                            ctx.set_handled();
+                        }
+                    }
+                }
             }
+            Event::Command(cmd) if cmd.is(UICOMMAND_CALLBACK) => {
+                if let UICommandCallback::Window(f) = cmd.get_unchecked(UICOMMAND_CALLBACK) {
+                    f(window,ctx,editor);
+                    ctx.set_handled();
+                }
+                
+            }
+            _ => (),
+        }
+    }
+}
+
+impl UICommandEventHandler<EditorView, EditStack> for CommandSet {
+    fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut EditorView, editor: &mut EditStack) {
+        match event {
+            Event::KeyDown(event) => {
+                for c in &VIEWCOMMANDSET.commands {
+                    if c.matches(event.borrow()) {
+                        if let UICommandCallback::EditView(c) = c.exec {
+                            c(window, ctx, editor);
+                        }
+                    }
+                }
+            }
+            Event::Command(cmd) if cmd.is(UICOMMAND_CALLBACK) => {
+                if let UICommandCallback::EditView(f) = cmd.get_unchecked(UICOMMAND_CALLBACK) {
+                    f(window,ctx,editor);
+                    ctx.set_handled();
+                }
+                
+            }
+            _ => (),
         }
     }
 }
@@ -109,51 +143,90 @@ fn string_to_hotkey(input: &str) -> Option<HotKey> {
     }
 }
 
-macro_rules! uicmd {
+macro_rules! wincmd {
     ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, $v:expr, $b:expr));+ $(;)? } ) => {
-        pub static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
+        static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
             let mut v = UICommandSet::new();
-            $(v.commands.push(UICommand::new($description, $v,string_to_hotkey($hotkey), $b ));)+
+            $(v.commands.push(UICommand::new($description, $v,string_to_hotkey($hotkey), UICommandCallback::Window($b) ));)+
             v
         });
     };
+
 }
 
-uicmd! {
-    COMMANDSET = {
+macro_rules! viewcmd {
+    ($commandset:ident = { $($command:ident = ($description:literal,$hotkey:literal, $v:expr, $b:expr));+ $(;)? } ) => {
+        static $commandset: Lazy<UICommandSet> = Lazy::new(|| {
+            let mut v = UICommandSet::new();
+            $(v.commands.push(UICommand::new($description, $v,string_to_hotkey($hotkey), UICommandCallback::EditView($b) ));)+
+            v
+        });
+    };
+
+}
+
+wincmd! {
+    WINCOMMANDSET = {
+        PLACMD_SHOW_PAL = ("Show command palette","CtrlShift-p", false,
+        |win, ctx, _data| {
+            let mut items = Vector::new();
+            for c in WINCOMMANDSET.commands.iter().filter(|c| c.show_in_palette) {
+                items.push_back(Item::new(&c.description, &""));
+            }
+            let viewcmd_start_index = items.len();
+            for c in VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette) {
+                items.push_back(Item::new(&c.description, &""));
+            }
+            win.palette()
+                .items(items)
+                .on_select(move |result, ctx, _, _| {
+                    if result.index>=viewcmd_start_index {
+                        if let Some(ui_cmd) = &VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index - viewcmd_start_index) {
+                            // TODO: Send command to current editor target, not global
+                            ctx.submit_command(Command::new(UICOMMAND_CALLBACK, ui_cmd.exec.clone(), Target::Global));
+                        }
+                    } else {
+                        if let Some(ui_cmd) = &WINCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index) {
+                            ctx.submit_command(Command::new(UICOMMAND_CALLBACK, ui_cmd.exec.clone(), Target::Global));
+                        }
+                    }
+                })
+                .show(ctx);
+            true
+        });
         PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
-        |_window, ctx, _data| {
+        |window, ctx, _data| {
             let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
-            Palette::new().items(languages)
+            window.palette().items(languages)
                 .title("Set Language mode to")
-                .editor_action(
-                    |_idx,name, _ctx, _editor_view, data| {
-                        data.file.syntax = SYNTAXSET.find_syntax_by_name(&name).unwrap();
+                .on_select(
+                    |result: PaletteResult, _ctx, _win, data| {
+                        data.editor.file.syntax = SYNTAXSET.find_syntax_by_name(&result.name).unwrap();
                     }
                 ).show(ctx);
             true
         });
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
-        |_window, ctx, _data| {
-            Palette::new().items(item!["Tabs","Spaces"])
+        |window, ctx, _data| {
+            window.palette().items(item!["Tabs","Spaces"])
                 .title("Indent using")
-                .editor_action(
-                    |idx, _name, _ctx, _editor_view, data| {
-                        if idx == 0 {
-                            data.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
+                .on_select(
+                    |result: PaletteResult, _ctx, _win, data| {
+                        if result.index == 0 {
+                            data.editor.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
                         } else {
-                            data.file.indentation = crate::widgets::text_buffer::Indentation::Space(4);
+                            data.editor.file.indentation = crate::widgets::text_buffer::Indentation::Space(4);
                         }
-                    } 
+                    }
                 ).show(ctx);
             true
         });
-        PALCMD_OPEN = ("Open","Ctrl-o", true,
-        |_window, ctx, data| {
+        PALCMD_OPEN  = ("Open","Ctrl-o", true,
+        |window, ctx, data| {
             if data.editor.is_dirty() {
-                Palette::new().items(item!["Yes","No"]).title("Discard unsaved change?").editor_action(
-                    |idx, _name, ctx, _editor_view, _data| {
-                        if idx == 0 {
+                window.dialog().title("Discard unsaved change?").on_select(
+                    |result, ctx, _, _| {
+                        if result == DialogResult::Ok {
                             let options = FileDialogOptions::new().show_hidden();
                             ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
                         }
@@ -165,7 +238,7 @@ uicmd! {
             }
             true
         });
-        PALCMD_SAVE = ("Save","Ctrl-s",true,
+        PALCMD_SAVE  = ("Save","Ctrl-s",true,
         |_window, ctx, data| {
             if data.editor.filename.is_some() {
                 ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
@@ -175,16 +248,21 @@ uicmd! {
             }
             return true;
         });
-        PALCMD_SAVE_AS = ("Save As","CtrlShift-s",true,
+        PALCMD_SAVE_AS  = ("Save As","CtrlShift-s",true,
         |_window, ctx, _data| {
             let options = FileDialogOptions::new().show_hidden();
             ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
             return true;
         });
-        PALCMD_GOTO_LINE = ("Navigate to line","Ctrl-g", true,
-        |_window, ctx, _data|{
-            Palette::new().title("Navigate to line").editor_action(|_,line,ctx,ev,editor| {
-                if let Ok(line) = line.parse::<usize>() {
+    }
+}
+
+viewcmd! {
+    VIEWCOMMANDSET = {
+        PALCMD_GOTO_LINE  = ("Navigate to line","Ctrl-g", true,
+        |window, ctx, _data|{
+            window.palette().title("Navigate to line").on_select(|result,ctx,ev,editor| {
+                if let Ok(line) = result.name.parse::<usize>() {
                     ev.navigate_to_line(ctx,editor,line.into() );
                 }
             }).show(ctx);
@@ -192,69 +270,3 @@ uicmd! {
         });
     }
 }
-
-trait ShowPalette {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<UICommandType>);
-}
-
-impl<'a, 'b, 'c> ShowPalette for EventCtx<'b, 'c> {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<UICommandType>) {
-        self.submit_command(Command::new(
-            SHOW_PALETTE_PANEL,
-            (self.widget_id(), title, items, callback),
-            Target::Auto,
-        ));
-    }
-}
-
-macro_rules! item {
-    ($($n : expr), + $(,) ?) => {{
-        let mut v = Vector::new();
-        $(v.push_back(Item::new($n,"") );)+
-        v
-    }};
-}
-pub(crate) use item;
-
-#[derive(Default)]
-pub struct Palette {
-    title: Option<String>,
-    action: Option<UICommandType>,
-    items: Option<Vector<Item>>,
-}
-
-impl Palette {
-    pub fn new() -> Self {
-        Palette::default()
-    }
-    pub fn title(mut self, title: &str) -> Self {
-        self.title = Some(title.to_owned());
-        self
-    }
-    pub fn win_action(
-        mut self,
-        action: impl Fn(usize, Arc<String>, &mut EventCtx, &mut NPWindow, &mut NPWindowState) + 'static,
-    ) -> Self {
-        self.action = Some(UICommandType::Window(Rc::new(action)));
-        self
-    }
-    pub fn editor_action(
-        mut self,
-        action: impl Fn(usize, Arc<String>, &mut EventCtx, &mut EditorView, &mut EditStack) + 'static,
-    ) -> Self {
-        self.action = Some(UICommandType::Editor(Rc::new(action)));
-        self
-    }
-    pub fn items(mut self, items: Vector<Item>) -> Self {
-        self.items = Some(items);
-        self
-    }
-    pub fn show(self, ctx: &mut EventCtx) {
-        ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
-    }
-
-    pub fn alert(title: &str) -> Self {
-        Palette::new().title(title).items(item!["Ok"])
-    }
-}
-
