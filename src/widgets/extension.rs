@@ -1,6 +1,6 @@
 use druid::{
     widget::{Controller, ControllerHost},
-    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget,
+    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, Selector,
 };
 
 pub struct OnEnter<T> {
@@ -49,6 +49,8 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for SendData<T> {
     }
 }
 
+const AUTO_FOCUS: Selector<()> = Selector::new("nonepad.extension.autofocus");
+
 pub struct TakeFocus;
 impl TakeFocus {
     pub fn new() -> Self {
@@ -58,8 +60,7 @@ impl TakeFocus {
 impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
-                println!("widget {:?} get Focus! (via ext)",ctx.widget_id());
+            Event::Command(cmd) if cmd.is(AUTO_FOCUS) => {
                 ctx.request_focus();
                 ctx.set_handled();
             }
@@ -76,7 +77,7 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
         env: &Env,
     ) {
         if let druid::LifeCycle::WidgetAdded = event {
-            ctx.submit_command(Command::new(crate::commands::GIVE_FOCUS, (), ctx.widget_id()));
+            ctx.submit_command(Command::new(AUTO_FOCUS, (), ctx.widget_id()));
         }
         child.lifecycle(ctx, event, data, env)
     }

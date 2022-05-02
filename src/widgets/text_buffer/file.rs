@@ -272,7 +272,6 @@ pub fn detect_indentation(input: &RopeSlice) -> Indentation {
         last = width;
     }
     if let Some(i) = indents.iter().max_by(|x, y| x.1.cmp(y.1)) {
-        println!("largest {}", i.0);
         Indentation::Space(*i.0)
     } else {
         Indentation::default()

@@ -187,7 +187,6 @@ pub struct EditorView {
 
 impl Widget<EditStack> for EditorView {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, editor: &mut EditStack, _env: &Env) {
-        if let Event::Command(e) = event { dbg!(&e); }
         let old_dx = self.delta_x;
         let old_dy = self.delta_y;
         let old_editor = editor.clone();
@@ -211,86 +210,93 @@ impl Widget<EditStack> for EditorView {
     }
 
     fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, editor: &EditStack, env: &Env) {
-        if let LifeCycle::WidgetAdded = event {
-            let (tx, rx) = mpsc::channel();
-            self.bgworker_channel_tx = Some(tx);
-            let highlighted_line = self.highlighted_line.clone();
-            let owner_id = self.owner_id.clone();
-            let event_sink = ctx.get_external_handle();
-            thread::spawn(move || {
-                let mut syntax = SYNTAXSET.find_syntax_plain_text();
-                let mut highlight_cache = StateCache::new();
-                let mut current_index = 0;
-                let mut chunk_len = 100;
-                let mut rope = Rope::new();
-                let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crash the highlighter if hotwatch couldn't be initialized
-                loop {
-                    match rx.try_recv() {
-                        Ok(message) => match message {
-                            BackgroundWorkerMessage::Stop => return,
-                            BackgroundWorkerMessage::UpdateBuffer(s, r, start) => {
-                                rope = r;
-                                current_index = start;
-                                // The first chunk is smaller, to repaint quickly with highlight
-                                chunk_len = 100;
-                                syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
-                            }
-                            BackgroundWorkerMessage::WatchFile(p) => {
-                                let es = event_sink.clone();
-                                let _ = hotwatch.watch(p, move |e| {
-                                    match e {
-                                    hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
-                                        let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
-                                    }
-                                    hotwatch::Event::Remove(_) => {
-                                        let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
-                                    }
-                                    _ => {
-
-                                    }
+        match event {
+            LifeCycle::WidgetAdded => {
+                let (tx, rx) = mpsc::channel();
+                self.bgworker_channel_tx = Some(tx);
+                let highlighted_line = self.highlighted_line.clone();
+                let owner_id = self.owner_id.clone();
+                let event_sink = ctx.get_external_handle();
+                thread::spawn(move || {
+                    let mut syntax = SYNTAXSET.find_syntax_plain_text();
+                    let mut highlight_cache = StateCache::new();
+                    let mut current_index = 0;
+                    let mut chunk_len = 100;
+                    let mut rope = Rope::new();
+                    let mut hotwatch = hotwatch::Hotwatch::new().unwrap(); // TODO, will crash the highlighter if hotwatch couldn't be initialized
+                    loop {
+                        match rx.try_recv() {
+                            Ok(message) => match message {
+                                BackgroundWorkerMessage::Stop => return,
+                                BackgroundWorkerMessage::UpdateBuffer(s, r, start) => {
+                                    rope = r;
+                                    current_index = start;
+                                    // The first chunk is smaller, to repaint quickly with highlight
+                                    chunk_len = 100;
+                                    syntax = SYNTAXSET.find_syntax_by_name(&s.name).unwrap();
                                 }
-                                });
-                            }
-                            BackgroundWorkerMessage::UnwatchFile(p) => {
-                                let _ = hotwatch.unwatch(p);
-                            }
-                        },
-                        _ => (),
+                                BackgroundWorkerMessage::WatchFile(p) => {
+                                    let es = event_sink.clone();
+                                    let _ = hotwatch.watch(p, move |e| {
+                                        match e {
+                                        hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
+                                            let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
+                                        }
+                                        hotwatch::Event::Remove(_) => {
+                                            let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
+                                        }
+                                        _ => {
+
+                                        }
+                                    }
+                                    });
+                                }
+                                BackgroundWorkerMessage::UnwatchFile(p) => {
+                                    let _ = hotwatch.unwatch(p);
+                                }
+                            },
+                            _ => (),
+                        }
+                        if current_index < rope.len_lines() {
+                            highlight_cache.update_range(
+                                highlighted_line.clone(),
+                                &syntax,
+                                &rope,
+                                current_index,
+                                current_index + chunk_len,
+                            );
+                            let _ = event_sink.submit_command(
+                                crate::commands::HIGHLIGHT,
+                                (current_index, current_index + chunk_len),
+                                owner_id,
+                            );
+                            current_index += chunk_len;
+                            // subsequent chunck are bigger, for better performance
+                            chunk_len = 1000;
+                        } else {
+                            thread::sleep(Duration::from_millis(1));
+                        }
                     }
-                    if current_index < rope.len_lines() {
-                        highlight_cache.update_range(
-                            highlighted_line.clone(),
-                            &syntax,
-                            &rope,
-                            current_index,
-                            current_index + chunk_len,
-                        );
-                        let _ = event_sink.submit_command(
-                            crate::commands::HIGHLIGHT,
-                            (current_index, current_index + chunk_len),
-                            owner_id,
-                        );
-                        current_index += chunk_len;
-                        // subsequent chunck are bigger, for better performance
-                        chunk_len = 1000;
-                    } else {
-                        thread::sleep(Duration::from_millis(1));
-                    }
+                });
+
+                self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
+                self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
+                self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
+                self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
+
+    
+                self.update_highlighter(editor, 0);
+                // start notify
+                if let Some(f) = &editor.filename {
+                    self.start_watching_file(f);
                 }
-            });
-
-            self.bg_color = env.get(crate::theme::EDITOR_BACKGROUND);
-            self.fg_color = env.get(crate::theme::EDITOR_FOREGROUND);
-            self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
-            self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
-
-            ctx.register_for_focus();
-            self.update_highlighter(editor, 0);
-            // start notify
-            if let Some(f) = &editor.filename {
-                self.start_watching_file(f);
             }
+            LifeCycle::BuildFocusChain => {
+                ctx.register_for_focus();
+            }
+            _ => (),
         }
+
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
@@ -742,11 +748,6 @@ impl EditorView {
                 if let Some(data) = cmd.get(REQUEST_NEXT_SEARCH) {
                     editor.search_next(data);
                 }
-                true
-            }
-            Event::Command(cmd) if cmd.is(crate::commands::GIVE_FOCUS) => {
-                println!("widget {:?} get Focus!",ctx.widget_id());
-                ctx.request_focus();
                 true
             }
             Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
@@ -1315,11 +1316,7 @@ impl Widget<EditStack> for Gutter {
         }
     }
 
-    fn lifecycle(&mut self, ctx: &mut LifeCycleCtx, event: &LifeCycle, _data: &EditStack, _env: &Env) {
-        match event {
-            LifeCycle::WidgetAdded => ctx.register_for_focus(),
-            _ => (),
-        }
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
@@ -1672,7 +1669,7 @@ impl TextEditor {
     pub fn text_width(&self, data: &EditStack) -> f64 {
         data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
     }
-}
+}   
 
 impl Default for TextEditor {
     fn default() -> Self {
@@ -1681,6 +1678,7 @@ impl Default for TextEditor {
         let editor_id = WidgetId::next();
         let vscroll_id = WidgetId::next();
         let hscroll_id = WidgetId::next();
+
         TextEditor {
             gutter_id,
             editor_id,

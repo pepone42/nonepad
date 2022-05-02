@@ -7,15 +7,13 @@ use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::{Flex, Label, Padding, TextBox};
 use druid::{
     Affine, Color, Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Point, Rect, RenderContext,
-    Selector, Size, Target, Widget, WidgetExt, WidgetId,
+    Selector, Size, Target, Widget, WidgetExt, WidgetId, WidgetPod,
 };
 
 use sublime_fuzzy::best_match;
 
-use crate::commands;
 use crate::theme::THEME;
 
-use super::Extension;
 use super::editor_view::EditorView;
 use super::text_buffer::EditStack;
 use super::window::{NPWindow, NPWindowState};
@@ -113,7 +111,7 @@ impl PaletteViewState {
 }
 
 pub struct PaletteView {
-    inner: Flex<PaletteViewState>,
+    inner: WidgetPod<PaletteViewState,Flex<PaletteViewState>>,
     textbox_id: WidgetId,
     action: Option<PaletteCommandType>,
 }
@@ -122,7 +120,7 @@ impl PaletteView {
     pub(super) fn new() -> Self {
         let textbox_id = WidgetId::next();
         PaletteView {
-            inner: build(textbox_id),
+            inner: WidgetPod::new(build(textbox_id)),
             textbox_id,
             action: None,
         }
@@ -142,9 +140,7 @@ impl PaletteView {
         data.visible_list = list.map(|l| l.iter().enumerate().map(|i| (i.0, i.1.clone())).collect())
     }
     pub fn take_focus(&self, ctx: &mut EventCtx) {
-        println!("take focus {:?} {:?}",ctx.widget_id(),self.textbox_id);
-        ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), ctx.widget_id()));
-        //ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), self.textbox_id));
+        ctx.set_focus(self.textbox_id);
     }
 }
 
@@ -173,7 +169,7 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
-                    ctx.resign_focus();
+                    //ctx.resign_focus();
                     ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
 
                     if let Some(f) = self.action.take() {
@@ -200,7 +196,7 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Escape, .. } => {
-                    ctx.resign_focus();
+                    //ctx.resign_focus();
                     ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
                     ctx.set_handled();
                 }
@@ -209,7 +205,6 @@ impl Widget<PaletteViewState> for PaletteView {
                 },
             },
             Event::Command(c) if c.is(FILTER) => {
-                dbg!(&data.filter);
                 data.apply_filter();
                 data.selected_idx = 0;
                 ctx.request_paint();
@@ -238,7 +233,7 @@ impl Widget<PaletteViewState> for PaletteView {
         data: &PaletteViewState,
         env: &druid::Env,
     ) {
-        self.inner.update(ctx, &old_data, data, env);
+        self.inner.update(ctx,  data, env);
 
         if old_data.selected_idx != data.selected_idx || !old_data.filter.same(&data.filter) {
             ctx.request_paint();
@@ -466,7 +461,7 @@ fn build(id: WidgetId) -> Flex<PaletteViewState> {
                             .with_child(
                                 TextBox::new()
                                     .with_text_size(12.0)
-                                    .focus()
+                                    //.focus()
                                     .fix_width(550.)
                                     .with_id(id)
                                     .lens(PaletteViewState::filter),

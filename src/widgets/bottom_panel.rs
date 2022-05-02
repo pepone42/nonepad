@@ -1,11 +1,11 @@
 use druid::{
     widget::{Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, Selector,
+    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, Selector, KeyEvent, KbKey,
 };
 
 
 use crate::widgets::{EmptyWidget, Extension, PaletteViewState};
-use crate::commands;
+
 
 pub const PANEL_CLOSED: usize = 0x0;
 pub const PANEL_SEARCH: usize = 0x1;
@@ -45,22 +45,28 @@ pub fn build() -> impl Widget<BottonPanelState> {
 impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPanel {
     fn event(&mut self, child: &mut W, ctx: &mut EventCtx, event: &Event, data: &mut BottonPanelState, env: &Env) {
         match event {
+            Event::KeyDown(KeyEvent { key: KbKey::Escape, .. }) => {
+                data.current = PANEL_CLOSED;
+                ctx.focus_prev();
+                return;
+            }
             Event::Command(cmd) if cmd.is(CLOSE_BOTTOM_PANEL) => {
                 data.current = PANEL_CLOSED;
-                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
+                ctx.focus_prev();
                 return;
             }
             Event::Command(cmd) if cmd.is(SHOW_SEARCH_PANEL) => {
                 data.current = PANEL_SEARCH;
-                let id = child.id().unwrap();
                 let input = cmd.get_unchecked(SHOW_SEARCH_PANEL).clone();
-                ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), id));
-                ctx.submit_command(Command::new(SEND_STRING_DATA, input, id));
+                ctx.submit_command(SEND_STRING_DATA.with(input).to(ctx.widget_id()));
                 return;
             }
             _ => (),
         }
         child.event(ctx, event, data, env)
+    }
+    fn lifecycle(&mut self, child: &mut W, ctx: &mut druid::LifeCycleCtx, event: &druid::LifeCycle, data: &BottonPanelState, env: &Env) {
+        child.lifecycle(ctx, event, data, env);
     }
 }
 
