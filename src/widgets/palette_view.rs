@@ -168,7 +168,7 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
-                    ctx.submit_command(CLOSE_PALETTE.to(Target::Global));
+                    ctx.submit_command(CLOSE_PALETTE);
 
                     if let Some(f) = self.action.take() {
                         match &data.visible_list {
@@ -182,9 +182,7 @@ impl Widget<PaletteViewState> for PaletteView {
                                                 name: item.1.title.clone(),
                                             },
                                             f,
-                                        )).to(
-                                        Target::Global,
-                                    ));
+                                        )));
                                 }
                             }
                             None => {
@@ -196,9 +194,7 @@ impl Widget<PaletteViewState> for PaletteView {
                                             name: Arc::new(data.filter.clone()),
                                         },
                                         f,
-                                    )).to(
-                                    Target::Global
-                                ));
+                                    )));
                             }
                         }
                     }
@@ -206,7 +202,7 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Escape, .. } => {
-                    ctx.submit_command(CLOSE_PALETTE.to(Target::Global));
+                    ctx.submit_command(CLOSE_PALETTE);
                     ctx.set_handled();
                 }
                 _ => {
@@ -431,7 +427,7 @@ impl<T> Widget<T> for EmptyWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &druid::Env) {
         match event {
             Event::MouseDown(_) => {
-                ctx.submit_command(CLOSE_PALETTE.to(Target::Global));
+                ctx.submit_command(CLOSE_PALETTE);
             }
             _ => (),
         }

@@ -87,11 +87,7 @@ fn build_search_panel() -> impl Widget<SearchState> {
             TextBox::new()
                 .with_text_size(12.0)
                 .on_enter(|ctx, data: &mut String, _| {
-                    ctx.submit_command(
-                        super::editor_view::REQUEST_NEXT_SEARCH
-                            .with(data.clone())
-                            .to(Target::Global),
-                    )
+                    ctx.submit_command(super::editor_view::REQUEST_NEXT_SEARCH.with(data.clone()))
                 })
                 .focus()
                 .on_data_received(|ctx, state: &mut String, data: &String, _| {

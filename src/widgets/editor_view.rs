@@ -597,7 +597,6 @@ impl EditorView {
                     ctx.submit_command(
                         super::bottom_panel::SHOW_SEARCH_PANEL
                             .with(editor.main_cursor_selected_text())
-                            .to(Target::Global),
                     );
                     return true;
                 }

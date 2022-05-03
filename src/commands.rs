@@ -175,11 +175,11 @@ wincmd! {
                     if result.index>=viewcmd_start_index {
                         if let Some(ui_cmd) = &VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index - viewcmd_start_index) {
                             // TODO: Send command to current editor target, not global
-                            ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()).to(Target::Global));
+                            ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()));
                         }
                     } else {
                         if let Some(ui_cmd) = &WINCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index) {
-                            ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()).to(Target::Global));
+                            ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()));
                         }
                     }
                 })
@@ -220,30 +220,30 @@ wincmd! {
                     |result, ctx, _, _| {
                         if result == DialogResult::Ok {
                             let options = FileDialogOptions::new().show_hidden();
-                            ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options).to(Target::Auto));
+                            ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
                         }
                     }
                 ).show(ctx);
             } else {
                 let options = FileDialogOptions::new().show_hidden();
-                ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options).to(Target::Auto));
+                ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
             }
             true
         });
         PALCMD_SAVE  = ("Save","Ctrl-s",true,
         |_window, ctx, data| {
             if data.editor.filename.is_some() {
-                ctx.submit_command(druid::commands::SAVE_FILE.to(Target::Auto));
+                ctx.submit_command(druid::commands::SAVE_FILE);
             } else {
                 let options = FileDialogOptions::new().show_hidden();
-                ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options).to(Target::Auto))
+                ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options))
             }
             return true;
         });
         PALCMD_SAVE_AS  = ("Save As","CtrlShift-s",true,
         |_window, ctx, _data| {
             let options = FileDialogOptions::new().show_hidden();
-            ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options).to(Target::Auto));
+            ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options));
             return true;
         });
     }

@@ -71,11 +71,11 @@ impl Widget<NPWindowState> for NPWindow {
                 key: druid::KbKey::Escape,
                 ..
             }) if data.bottom_panel.is_open() && !data.in_palette => {
-                ctx.submit_command(bottom_panel::CLOSE_BOTTOM_PANEL.to(druid::Target::Global));
+                ctx.submit_command(bottom_panel::CLOSE_BOTTOM_PANEL);
                 ctx.set_handled();
                 return;
             }
-            druid::Event::MouseUp(_) => ctx.submit_command(commands::RESET_HELD_STATE.to(druid::Target::Global)),
+            druid::Event::MouseUp(_) => ctx.submit_command(commands::RESET_HELD_STATE),
             druid::Event::Command(cmd) if cmd.is(super::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(super::PALETTE_CALLBACK);
                 match &item.1 {
