@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target};
+use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods};
 use once_cell::sync::Lazy;
 
 use crate::widgets::{

@@ -6,8 +6,8 @@ use druid::im::Vector;
 use druid::piet::{Text, TextLayout, TextLayoutBuilder};
 use druid::widget::{Flex, Label, Padding, TextBox};
 use druid::{
-    Affine, Color, Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Point, Rect, RenderContext,
-    Selector, Size, Target, Widget, WidgetExt, WidgetId, WidgetPod,
+    Affine, Color, Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, LifeCycle, Point, Rect, RenderContext,
+    Selector, Size, Widget, WidgetExt, WidgetId, WidgetPod,
 };
 
 use sublime_fuzzy::best_match;

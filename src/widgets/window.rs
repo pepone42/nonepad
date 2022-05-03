@@ -9,7 +9,7 @@ use crate::commands::{self, UICommandEventHandler};
 
 use druid::{
     widget::{Flex, Label, MainAxisAlignment},
-    Color, Command, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod,
+    Color, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod,
 };
 
 pub(super) const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");

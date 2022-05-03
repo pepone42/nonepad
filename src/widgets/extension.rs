@@ -1,6 +1,6 @@
 use druid::{
     widget::{Controller, ControllerHost},
-    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, Selector,
+    Data, Env, Event, EventCtx, KbKey, KeyEvent, Widget, Selector,
 };
 
 pub struct OnEnter<T> {

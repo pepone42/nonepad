@@ -1,6 +1,6 @@
 use druid::{
     widget::{Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, Selector, Target, Widget, WidgetExt, WidgetId,
+    Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, Selector, Widget, WidgetExt, WidgetId,
 };
 
 use crate::widgets::{EmptyWidget, Extension, PaletteViewState};
