@@ -2,15 +2,17 @@ use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view, PaletteCommandType,
+    editor_view, PaletteCommandType, PALETTE_CALLBACK,
 };
 use super::{text_buffer::EditStack, DialogResult, PaletteBuilder, PaletteView, PaletteViewState};
 use crate::commands::{self, UICommandEventHandler};
 
 use druid::{
     widget::{Flex, Label, MainAxisAlignment},
-    Color, Command, Data, Env, Lens, Widget, WidgetExt, WidgetPod,
+    Color, Command, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod,
 };
+
+pub(super) const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
 
 pub struct NPWindow {
     inner: WidgetPod<NPWindowState, Flex<NPWindowState>>,
@@ -75,9 +77,9 @@ impl Widget<NPWindowState> for NPWindow {
                 ctx.set_handled();
                 return;
             }
-            druid::Event::MouseUp(_) => ctx.submit_command(commands::RESET_HELD_STATE),
-            druid::Event::Command(cmd) if cmd.is(super::PALETTE_CALLBACK) => {
-                let item = cmd.get_unchecked(super::PALETTE_CALLBACK);
+            druid::Event::MouseUp(_) => ctx.submit_command(super::window::RESET_HELD_STATE),
+            druid::Event::Command(cmd) if cmd.is(PALETTE_CALLBACK) => {
+                let item = cmd.get_unchecked(PALETTE_CALLBACK);
                 match &item.1 {
                     PaletteCommandType::Window(action) => {
                         (action)(item.0.clone(), ctx, self, data);

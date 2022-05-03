@@ -8,7 +8,7 @@ use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
 use super::{PaletteCommandType, PALETTE_CALLBACK};
 
-use crate::commands::{self, UICommandEventHandler, SCROLL_TO};
+use crate::commands::{self, UICommandEventHandler};
 use crate::widgets::{DialogResult, PaletteBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
@@ -45,6 +45,13 @@ pub const EDITOR_LEFT_PADDING: f64 = 2.;
 pub const SCROLLBAR_X_PADDING: f64 = 2.;
 
 pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
+
+const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
+const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
+const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
+const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
+const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
+
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -234,10 +241,10 @@ impl Widget<EditStack> for EditorView {
                                     let es = event_sink.clone();
                                     let _ = hotwatch.watch(p, move |e| match e {
                                         hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
-                                            let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
+                                            let _ = es.submit_command(RELOAD_FROM_DISK, (), owner_id);
                                         }
                                         hotwatch::Event::Remove(_) => {
-                                            let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
+                                            let _ = es.submit_command(FILE_REMOVED, (), owner_id);
                                         }
                                         _ => {}
                                     });
@@ -257,7 +264,7 @@ impl Widget<EditStack> for EditorView {
                                 current_index + chunk_len,
                             );
                             let _ = event_sink.submit_command(
-                                crate::commands::HIGHLIGHT,
+                                HIGHLIGHT,
                                 (current_index, current_index + chunk_len),
                                 owner_id,
                             );
@@ -594,10 +601,7 @@ impl EditorView {
                     return true;
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
-                    ctx.submit_command(
-                        super::bottom_panel::SHOW_SEARCH_PANEL
-                            .with(editor.main_cursor_selected_text())
-                    );
+                    ctx.submit_command(super::bottom_panel::SHOW_SEARCH_PANEL.with(editor.main_cursor_selected_text()));
                     return true;
                 }
                 if HotKey::new(SysMods::Cmd, "d").matches(event) {
@@ -623,7 +627,7 @@ impl EditorView {
             }
             Event::Wheel(event) => {
                 ctx.submit_command(
-                    commands::SCROLL_TO
+                    SCROLL_TO
                         .with((
                             Some(self.delta_x - event.wheel_delta.x),
                             Some(self.delta_y - event.wheel_delta.y),
@@ -738,23 +742,23 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::SELECT_LINE) => {
-                let (line, expand) = *cmd.get_unchecked(crate::commands::SELECT_LINE);
+            Event::Command(cmd) if cmd.is(SELECT_LINE) => {
+                let (line, expand) = *cmd.get_unchecked(SELECT_LINE);
                 editor.buffer.select_line(line.into(), expand);
                 true
             }
-            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
-                let d = *cmd.get_unchecked(commands::SCROLL_TO);
+            Event::Command(cmd) if cmd.is(SCROLL_TO) => {
+                let d = *cmd.get_unchecked(SCROLL_TO);
                 self.delta_x = d.0.unwrap_or(self.delta_x);
                 self.delta_y = d.1.unwrap_or(self.delta_y);
                 true
             }
-            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+            Event::Command(cmd) if cmd.is(super::window::RESET_HELD_STATE) => {
                 self.held_state = HeldState::None;
                 false
             }
-            Event::Command(cmd) if cmd.is(crate::commands::HIGHLIGHT) => {
-                let d = *cmd.get_unchecked(crate::commands::HIGHLIGHT);
+            Event::Command(cmd) if cmd.is(HIGHLIGHT) => {
+                let d = *cmd.get_unchecked(HIGHLIGHT);
 
                 if self.visible_range().contains(&d.0)
                     || self.visible_range().contains(&d.1)
@@ -785,7 +789,7 @@ impl EditorView {
                 }
                 false
             }
-            Event::Command(cmd) if cmd.is(crate::commands::RELOAD_FROM_DISK) => {
+            Event::Command(cmd) if cmd.is(RELOAD_FROM_DISK) => {
                 if editor.is_dirty() {
                     ctx.set_handled();
                     self.dialog()
@@ -819,7 +823,7 @@ impl EditorView {
                 }
                 true
             }
-            Event::Command(cmd) if cmd.is(crate::commands::FILE_REMOVED) => {
+            Event::Command(cmd) if cmd.is(FILE_REMOVED) => {
                 editor.set_dirty();
                 true
             }
@@ -1215,7 +1219,7 @@ impl EditorView {
             self.delta_x = -x;
         }
         ctx.submit_command(
-            commands::SCROLL_TO
+            SCROLL_TO
                 .with((Some(self.delta_x), Some(self.delta_y)))
                 .to(self.owner_id),
         );
@@ -1270,19 +1274,19 @@ pub struct Gutter {
 impl Widget<EditStack> for Gutter {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
         match event {
-            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
-                self.dy = cmd.get_unchecked(commands::SCROLL_TO).1.unwrap_or(self.dy);
+            Event::Command(cmd) if cmd.is(SCROLL_TO) => {
+                self.dy = cmd.get_unchecked(SCROLL_TO).1.unwrap_or(self.dy);
                 ctx.request_paint();
                 ctx.set_handled();
             }
-            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+            Event::Command(cmd) if cmd.is(super::window::RESET_HELD_STATE) => {
                 self.is_held = false;
             }
             Event::MouseMove(m) => {
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                    ctx.submit_command(commands::SELECT_LINE.with((line, true)).to(self.owner_id));
+                    ctx.submit_command(SELECT_LINE.with((line, true)).to(self.owner_id));
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -1291,7 +1295,7 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_active(true);
                 let y = (m.pos.y - self.dy).max(0.);
                 let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                ctx.submit_command(commands::SELECT_LINE.with((line, m.mods.shift())).to(self.owner_id));
+                ctx.submit_command(SELECT_LINE.with((line, m.mods.shift())).to(self.owner_id));
                 ctx.request_paint();
                 ctx.set_handled();
                 self.is_held = true;
@@ -1473,12 +1477,12 @@ impl Widget<EditStack> for ScrollBar {
         //     return;
         // }
         match event {
-            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+            Event::Command(cmd) if cmd.is(SCROLL_TO) => {
                 if self.text_len(data) < 0.1 {
                     return;
                 }
                 if self.is_vertical() {
-                    if let Some(dy) = cmd.get_unchecked(commands::SCROLL_TO).1 {
+                    if let Some(dy) = cmd.get_unchecked(SCROLL_TO).1 {
                         self.delta = dy;
                         let len = self.effective_len(data);
                         let dy = dy * self.len / self.text_len(data);
@@ -1489,7 +1493,7 @@ impl Widget<EditStack> for ScrollBar {
                         ctx.request_paint();
                         ctx.set_handled();
                     }
-                } else if let Some(dx) = cmd.get_unchecked(commands::SCROLL_TO).0 {
+                } else if let Some(dx) = cmd.get_unchecked(SCROLL_TO).0 {
                     self.delta = dx;
                     let len = self.effective_len(data);
 
@@ -1501,7 +1505,7 @@ impl Widget<EditStack> for ScrollBar {
                     ctx.set_handled();
                 }
             }
-            Event::Command(cmd) if cmd.is(commands::RESET_HELD_STATE) => {
+            Event::Command(cmd) if cmd.is(super::window::RESET_HELD_STATE) => {
                 self.is_held = false;
                 self.is_hovered = false;
                 ctx.request_paint();
@@ -1710,9 +1714,9 @@ impl Widget<EditStack> for TextEditor {
         let mut new_env = env.clone();
         self.metrics.to_env(&mut new_env);
         match event {
-            Event::Command(cmd) if cmd.is(commands::SCROLL_TO) => {
+            Event::Command(cmd) if cmd.is(SCROLL_TO) => {
                 // clamp to size
-                let d = *cmd.get_unchecked(commands::SCROLL_TO);
+                let d = *cmd.get_unchecked(SCROLL_TO);
                 let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
                 let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
                 // dbg!(x,y);

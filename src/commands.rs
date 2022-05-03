@@ -11,14 +11,6 @@ use crate::widgets::{
     DialogResult, Item, PaletteBuilder, PaletteResult,
 };
 
-pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
-pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
-
-pub const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.select_line");
-pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
-pub const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
-pub const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
-
 const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
 
 #[derive(Clone)]
