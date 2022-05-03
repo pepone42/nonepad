@@ -39,7 +39,6 @@ impl Item {
     }
 }
 
-
 macro_rules! item {
     ($($n : expr), + $(,) ?) => {{
         let mut v = Vector::new();
@@ -111,7 +110,7 @@ impl PaletteViewState {
 }
 
 pub struct PaletteView {
-    inner: WidgetPod<PaletteViewState,Flex<PaletteViewState>>,
+    inner: WidgetPod<PaletteViewState, Flex<PaletteViewState>>,
     textbox_id: WidgetId,
     action: Option<PaletteCommandType>,
 }
@@ -177,7 +176,13 @@ impl Widget<PaletteViewState> for PaletteView {
                                 if let Some(item) = l.get(data.selected_idx) {
                                     ctx.submit_command(Command::new(
                                         PALETTE_CALLBACK,
-                                        (PaletteResult { index: item.0, name: item.1.title.clone() }, f),
+                                        (
+                                            PaletteResult {
+                                                index: item.0,
+                                                name: item.1.title.clone(),
+                                            },
+                                            f,
+                                        ),
                                         Target::Global,
                                     ));
                                 }
@@ -185,7 +190,13 @@ impl Widget<PaletteViewState> for PaletteView {
                             None => {
                                 ctx.submit_command(Command::new(
                                     PALETTE_CALLBACK,
-                                    (PaletteResult { index: 0, name : Arc::new(data.filter.clone())}, f),
+                                    (
+                                        PaletteResult {
+                                            index: 0,
+                                            name: Arc::new(data.filter.clone()),
+                                        },
+                                        f,
+                                    ),
                                     Target::Global,
                                 ));
                             }
@@ -200,7 +211,7 @@ impl Widget<PaletteViewState> for PaletteView {
                 }
                 _ => {
                     self.inner.event(ctx, event, data, env);
-                },
+                }
             },
             Event::Command(c) if c.is(FILTER) => {
                 data.apply_filter();
@@ -231,7 +242,7 @@ impl Widget<PaletteViewState> for PaletteView {
         data: &PaletteViewState,
         env: &druid::Env,
     ) {
-        self.inner.update(ctx,  data, env);
+        self.inner.update(ctx, data, env);
 
         if old_data.selected_idx != data.selected_idx || !old_data.filter.same(&data.filter) {
             ctx.request_paint();
@@ -475,7 +486,6 @@ fn build(id: WidgetId) -> Flex<PaletteViewState> {
         .with_flex_child(EmptyWidget, 0.5)
 }
 
-
 #[derive(Clone)]
 pub(super) enum PaletteCommandType {
     Editor(Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>),
@@ -484,21 +494,51 @@ pub(super) enum PaletteCommandType {
     DialogWindow(Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>),
 }
 
-pub(super) const SHOW_PALETTE_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.palette.show_for_editor");
-pub(super) const SHOW_PALETTE_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.palette.show_for_window");
-pub(super) const SHOW_DIALOG_FOR_EDITOR: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>)> = Selector::new("nonepad.dialog.show_for_editor");
-pub(super) const SHOW_DIALOG_FOR_WINDOW: Selector<(WidgetId, String, Option<Vector<Item>>, Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>)> = Selector::new("nonepad.dialog.show_for_window");
+pub(super) const SHOW_PALETTE_FOR_EDITOR: Selector<(
+    WidgetId,
+    String,
+    Option<Vector<Item>>,
+    Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>,
+)> = Selector::new("nonepad.palette.show_for_editor");
+pub(super) const SHOW_PALETTE_FOR_WINDOW: Selector<(
+    WidgetId,
+    String,
+    Option<Vector<Item>>,
+    Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>,
+)> = Selector::new("nonepad.palette.show_for_window");
+pub(super) const SHOW_DIALOG_FOR_EDITOR: Selector<(
+    WidgetId,
+    String,
+    Option<Vector<Item>>,
+    Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>,
+)> = Selector::new("nonepad.dialog.show_for_editor");
+pub(super) const SHOW_DIALOG_FOR_WINDOW: Selector<(
+    WidgetId,
+    String,
+    Option<Vector<Item>>,
+    Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>,
+)> = Selector::new("nonepad.dialog.show_for_window");
 
-
-pub(super) const PALETTE_CALLBACK: Selector<(PaletteResult, PaletteCommandType)> = Selector::new("nonepad.editor.execute_command");
+pub(super) const PALETTE_CALLBACK: Selector<(PaletteResult, PaletteCommandType)> =
+    Selector::new("nonepad.editor.execute_command");
 pub(super) const CLOSE_PALETTE: Selector<()> = Selector::new("nonepad.palette.close");
 
 trait ShowPalette<R, W, D> {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(R, &mut EventCtx, &mut W, &mut D)>>);
+    fn show_palette(
+        &mut self,
+        title: String,
+        items: Option<Vector<Item>>,
+        callback: Option<Rc<dyn Fn(R, &mut EventCtx, &mut W, &mut D)>>,
+    );
 }
 
 impl<'a, 'b, 'c> ShowPalette<PaletteResult, EditorView, EditStack> for EventCtx<'b, 'c> {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>) {
+    fn show_palette(
+        &mut self,
+        title: String,
+        items: Option<Vector<Item>>,
+        callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>,
+    ) {
         self.submit_command(Command::new(
             SHOW_PALETTE_FOR_EDITOR,
             (self.widget_id(), title, items, callback),
@@ -508,7 +548,12 @@ impl<'a, 'b, 'c> ShowPalette<PaletteResult, EditorView, EditStack> for EventCtx<
 }
 
 impl<'a, 'b, 'c> ShowPalette<PaletteResult, NPWindow, NPWindowState> for EventCtx<'b, 'c> {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>) {
+    fn show_palette(
+        &mut self,
+        title: String,
+        items: Option<Vector<Item>>,
+        callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>,
+    ) {
         self.submit_command(Command::new(
             SHOW_PALETTE_FOR_WINDOW,
             (self.widget_id(), title, items, callback),
@@ -518,7 +563,12 @@ impl<'a, 'b, 'c> ShowPalette<PaletteResult, NPWindow, NPWindowState> for EventCt
 }
 
 impl<'a, 'b, 'c> ShowPalette<DialogResult, EditorView, EditStack> for EventCtx<'b, 'c> {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>) {
+    fn show_palette(
+        &mut self,
+        title: String,
+        items: Option<Vector<Item>>,
+        callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>,
+    ) {
         self.submit_command(Command::new(
             SHOW_DIALOG_FOR_EDITOR,
             (self.widget_id(), title, items, callback),
@@ -528,7 +578,12 @@ impl<'a, 'b, 'c> ShowPalette<DialogResult, EditorView, EditStack> for EventCtx<'
 }
 
 impl<'a, 'b, 'c> ShowPalette<DialogResult, NPWindow, NPWindowState> for EventCtx<'b, 'c> {
-    fn show_palette(&mut self, title: String, items: Option<Vector<Item>>, callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>) {
+    fn show_palette(
+        &mut self,
+        title: String,
+        items: Option<Vector<Item>>,
+        callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>,
+    ) {
         self.submit_command(Command::new(
             SHOW_DIALOG_FOR_WINDOW,
             (self.widget_id(), title, items, callback),
@@ -537,12 +592,12 @@ impl<'a, 'b, 'c> ShowPalette<DialogResult, NPWindow, NPWindowState> for EventCtx
     }
 }
 
-#[derive(Debug,PartialEq,Eq,Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum DialogResult {
     Ok,
     Cancel,
 }
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct PaletteResult {
     pub index: usize,
     pub name: Arc<String>,
@@ -554,10 +609,13 @@ pub struct Palette<R, W, D> {
     items: Option<Vector<Item>>,
 }
 
-
 impl<R, W, D> Default for Palette<R, W, D> {
     fn default() -> Self {
-        Self { title: Default::default(), action: Default::default(), items: Default::default() }
+        Self {
+            title: Default::default(),
+            action: Default::default(),
+            items: Default::default(),
+        }
     }
 }
 
@@ -569,10 +627,7 @@ impl<R, W, D> Palette<R, W, D> {
         self.title = Some(title.to_owned());
         self
     }
-    pub fn on_select(
-        mut self,
-        action: impl Fn(R, &mut EventCtx, &mut W, &mut D) + 'static,
-    ) -> Self {
+    pub fn on_select(mut self, action: impl Fn(R, &mut EventCtx, &mut W, &mut D) + 'static) -> Self {
         self.action = Some(Rc::new(action));
         self
     }
@@ -580,44 +635,37 @@ impl<R, W, D> Palette<R, W, D> {
         self.items = Some(items);
         self
     }
-    
 }
 
 pub trait PaletteBuilder<D> {
-    fn palette(&self) -> Palette<PaletteResult, Self, D> where Self: Sized;
-    fn dialog(&self) -> Palette<DialogResult, Self, D> where Self: Sized;
-    fn alert(&self,title: &str) -> Palette<PaletteResult, Self, D> where Self: Sized;
-}
-
-impl PaletteBuilder<EditStack> for EditorView {
-    fn palette(&self) -> Palette<PaletteResult, EditorView, EditStack> {
-        Palette::<PaletteResult, EditorView, EditStack>::new()
+    fn palette(&self) -> Palette<PaletteResult, Self, D>
+    where
+        Self: Sized,
+    {
+        Palette::<PaletteResult, Self, D>::new()
     }
-    fn dialog(&self) -> Palette<DialogResult, EditorView, EditStack> {
-        Palette::<DialogResult, EditorView, EditStack>::new().items(item!["Ok","Cancel"])
+    fn dialog(&self) -> Palette<DialogResult, Self, D>
+    where
+        Self: Sized,
+    {
+        Palette::<DialogResult, Self, D>::new().items(item!["Ok", "Cancel"])
     }
-    fn alert(&self,title: &str) -> Palette<PaletteResult, EditorView, EditStack> {
+    fn alert(&self, title: &str) -> Palette<PaletteResult, Self, D>
+    where
+        Self: Sized,
+    {
         Palette::new().title(title).items(item!["Ok"])
     }
 }
 
-impl PaletteBuilder<NPWindowState> for NPWindow {
-    fn palette(&self) -> Palette<PaletteResult, NPWindow, NPWindowState> {
-        Palette::<PaletteResult, NPWindow, NPWindowState>::new()
-    }
-    fn dialog(&self) -> Palette<DialogResult, NPWindow, NPWindowState> {
-        Palette::<DialogResult, NPWindow, NPWindowState>::new().items(item!["Ok","Cancel"])
-    }
-    fn alert(&self,title: &str) -> Palette<PaletteResult, NPWindow, NPWindowState> {
-        Palette::new().title(title).items(item!["Ok"])
-    }
-}
+impl PaletteBuilder<EditStack> for EditorView {}
+
+impl PaletteBuilder<NPWindowState> for NPWindow {}
 
 impl Palette<PaletteResult, EditorView, EditStack> {
     pub fn show(self, ctx: &mut EventCtx) {
         ctx.show_palette(self.title.unwrap_or_default(), self.items, self.action);
     }
-
 }
 
 impl Palette<PaletteResult, NPWindow, NPWindowState> {
