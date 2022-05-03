@@ -14,8 +14,8 @@ use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
     piet::{PietText, RenderContext, Text, TextAttribute, TextLayout, TextLayoutBuilder},
     widget::Flex,
-    Affine, Application, BoxConstraints, ClipboardFormat, Color, Env, Event, EventCtx, FontWeight, HotKey,
-    KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, SysMods, UpdateCtx, Widget, WidgetExt,
+    Affine, BoxConstraints, Color, Env, Event, EventCtx, FontWeight,
+    KeyEvent, LayoutCtx, LifeCycle, LifeCycleCtx, MouseButton, PaintCtx, UpdateCtx, Widget, WidgetExt,
     WidgetId,
 };
 use druid::{Data, FontStyle, Selector};
@@ -558,58 +558,6 @@ impl EditorView {
                         return true;
                     }
                     _ => (),
-                }
-
-                if HotKey::new(SysMods::Cmd, "v").matches(event) {
-                    let clipboard = Application::global().clipboard();
-                    let supported_types = &[ClipboardFormat::TEXT];
-                    let best_available_type = clipboard.preferred_format(supported_types);
-                    if let Some(format) = best_available_type {
-                        let data = clipboard
-                            .get_format(format)
-                            .expect("I promise not to unwrap in production");
-                        editor.insert(String::from_utf8_lossy(&data).as_ref());
-                    }
-
-                    // TODO: The bug is fixed.
-                    // in druid-shell, there is a bug with get_string, it dont close the clipboard, so after a paste, other application can't use the clipboard anymore
-                    // get_format correctly close the slipboard
-                    // let s= Application::global().clipboard().get_string().unwrap_or_default().clone();
-                    // editor.insert(&dbg!(s));
-
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "c").matches(event) {
-                    Application::global().clipboard().put_string(editor.selected_text());
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "x").matches(event) {
-                    Application::global().clipboard().put_string(editor.selected_text());
-                    editor.delete();
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "a").matches(event) {
-                    editor.select_all();
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "z").matches(event) {
-                    editor.undo();
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "y").matches(event) {
-                    editor.redo();
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "f").matches(event) {
-                    ctx.submit_command(super::bottom_panel::SHOW_SEARCH_PANEL.with(editor.main_cursor_selected_text()));
-                    return true;
-                }
-                if HotKey::new(SysMods::Cmd, "d").matches(event) {
-                    editor
-                        .buffer
-                        .duplicate_cursor_from_str(&editor.main_cursor_selected_text());
-                    // TODO: put the last duplicated carret in visible range
-                    // self.put_caret_in_visible_range(ctx, editor);
                 }
 
                 if let druid::keyboard_types::Key::Character(text) = event.key.clone() {
