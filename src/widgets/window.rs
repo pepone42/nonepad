@@ -152,7 +152,6 @@ impl Widget<NPWindowState> for NPWindow {
                 return;
             }
             druid::Event::Command(cmd) if cmd.is(super::CLOSE_PALETTE) => {
-                // ctx.request_focus don't work. I guess it needs to be delayed
                 // TODO: send focus to the last focused editor
                 //ctx.submit_command(Command::new(commands::GIVE_FOCUS, (), Target::Global));
                 ctx.focus_prev();
@@ -164,7 +163,6 @@ impl Widget<NPWindowState> for NPWindow {
                 if data.editor.is_dirty() {
                     ctx.set_handled();
                     self.dialog()
-                        //.items(item!["Yes", "No"])
                         .title("Discard unsaved change?")
                         .on_select(|result, ctx, _, data| {
                             if result == DialogResult::Ok {

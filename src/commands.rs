@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 
-use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods};
+use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Application, ClipboardFormat};
 use once_cell::sync::Lazy;
 
 use crate::widgets::{
@@ -244,12 +244,63 @@ wincmd! {
 viewcmd! {
     VIEWCOMMANDSET = {
         PALCMD_GOTO_LINE  = ("Navigate to line","Ctrl-g", true,
-        |window, ctx, _data|{
-            window.palette().title("Navigate to line").on_select(|result,ctx,ev,editor| {
+        |view, ctx, _|{
+            view.palette().title("Navigate to line").on_select(|result,ctx,ev,editor| {
                 if let Ok(line) = result.name.parse::<usize>() {
                     ev.navigate_to_line(ctx,editor,line.into() );
                 }
             }).show(ctx);
+            return true;
+        });
+        SEARCH = ("Search","Ctrl-f", true,
+        |_, ctx, editor| {
+            ctx.submit_command(crate::widgets::bottom_panel::SHOW_SEARCH_PANEL.with(editor.main_cursor_selected_text()));
+            return true;
+        });
+        DUPLICATE_CURSOR_SELECTION = ("Duplicate cursor","Ctrl-d", false,
+        |_, _, editor| {
+            editor
+                .buffer
+                .duplicate_cursor_from_str(&editor.main_cursor_selected_text());
+                return true;
+        });
+        COPY = ("Copy selections to clipboard","Ctrl-c", false,
+        |_,_,editor| {
+            Application::global().clipboard().put_string(editor.selected_text());
+            return true;
+        });
+        CUT = ("Cut selections to clipboard","Ctrl-x", false,
+        |_,_,editor| {
+            Application::global().clipboard().put_string(editor.selected_text());
+            editor.delete();
+            return true;
+        });
+        PASTE = ("Paste from clipboard","Ctrl-v", false,
+        |_,_,editor| {
+            let clipboard = Application::global().clipboard();
+            let supported_types = &[ClipboardFormat::TEXT];
+            let best_available_type = clipboard.preferred_format(supported_types);
+            if let Some(format) = best_available_type {
+                let data = clipboard
+                    .get_format(format)
+                    .expect("I promise not to unwrap in production");
+                editor.insert(String::from_utf8_lossy(&data).as_ref());
+            }
+            return true;
+        });
+        UNDO = ("Undo","Ctrl-z", false,
+        |_,_,editor| {
+            editor.undo();
+            return true;
+        });
+        REDO = ("redo","Ctrl-y", false,
+        |_,_,editor| {
+            editor.redo();
+            return true;
+        });
+        SELECT_ALL = ("Select all text","Ctrl-a", true,
+        |_,_,editor| {
+            editor.select_all();
             return true;
         });
     }
