@@ -4,11 +4,11 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::Duration;
 
-use super::{PALETTE_CALLBACK, PaletteCommandType};
 use super::text_buffer::syntax::{StateCache, StyledLinesCache, SYNTAXSET};
 use super::text_buffer::{position, rope_utils, EditStack, SelectionLineRange};
+use super::{PaletteCommandType, PALETTE_CALLBACK};
 
-use crate::commands::{self, SCROLL_TO, UICommandEventHandler};
+use crate::commands::{self, UICommandEventHandler, SCROLL_TO};
 use crate::widgets::{DialogResult, PaletteBuilder};
 use druid::{
     kurbo::{BezPath, Line, PathEl, Point, Rect, Size},
@@ -45,7 +45,6 @@ pub const EDITOR_LEFT_PADDING: f64 = 2.;
 pub const SCROLLBAR_X_PADDING: f64 = 2.;
 
 pub const REQUEST_NEXT_SEARCH: Selector<String> = Selector::new("nonepad.editor.request_next_search");
-
 
 #[derive(Debug, Default)]
 struct SelectionPath {
@@ -233,18 +232,14 @@ impl Widget<EditStack> for EditorView {
                                 }
                                 BackgroundWorkerMessage::WatchFile(p) => {
                                     let es = event_sink.clone();
-                                    let _ = hotwatch.watch(p, move |e| {
-                                        match e {
+                                    let _ = hotwatch.watch(p, move |e| match e {
                                         hotwatch::Event::Write(_) | hotwatch::Event::Create(_) => {
                                             let _ = es.submit_command(crate::commands::RELOAD_FROM_DISK, (), owner_id);
                                         }
                                         hotwatch::Event::Remove(_) => {
                                             let _ = es.submit_command(crate::commands::FILE_REMOVED, (), owner_id);
                                         }
-                                        _ => {
-
-                                        }
-                                    }
+                                        _ => {}
                                     });
                                 }
                                 BackgroundWorkerMessage::UnwatchFile(p) => {
@@ -280,7 +275,6 @@ impl Widget<EditStack> for EditorView {
                 self.fg_sel_color = env.get(crate::theme::SELECTION_BACKGROUND);
                 self.bg_sel_color = env.get(crate::theme::EDITOR_FOREGROUND);
 
-    
                 self.update_highlighter(editor, 0);
                 // start notify
                 if let Some(f) = &editor.filename {
@@ -292,7 +286,6 @@ impl Widget<EditStack> for EditorView {
             }
             _ => (),
         }
-
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
@@ -601,11 +594,11 @@ impl EditorView {
                     return true;
                 }
                 if HotKey::new(SysMods::Cmd, "f").matches(event) {
-                    ctx.submit_command(Command::new(
-                        super::bottom_panel::SHOW_SEARCH_PANEL,
-                        editor.main_cursor_selected_text(),
-                        Target::Global,
-                    ));
+                    ctx.submit_command(
+                        super::bottom_panel::SHOW_SEARCH_PANEL
+                            .with(editor.main_cursor_selected_text())
+                            .to(Target::Global),
+                    );
                     return true;
                 }
                 if HotKey::new(SysMods::Cmd, "d").matches(event) {
@@ -630,14 +623,14 @@ impl EditorView {
                 false
             }
             Event::Wheel(event) => {
-                ctx.submit_command(Command::new(
-                    commands::SCROLL_TO,
-                    (
-                        Some(self.delta_x - event.wheel_delta.x),
-                        Some(self.delta_y - event.wheel_delta.y),
-                    ),
-                    self.owner_id,
-                ));
+                ctx.submit_command(
+                    commands::SCROLL_TO
+                        .with((
+                            Some(self.delta_x - event.wheel_delta.x),
+                            Some(self.delta_y - event.wheel_delta.y),
+                        ))
+                        .to(self.owner_id),
+                );
 
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
                     let (x, y) = self.pix_to_point(event.pos.x, event.pos.y, ctx, editor);
@@ -781,7 +774,11 @@ impl EditorView {
                         return true;
                     }
                     PaletteCommandType::DialogEditor(action) => {
-                        let dialog_result = if item.0.index == 0 { DialogResult::Ok} else {DialogResult::Cancel};
+                        let dialog_result = if item.0.index == 0 {
+                            DialogResult::Ok
+                        } else {
+                            DialogResult::Cancel
+                        };
                         (action)(dialog_result, ctx, self, editor);
                         return true;
                     }
@@ -798,7 +795,13 @@ impl EditorView {
                         .on_select(|result, ctx, editor_view, data| {
                             if result == DialogResult::Ok {
                                 if let Err(e) = data.reload() {
-                                    editor_view.alert(&format!("Error while reloading {}: {}",data.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                                    editor_view
+                                        .alert(&format!(
+                                            "Error while reloading {}: {}",
+                                            data.filename.clone().unwrap_or_default().to_string_lossy(),
+                                            e
+                                        ))
+                                        .show(ctx);
                                 } else {
                                     data.reset_dirty();
                                 }
@@ -807,7 +810,12 @@ impl EditorView {
                         .show(ctx);
                 } else {
                     if let Err(e) = editor.reload() {
-                        self.alert(&format!("Error while reloading {}: {}",editor.filename.clone().unwrap_or_default().to_string_lossy(), e)).show(ctx);
+                        self.alert(&format!(
+                            "Error while reloading {}: {}",
+                            editor.filename.clone().unwrap_or_default().to_string_lossy(),
+                            e
+                        ))
+                        .show(ctx);
                     }
                 }
                 true
@@ -1207,11 +1215,11 @@ impl EditorView {
         if x < -self.delta_x {
             self.delta_x = -x;
         }
-        ctx.submit_command(Command::new(
-            commands::SCROLL_TO,
-            (Some(self.delta_x), Some(self.delta_y)),
-            self.owner_id,
-        ));
+        ctx.submit_command(
+            commands::SCROLL_TO
+                .with((Some(self.delta_x), Some(self.delta_y)))
+                .to(self.owner_id),
+        );
     }
 
     pub fn navigate_to_line(&mut self, ctx: &mut EventCtx, editor: &mut EditStack, line: position::Line) {
@@ -1275,7 +1283,7 @@ impl Widget<EditStack> for Gutter {
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                    ctx.submit_command(Command::new(commands::SELECT_LINE, (line, true), self.owner_id));
+                    ctx.submit_command(commands::SELECT_LINE.with((line, true)).to(self.owner_id));
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -1284,11 +1292,7 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_active(true);
                 let y = (m.pos.y - self.dy).max(0.);
                 let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                ctx.submit_command(Command::new(
-                    commands::SELECT_LINE,
-                    (line, m.mods.shift()),
-                    self.owner_id,
-                ));
+                ctx.submit_command(commands::SELECT_LINE.with((line, m.mods.shift())).to(self.owner_id));
                 ctx.request_paint();
                 ctx.set_handled();
                 self.is_held = true;
@@ -1300,11 +1304,11 @@ impl Widget<EditStack> for Gutter {
             }
             Event::Wheel(m) => {
                 //self.dy -= m.wheel_delta.y;
-                ctx.submit_command(Command::new(
-                    SCROLL_TO,
-                    (None, Some(self.dy - m.wheel_delta.y)),
-                    self.owner_id,
-                ));
+                ctx.submit_command(
+                    SCROLL_TO
+                        .with((None, Some(self.dy - m.wheel_delta.y)))
+                        .to(self.owner_id),
+                );
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1312,8 +1316,7 @@ impl Widget<EditStack> for Gutter {
         }
     }
 
-    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {
-    }
+    fn lifecycle(&mut self, _ctx: &mut LifeCycleCtx, _event: &LifeCycle, _data: &EditStack, _env: &Env) {}
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &EditStack, data: &EditStack, _env: &Env) {
         if old_data.len_lines() != data.len_lines() {
@@ -1530,23 +1533,23 @@ impl Widget<EditStack> for ScrollBar {
                 }
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     if self.is_vertical() {
-                        ctx.submit_command(Command::new(
-                            SCROLL_TO,
-                            (
-                                None,
-                                Some((self.mouse_delta - m.pos.y) * self.text_len(data) / self.effective_len(data)),
-                            ),
-                            self.owner_id,
-                        ));
+                        ctx.submit_command(
+                            SCROLL_TO
+                                .with((
+                                    None,
+                                    Some((self.mouse_delta - m.pos.y) * self.text_len(data) / self.effective_len(data)),
+                                ))
+                                .to(self.owner_id),
+                        );
                     } else {
-                        ctx.submit_command(Command::new(
-                            SCROLL_TO,
-                            (
-                                Some((self.mouse_delta - m.pos.x) * self.text_len(data) / self.effective_len(data)),
-                                None,
-                            ),
-                            self.owner_id,
-                        ));
+                        ctx.submit_command(
+                            SCROLL_TO
+                                .with((
+                                    Some((self.mouse_delta - m.pos.x) * self.text_len(data) / self.effective_len(data)),
+                                    None,
+                                ))
+                                .to(self.owner_id),
+                        );
                     }
 
                     ctx.set_handled();
@@ -1665,7 +1668,7 @@ impl TextEditor {
     pub fn text_width(&self, data: &EditStack) -> f64 {
         data.buffer.max_visible_line_grapheme_len().saturating_sub(3) as f64 * self.metrics.font_advance
     }
-}   
+}
 
 impl Default for TextEditor {
     fn default() -> Self {
@@ -1714,10 +1717,10 @@ impl Widget<EditStack> for TextEditor {
                 let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
                 let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
                 // dbg!(x,y);
-                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.editor_id));
-                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.gutter_id));
-                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.vscroll_id));
-                ctx.submit_command(Command::new(SCROLL_TO, (x, y), self.hscroll_id));
+                ctx.submit_command(SCROLL_TO.with((x, y)).to(self.editor_id));
+                ctx.submit_command(SCROLL_TO.with((x, y)).to(self.gutter_id));
+                ctx.submit_command(SCROLL_TO.with((x, y)).to(self.vscroll_id));
+                ctx.submit_command(SCROLL_TO.with((x, y)).to(self.hscroll_id));
                 ctx.is_handled();
             }
 

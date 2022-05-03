@@ -1,8 +1,6 @@
 use std::borrow::Borrow;
 
-use druid::{
-    im::Vector, Command, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target,
-};
+use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Target};
 use once_cell::sync::Lazy;
 
 use crate::widgets::{
@@ -13,7 +11,6 @@ use crate::widgets::{
     DialogResult, Item, PaletteBuilder, PaletteResult,
 };
 
-
 pub const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
 pub const SCROLL_TO: Selector<(Option<f64>, Option<f64>)> = Selector::new("nonepad.editor.scroll_to_rect");
 
@@ -22,10 +19,7 @@ pub const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.hi
 pub const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
 pub const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
 
-
-
 const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
-
 
 #[derive(Clone)]
 enum UICommandCallback {
@@ -86,10 +80,9 @@ impl UICommandEventHandler<NPWindow, NPWindowState> for CommandSet {
             }
             Event::Command(cmd) if cmd.is(UICOMMAND_CALLBACK) => {
                 if let UICommandCallback::Window(f) = cmd.get_unchecked(UICOMMAND_CALLBACK) {
-                    f(window,ctx,editor);
+                    f(window, ctx, editor);
                     ctx.set_handled();
                 }
-                
             }
             _ => (),
         }
@@ -110,10 +103,9 @@ impl UICommandEventHandler<EditorView, EditStack> for CommandSet {
             }
             Event::Command(cmd) if cmd.is(UICOMMAND_CALLBACK) => {
                 if let UICommandCallback::EditView(f) = cmd.get_unchecked(UICOMMAND_CALLBACK) {
-                    f(window,ctx,editor);
+                    f(window, ctx, editor);
                     ctx.set_handled();
                 }
-                
             }
             _ => (),
         }
@@ -183,11 +175,11 @@ wincmd! {
                     if result.index>=viewcmd_start_index {
                         if let Some(ui_cmd) = &VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index - viewcmd_start_index) {
                             // TODO: Send command to current editor target, not global
-                            ctx.submit_command(Command::new(UICOMMAND_CALLBACK, ui_cmd.exec.clone(), Target::Global));
+                            ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()).to(Target::Global));
                         }
                     } else {
                         if let Some(ui_cmd) = &WINCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index) {
-                            ctx.submit_command(Command::new(UICOMMAND_CALLBACK, ui_cmd.exec.clone(), Target::Global));
+                            ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()).to(Target::Global));
                         }
                     }
                 })
@@ -228,30 +220,30 @@ wincmd! {
                     |result, ctx, _, _| {
                         if result == DialogResult::Ok {
                             let options = FileDialogOptions::new().show_hidden();
-                            ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
+                            ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options).to(Target::Auto));
                         }
                     }
                 ).show(ctx);
             } else {
                 let options = FileDialogOptions::new().show_hidden();
-                ctx.submit_command(Command::new(druid::commands::SHOW_OPEN_PANEL, options, Target::Auto));
+                ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options).to(Target::Auto));
             }
             true
         });
         PALCMD_SAVE  = ("Save","Ctrl-s",true,
         |_window, ctx, data| {
             if data.editor.filename.is_some() {
-                ctx.submit_command(Command::new(druid::commands::SAVE_FILE, (), Target::Auto));
+                ctx.submit_command(druid::commands::SAVE_FILE.to(Target::Auto));
             } else {
                 let options = FileDialogOptions::new().show_hidden();
-                ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto))
+                ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options).to(Target::Auto))
             }
             return true;
         });
         PALCMD_SAVE_AS  = ("Save As","CtrlShift-s",true,
         |_window, ctx, _data| {
             let options = FileDialogOptions::new().show_hidden();
-            ctx.submit_command(Command::new(druid::commands::SHOW_SAVE_PANEL, options, Target::Auto));
+            ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options).to(Target::Auto));
             return true;
         });
     }

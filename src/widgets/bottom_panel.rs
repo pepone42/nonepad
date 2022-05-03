@@ -1,11 +1,9 @@
 use druid::{
     widget::{Controller, Flex, Label, TextBox, ViewSwitcher},
-    Command, Data, Env, Event, EventCtx, Lens, Target, Widget, WidgetExt, WidgetId, Selector, KeyEvent, KbKey,
+    Command, Data, Env, Event, EventCtx, KbKey, KeyEvent, Lens, Selector, Target, Widget, WidgetExt, WidgetId,
 };
 
-
 use crate::widgets::{EmptyWidget, Extension, PaletteViewState};
-
 
 pub const PANEL_CLOSED: usize = 0x0;
 pub const PANEL_SEARCH: usize = 0x1;
@@ -65,7 +63,14 @@ impl<W: Widget<BottonPanelState>> Controller<BottonPanelState, W> for BottomPane
         }
         child.event(ctx, event, data, env)
     }
-    fn lifecycle(&mut self, child: &mut W, ctx: &mut druid::LifeCycleCtx, event: &druid::LifeCycle, data: &BottonPanelState, env: &Env) {
+    fn lifecycle(
+        &mut self,
+        child: &mut W,
+        ctx: &mut druid::LifeCycleCtx,
+        event: &druid::LifeCycle,
+        data: &BottonPanelState,
+        env: &Env,
+    ) {
         child.lifecycle(ctx, event, data, env);
     }
 }
@@ -82,14 +87,15 @@ fn build_search_panel() -> impl Widget<SearchState> {
             TextBox::new()
                 .with_text_size(12.0)
                 .on_enter(|ctx, data: &mut String, _| {
-                    ctx.submit_command(Command::new(
-                        super::editor_view::REQUEST_NEXT_SEARCH,
-                        data.clone(),
-                        Target::Global,
-                    ))
+                    ctx.submit_command(
+                        super::editor_view::REQUEST_NEXT_SEARCH
+                            .with(data.clone())
+                            .to(Target::Global),
+                    )
                 })
                 .focus()
-                .on_data_received(|_ctx, state: &mut String, data: &String, _| {
+                .on_data_received(|ctx, state: &mut String, data: &String, _| {
+                    ctx.request_focus();
                     state.clone_from(data);
                 })
                 .lens(SearchState::s)
@@ -97,4 +103,3 @@ fn build_search_panel() -> impl Widget<SearchState> {
             1.0,
         )
 }
-

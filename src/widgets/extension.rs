@@ -77,7 +77,7 @@ impl<T: Data, W: Widget<T>> Controller<T, W> for TakeFocus {
         env: &Env,
     ) {
         if let druid::LifeCycle::WidgetAdded = event {
-            ctx.submit_command(Command::new(AUTO_FOCUS, (), ctx.widget_id()));
+            ctx.submit_command(AUTO_FOCUS.to(ctx.widget_id()));
         }
         child.lifecycle(ctx, event, data, env)
     }

@@ -1,7 +1,4 @@
-use std::{
-    ffi::OsStr,
-    path::Path,
-};
+use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
@@ -74,17 +71,11 @@ impl Widget<NPWindowState> for NPWindow {
                 key: druid::KbKey::Escape,
                 ..
             }) if data.bottom_panel.is_open() && !data.in_palette => {
-                ctx.submit_command(Command::new(
-                    bottom_panel::CLOSE_BOTTOM_PANEL,
-                    (),
-                    druid::Target::Global,
-                ));
+                ctx.submit_command(bottom_panel::CLOSE_BOTTOM_PANEL.to(druid::Target::Global));
                 ctx.set_handled();
                 return;
             }
-            druid::Event::MouseUp(_) => {
-                ctx.submit_command(Command::new(commands::RESET_HELD_STATE, (), druid::Target::Global))
-            }
+            druid::Event::MouseUp(_) => ctx.submit_command(commands::RESET_HELD_STATE.to(druid::Target::Global)),
             druid::Event::Command(cmd) if cmd.is(super::PALETTE_CALLBACK) => {
                 let item = cmd.get_unchecked(super::PALETTE_CALLBACK);
                 match &item.1 {
@@ -204,7 +195,7 @@ impl Widget<NPWindowState> for NPWindow {
     ) {
         if event.should_propagate_to_hidden() {
             self.palette.lifecycle(ctx, event, &data.palette_state, env);
-                self.inner.lifecycle(ctx, event, data, env);
+            self.inner.lifecycle(ctx, event, data, env);
         } else {
             if data.in_palette {
                 self.palette.lifecycle(ctx, event, &data.palette_state, env);

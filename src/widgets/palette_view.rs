@@ -168,36 +168,36 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Enter, .. } => {
-                    ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
+                    ctx.submit_command(CLOSE_PALETTE.to(Target::Global));
 
                     if let Some(f) = self.action.take() {
                         match &data.visible_list {
                             Some(l) => {
                                 if let Some(item) = l.get(data.selected_idx) {
-                                    ctx.submit_command(Command::new(
-                                        PALETTE_CALLBACK,
+                                    ctx.submit_command(
+                                        PALETTE_CALLBACK.with(
                                         (
                                             PaletteResult {
                                                 index: item.0,
                                                 name: item.1.title.clone(),
                                             },
                                             f,
-                                        ),
+                                        )).to(
                                         Target::Global,
                                     ));
                                 }
                             }
                             None => {
-                                ctx.submit_command(Command::new(
-                                    PALETTE_CALLBACK,
+                                ctx.submit_command(
+                                    PALETTE_CALLBACK.with(
                                     (
                                         PaletteResult {
                                             index: 0,
                                             name: Arc::new(data.filter.clone()),
                                         },
                                         f,
-                                    ),
-                                    Target::Global,
+                                    )).to(
+                                    Target::Global
                                 ));
                             }
                         }
@@ -206,7 +206,7 @@ impl Widget<PaletteViewState> for PaletteView {
                     ctx.set_handled();
                 }
                 KeyEvent { key: KbKey::Escape, .. } => {
-                    ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
+                    ctx.submit_command(CLOSE_PALETTE.to(Target::Global));
                     ctx.set_handled();
                 }
                 _ => {
@@ -248,7 +248,7 @@ impl Widget<PaletteViewState> for PaletteView {
             ctx.request_paint();
         }
         if !old_data.filter.same(&data.filter) {
-            ctx.submit_command(Command::new(FILTER, (), ctx.widget_id()))
+            ctx.submit_command(FILTER.to(ctx.widget_id()))
         }
     }
 
@@ -431,7 +431,7 @@ impl<T> Widget<T> for EmptyWidget {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, _data: &mut T, _env: &druid::Env) {
         match event {
             Event::MouseDown(_) => {
-                ctx.submit_command(Command::new(CLOSE_PALETTE, (), Target::Global));
+                ctx.submit_command(CLOSE_PALETTE.to(Target::Global));
             }
             _ => (),
         }
@@ -539,11 +539,7 @@ impl<'a, 'b, 'c> ShowPalette<PaletteResult, EditorView, EditStack> for EventCtx<
         items: Option<Vector<Item>>,
         callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>,
     ) {
-        self.submit_command(Command::new(
-            SHOW_PALETTE_FOR_EDITOR,
-            (self.widget_id(), title, items, callback),
-            Target::Auto,
-        ));
+        self.submit_command(SHOW_PALETTE_FOR_EDITOR.with((self.widget_id(), title, items, callback)));
     }
 }
 
@@ -554,11 +550,7 @@ impl<'a, 'b, 'c> ShowPalette<PaletteResult, NPWindow, NPWindowState> for EventCt
         items: Option<Vector<Item>>,
         callback: Option<Rc<dyn Fn(PaletteResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>,
     ) {
-        self.submit_command(Command::new(
-            SHOW_PALETTE_FOR_WINDOW,
-            (self.widget_id(), title, items, callback),
-            Target::Auto,
-        ));
+        self.submit_command(SHOW_PALETTE_FOR_WINDOW.with((self.widget_id(), title, items, callback)));
     }
 }
 
@@ -569,11 +561,7 @@ impl<'a, 'b, 'c> ShowPalette<DialogResult, EditorView, EditStack> for EventCtx<'
         items: Option<Vector<Item>>,
         callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut EditorView, &mut EditStack)>>,
     ) {
-        self.submit_command(Command::new(
-            SHOW_DIALOG_FOR_EDITOR,
-            (self.widget_id(), title, items, callback),
-            Target::Auto,
-        ));
+        self.submit_command(SHOW_DIALOG_FOR_EDITOR.with((self.widget_id(), title, items, callback)));
     }
 }
 
@@ -584,11 +572,7 @@ impl<'a, 'b, 'c> ShowPalette<DialogResult, NPWindow, NPWindowState> for EventCtx
         items: Option<Vector<Item>>,
         callback: Option<Rc<dyn Fn(DialogResult, &mut EventCtx, &mut NPWindow, &mut NPWindowState)>>,
     ) {
-        self.submit_command(Command::new(
-            SHOW_DIALOG_FOR_WINDOW,
-            (self.widget_id(), title, items, callback),
-            Target::Auto,
-        ));
+        self.submit_command(SHOW_DIALOG_FOR_WINDOW.with((self.widget_id(), title, items, callback)));
     }
 }
 
