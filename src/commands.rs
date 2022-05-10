@@ -1,6 +1,13 @@
-use std::borrow::Borrow;
+use std::{
+    any::Any,
+    borrow::{Borrow, BorrowMut},
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
-use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods};
+use druid::{
+    im::Vector, Data, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, RawMods, Selector, SysMods, Widget,
+};
 use once_cell::sync::Lazy;
 
 use crate::widgets::{
@@ -10,6 +17,114 @@ use crate::widgets::{
     window::{NPWindow, NPWindowState},
     DialogResult, Item, PaletteBuilder, PaletteResult,
 };
+
+#[derive(Debug, Clone)]
+pub struct NPHotKey {
+    key1: HotKey,
+    key2: Option<HotKey>,
+}
+
+pub trait Command<W: Widget<D>, D: Data>: Sync + Send {
+    fn new() -> Self
+    where
+        Self: Sized;
+    fn run(&mut self, ctx: &mut EventCtx, widget: &mut W, data: &mut D);
+    fn description(&self) -> &str;
+    fn shortcut(&self) -> Option<NPHotKey> {
+        return None;
+    }
+    fn before_edit(&mut self, ctx: &mut EventCtx, widget: &mut W, data: &mut D, input: &str) {}
+    fn after_edit(&mut self, ctx: &mut EventCtx, widget: &mut W, data: &mut D, input: &str) {}
+    fn matches(&self, event: &KeyEvent) -> bool {
+        self.shortcut().clone().map(|s| s.key1.matches(event)).unwrap_or(false)
+    }
+}
+
+macro_rules! register_cmd {
+    ($t:ty) => {
+        paste::item! {
+            #[small_ctor::ctor]
+            #[allow(non_snake_case)]
+            unsafe fn [< register_command_ $t >] () {
+                WC.push(Box::new($t::new()));
+            }
+        }
+    };
+}
+
+
+fn register_wincommands() -> Vec<Box<dyn Command<NPWindow, NPWindowState>>> {
+    let mut v: Vec<Box<dyn Command<NPWindow, NPWindowState>>> = Vec::new();
+    v.push(Box::new(TestCommand::new()));
+    v
+}
+struct TestCommand;
+register_cmd!(TestCommand);
+impl Command<NPWindow, NPWindowState> for TestCommand {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        TestCommand
+    }
+    fn shortcut(&self) -> Option<NPHotKey> {
+        Some(NPHotKey {
+            key1: HotKey::new(RawMods::Ctrl, "i"),
+            key2: None,
+        })
+    }
+
+    fn run(&mut self, ctx: &mut EventCtx, widget: &mut NPWindow, data: &mut NPWindowState) {
+        widget.alert("hey!").show(ctx);
+    }
+
+    fn description(&self) -> &str {
+        "une commande de test"
+    }
+}
+
+
+
+static mut WC: Vec<Box<dyn Command<NPWindow, NPWindowState>>> = vec![];
+
+
+
+struct WindowCommandsSet {
+    commands: Vec<Box<dyn Command<NPWindow, NPWindowState>>>,
+}
+
+
+
+static WINDOWCOMMANDSSET: Lazy<Mutex<WindowCommandsSet>> = Lazy::new(|| {
+    Mutex::new(WindowCommandsSet {
+        commands: register_wincommands(),
+    })
+});
+
+pub struct WindowCommands;
+
+impl UICommandEventHandler<NPWindow, NPWindowState> for WindowCommands {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, window: &mut NPWindow, editor: &mut NPWindowState) {
+        match event {
+            Event::KeyDown(event) => {
+                let cmdset = unsafe{&mut WC};
+                for c in cmdset {
+                    if c.matches(event.borrow()) {
+                        c.run(ctx, window, editor);
+                        ctx.set_handled();
+                    }
+                }
+            }
+            Event::Command(cmd) if cmd.is(UICOMMAND_CALLBACK) => {
+                if let UICommandCallback::Window(f) = cmd.get_unchecked(UICOMMAND_CALLBACK) {
+                    f(window, ctx, editor);
+                    ctx.set_handled();
+                }
+            }
+            _ => (),
+        }
+    }
+}
 
 const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
 
@@ -54,11 +169,11 @@ impl UICommandSet {
 pub struct CommandSet;
 
 pub trait UICommandEventHandler<W, D> {
-    fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut W, editor: &mut D);
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, window: &mut W, editor: &mut D);
 }
 
 impl UICommandEventHandler<NPWindow, NPWindowState> for CommandSet {
-    fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut NPWindow, editor: &mut NPWindowState) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, window: &mut NPWindow, editor: &mut NPWindowState) {
         match event {
             Event::KeyDown(event) => {
                 for c in &WINCOMMANDSET.commands {
@@ -82,7 +197,7 @@ impl UICommandEventHandler<NPWindow, NPWindowState> for CommandSet {
 }
 
 impl UICommandEventHandler<EditorView, EditStack> for CommandSet {
-    fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut EditorView, editor: &mut EditStack) {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, window: &mut EditorView, editor: &mut EditStack) {
         match event {
             Event::KeyDown(event) => {
                 for c in &VIEWCOMMANDSET.commands {

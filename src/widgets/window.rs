@@ -65,6 +65,7 @@ impl NPWindowState {
 impl Widget<NPWindowState> for NPWindow {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut NPWindowState, env: &druid::Env) {
         commands::CommandSet.event(ctx, event, self, data);
+        commands::WindowCommands.event(ctx, event, self, data);
         if ctx.is_handled() {
             return;
         }

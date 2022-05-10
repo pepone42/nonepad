@@ -1057,7 +1057,9 @@ dependencies = [
  "encoding_rs",
  "hotwatch",
  "once_cell",
+ "paste",
  "ropey",
+ "small_ctor",
  "sublime_fuzzy",
  "syntect",
  "tracing",
@@ -1184,6 +1186,12 @@ dependencies = [
  "pango-sys",
  "system-deps",
 ]
+
+[[package]]
+name = "paste"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c520e05135d6e763148b6426a837e239041653ba7becd2e538c076c738025fc"
 
 [[package]]
 name = "pest"
@@ -1526,6 +1534,12 @@ name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9def91fd1e018fe007022791f865d0ccc9b3a0d5001e01aabb8b40e46000afb5"
+
+[[package]]
+name = "small_ctor"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59c7d21a73f95b248d4a74ef272bc2463c250c74569f29f8ead9563c0a59321e"
 
 [[package]]
 name = "smallvec"
