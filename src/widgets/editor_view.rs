@@ -160,6 +160,15 @@ impl HeldState {
     }
 }
 
+#[derive(Debug,Clone)]
+pub enum TextChange<'a> {
+    Delete,
+    BackSpace,
+    Enter,
+    Tab,
+    Insert(&'a str),
+}
+
 pub enum BackgroundWorkerMessage {
     Stop,
     UpdateBuffer(SyntaxReference, Rope, usize),
@@ -407,6 +416,7 @@ impl EditorView {
 
     fn handle_event(&mut self, event: &Event, ctx: &mut EventCtx, editor: &mut EditStack) -> bool {
         commands::CommandSet.event(ctx, event, self, editor);
+        commands::ViewCommands.event(ctx, event, self, editor);
         if ctx.is_handled() {
             return true;
         }
@@ -424,6 +434,7 @@ impl EditorView {
                         ..
                     } if mods.alt() && mods.ctrl() => {
                         editor.duplicate_down();
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     #[cfg(windows)]
@@ -433,6 +444,7 @@ impl EditorView {
                         ..
                     } if mods.alt() && mods.ctrl() => {
                         editor.duplicate_up();
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     #[cfg(not(windows))]
@@ -442,6 +454,7 @@ impl EditorView {
                         ..
                     } if mods.alt() && mods.shift() => {
                         editor.duplicate_down();
+                        command::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     #[cfg(not(windows))]
@@ -451,6 +464,7 @@ impl EditorView {
                         ..
                     } if mods.alt() && mods.shift() => {
                         editor.duplicate_up();
+                        command::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -459,6 +473,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.forward(mods.shift(), mods.ctrl());
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -467,6 +482,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.backward(mods.shift(), mods.ctrl());
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -475,6 +491,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.up(mods.shift());
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -483,6 +500,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.down(mods.shift());
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -493,6 +511,7 @@ impl EditorView {
                         for _ in 0..self.page_len {
                             editor.up(mods.shift());
                         }
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -501,8 +520,9 @@ impl EditorView {
                         ..
                     } => {
                         for _ in 0..self.page_len {
-                            editor.down(mods.shift())
+                            editor.down(mods.shift());
                         }
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -511,6 +531,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.end(mods.shift());
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -519,13 +540,15 @@ impl EditorView {
                         ..
                     } => {
                         editor.home(mods.shift());
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
                         key: druid::keyboard_types::Key::Tab,
                         ..
                     } => {
-                        editor.tab();
+                            editor.tab();
+                        commands::ViewCommands.on_edit(ctx,self,editor, TextChange::Tab);
                         return true;
                     }
                     KeyEvent {
@@ -534,6 +557,9 @@ impl EditorView {
                     } => {
                         editor.cancel_mutli_carets();
                         editor.cancel_selection();
+                        
+                        // TODO: may not be true, if there is no muticarets and/or selections
+                        commands::ViewCommands.on_selection_modified(ctx,self,editor);
                         return true;
                     }
                     KeyEvent {
@@ -541,6 +567,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.backspace();
+                        commands::ViewCommands.on_edit(ctx,self,editor, TextChange::BackSpace);
                         return true;
                     }
                     KeyEvent {
@@ -548,6 +575,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.delete();
+                        commands::ViewCommands.on_edit(ctx,self,editor, TextChange::Delete);
                         return true;
                     }
                     KeyEvent {
@@ -555,6 +583,7 @@ impl EditorView {
                         ..
                     } => {
                         editor.insert(editor.file.linefeed.to_str());
+                        commands::ViewCommands.on_edit(ctx,self,editor, TextChange::Enter);
                         return true;
                     }
                     _ => (),
@@ -590,6 +619,7 @@ impl EditorView {
                 }
                 if HotKey::new(SysMods::Cmd, "a").matches(event) {
                     editor.select_all();
+                    commands::ViewCommands.on_selection_modified(ctx,self,editor);
                     return true;
                 }
                 if HotKey::new(SysMods::Cmd, "z").matches(event) {
@@ -619,8 +649,8 @@ impl EditorView {
                     if text.chars().count() == 1 && text.chars().next().unwrap().is_ascii_control() {
                         return false;
                     }
-
                     editor.insert(&text);
+                    commands::ViewCommands.on_edit(ctx, self, editor, TextChange::Insert(&text));
                     return true;
                 }
                 false

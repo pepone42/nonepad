@@ -11,7 +11,7 @@ use druid::{
 use once_cell::sync::Lazy;
 
 use crate::widgets::{
-    editor_view::EditorView,
+    editor_view::{EditorView, TextChange},
     item,
     text_buffer::{syntax::SYNTAXSET, EditStack},
     window::{NPWindow, NPWindowState},
@@ -24,23 +24,39 @@ pub struct NPHotKey {
     key2: Option<HotKey>,
 }
 
-pub trait Command<W: Widget<D>, D: Data>: Sync + Send {
+pub trait WinCommand: Sync + Send {
     fn new() -> Self
     where
         Self: Sized;
-    fn run(&mut self, ctx: &mut EventCtx, widget: &mut W, data: &mut D);
+    fn run(&mut self, ctx: &mut EventCtx, widget: &mut NPWindow, data: &mut NPWindowState);
     fn description(&self) -> &str;
     fn shortcut(&self) -> Option<NPHotKey> {
         return None;
     }
-    fn before_edit(&mut self, ctx: &mut EventCtx, widget: &mut W, data: &mut D, input: &str) {}
-    fn after_edit(&mut self, ctx: &mut EventCtx, widget: &mut W, data: &mut D, input: &str) {}
     fn matches(&self, event: &KeyEvent) -> bool {
         self.shortcut().clone().map(|s| s.key1.matches(event)).unwrap_or(false)
     }
 }
 
-macro_rules! register_cmd {
+
+
+pub trait ViewCommand: Sync + Send {
+    fn new() -> Self
+    where
+        Self: Sized;
+    fn run(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack);
+    fn description(&self) -> &str;
+    fn shortcut(&self) -> Option<NPHotKey> {
+        return None;
+    }
+    fn on_edit(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack, input:  TextChange) {}
+    fn on_selection_modified(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack) {}
+    fn matches(&self, event: &KeyEvent) -> bool {
+        self.shortcut().clone().map(|s| s.key1.matches(event)).unwrap_or(false)
+    }
+}
+
+macro_rules! register_wincmd {
     ($t:ty) => {
         paste::item! {
             #[small_ctor::ctor]
@@ -52,19 +68,27 @@ macro_rules! register_cmd {
     };
 }
 
+macro_rules! register_viewcmd {
+    ($t:ty) => {
+        paste::item! {
+            #[small_ctor::ctor]
+            #[allow(non_snake_case)]
+            unsafe fn [< register_command_ $t >] () {
+                VC.push(Box::new($t::new()));
+            }
+        }
+    };
+}
 
-fn register_wincommands() -> Vec<Box<dyn Command<NPWindow, NPWindowState>>> {
-    let mut v: Vec<Box<dyn Command<NPWindow, NPWindowState>>> = Vec::new();
+fn register_wincommands() -> Vec<Box<dyn WinCommand>> {
+    let mut v: Vec<Box<dyn WinCommand>> = Vec::new();
     v.push(Box::new(TestCommand::new()));
     v
 }
 struct TestCommand;
-register_cmd!(TestCommand);
-impl Command<NPWindow, NPWindowState> for TestCommand {
-    fn new() -> Self
-    where
-        Self: Sized,
-    {
+register_wincmd!(TestCommand);
+impl WinCommand for TestCommand {
+    fn new() -> Self {
         TestCommand
     }
     fn shortcut(&self) -> Option<NPHotKey> {
@@ -84,16 +108,40 @@ impl Command<NPWindow, NPWindowState> for TestCommand {
 }
 
 
+struct TestViewCommand {
+    stack: Vec<String>,
+}
+register_viewcmd!(TestViewCommand);
+impl ViewCommand for TestViewCommand {
+    fn new() -> Self {
+        TestViewCommand { stack: Vec::new() }
+    }
 
-static mut WC: Vec<Box<dyn Command<NPWindow, NPWindowState>>> = vec![];
+    fn run(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack) {
+        // nothing
+    }
 
-
-
-struct WindowCommandsSet {
-    commands: Vec<Box<dyn Command<NPWindow, NPWindowState>>>,
+    fn description(&self) -> &str {
+        "Test de command view"
+    }
+    fn on_edit(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack, input: TextChange) {
+        dbg!(&input);
+        match input {
+            TextChange::Insert("l") => {
+                data.insert("j");
+                self.stack.push("l".to_string());
+            }
+            _ => (),
+        }
+    }
 }
 
+static mut WC: Vec<Box<dyn WinCommand>> = vec![];
+static mut VC: Vec<Box<dyn ViewCommand>> = vec![];
 
+struct WindowCommandsSet {
+    commands: Vec<Box<dyn WinCommand>>,
+}
 
 static WINDOWCOMMANDSSET: Lazy<Mutex<WindowCommandsSet>> = Lazy::new(|| {
     Mutex::new(WindowCommandsSet {
@@ -102,12 +150,14 @@ static WINDOWCOMMANDSSET: Lazy<Mutex<WindowCommandsSet>> = Lazy::new(|| {
 });
 
 pub struct WindowCommands;
+pub struct ViewCommands;
+
 
 impl UICommandEventHandler<NPWindow, NPWindowState> for WindowCommands {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, window: &mut NPWindow, editor: &mut NPWindowState) {
         match event {
             Event::KeyDown(event) => {
-                let cmdset = unsafe{&mut WC};
+                let cmdset = unsafe { &mut WC };
                 for c in cmdset {
                     if c.matches(event.borrow()) {
                         c.run(ctx, window, editor);
@@ -123,6 +173,41 @@ impl UICommandEventHandler<NPWindow, NPWindowState> for WindowCommands {
             }
             _ => (),
         }
+    }
+}
+
+impl UICommandEventHandler<EditorView, EditStack> for ViewCommands {
+    fn event(&mut self, ctx: &mut EventCtx, event: &Event, widget: &mut EditorView, editor: &mut EditStack) {
+        match event {
+            Event::KeyDown(event) => {
+                let cmdset = unsafe { &mut VC };
+                for c in cmdset {
+                    if c.matches(event.borrow()) {
+                        c.run(ctx, widget, editor);
+                        ctx.set_handled();
+                    }
+                }
+            }
+            Event::Command(cmd) if cmd.is(UICOMMAND_CALLBACK) => {
+                if let UICommandCallback::EditView(f) = cmd.get_unchecked(UICOMMAND_CALLBACK) {
+                    f(widget, ctx, editor);
+                    ctx.set_handled();
+                }
+            }
+            _ => (),
+        }
+    }
+    fn on_edit(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack, input: TextChange) {
+        for c in unsafe { &mut VC } {
+                c.on_edit(ctx, widget, data, input.clone());
+                ctx.set_handled();
+        }
+    }
+    fn on_selection_modified(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack) {
+        for c in unsafe { &mut VC } {
+            c.on_selection_modified(ctx, widget, data);
+            ctx.set_handled();
+    }
     }
 }
 
@@ -170,6 +255,9 @@ pub struct CommandSet;
 
 pub trait UICommandEventHandler<W, D> {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, window: &mut W, editor: &mut D);
+    fn on_edit(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack, input: TextChange) {}
+    fn on_selection_modified(&mut self, ctx: &mut EventCtx, widget: &mut EditorView, data: &mut EditStack) {}
+    
 }
 
 impl UICommandEventHandler<NPWindow, NPWindowState> for CommandSet {
