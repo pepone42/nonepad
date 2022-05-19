@@ -1,6 +1,7 @@
 mod empty;
 mod extension;
 mod palette_view;
+pub mod view_switcher;
 pub mod editor_view;
 pub mod bottom_panel;
 pub mod window;

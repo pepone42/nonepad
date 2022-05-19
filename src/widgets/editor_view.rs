@@ -574,13 +574,13 @@ impl EditorView {
                 false
             }
             Event::Wheel(event) => {
-                ctx.submit_command(
+                ctx.submit_notification(
                     SCROLL_TO
                         .with((
                             Some(self.delta_x - event.wheel_delta.x),
                             Some(self.delta_y - event.wheel_delta.y),
                         ))
-                        .to(self.owner_id),
+                        //.to(self.owner_id),
                 );
 
                 if ctx.is_active() && event.buttons.contains(MouseButton::Left) {
@@ -696,11 +696,12 @@ impl EditorView {
                 true
             }
             Event::Command(cmd) if cmd.is(SCROLL_TO) => {
-                let d = *cmd.get_unchecked(SCROLL_TO);
+                let d = *cmd.get(SCROLL_TO).unwrap();
                 self.delta_x = d.0.unwrap_or(self.delta_x);
                 self.delta_y = d.1.unwrap_or(self.delta_y);
                 true
             }
+            
             Event::Command(cmd) if cmd.is(super::window::RESET_HELD_STATE) => {
                 self.held_state = HeldState::None;
                 false
@@ -773,6 +774,11 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(FILE_REMOVED) => {
                 editor.set_dirty();
+                true
+            }
+            Event::Command(cmd) if cmd.is(super::view_switcher::ACTIVATE_EDITVIEW) => {
+                dbg!("hello");
+                ctx.request_focus();
                 true
             }
             _ => false,
@@ -1166,10 +1172,10 @@ impl EditorView {
         if x < -self.delta_x {
             self.delta_x = -x;
         }
-        ctx.submit_command(
+        ctx.submit_notification(
             SCROLL_TO
                 .with((Some(self.delta_x), Some(self.delta_y)))
-                .to(self.owner_id),
+                //.to(self.owner_id),
         );
     }
 
@@ -1223,7 +1229,7 @@ impl Widget<EditStack> for Gutter {
     fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut EditStack, _env: &Env) {
         match event {
             Event::Command(cmd) if cmd.is(SCROLL_TO) => {
-                self.dy = cmd.get_unchecked(SCROLL_TO).1.unwrap_or(self.dy);
+                self.dy = cmd.get(SCROLL_TO).unwrap().1.unwrap_or(self.dy);
                 ctx.request_paint();
                 ctx.set_handled();
             }
@@ -1234,7 +1240,7 @@ impl Widget<EditStack> for Gutter {
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     let y = (m.pos.y - self.dy).max(0.);
                     let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                    ctx.submit_command(SELECT_LINE.with((line, true)).to(self.owner_id));
+                    ctx.submit_notification(SELECT_LINE.with((line, true)));//.to(self.owner_id));
                     ctx.request_paint();
                     ctx.set_handled();
                 }
@@ -1243,7 +1249,7 @@ impl Widget<EditStack> for Gutter {
                 ctx.set_active(true);
                 let y = (m.pos.y - self.dy).max(0.);
                 let line = ((y / self.metrics.font_height) as usize).min(data.len_lines() - 1);
-                ctx.submit_command(SELECT_LINE.with((line, m.mods.shift())).to(self.owner_id));
+                ctx.submit_notification(SELECT_LINE.with((line, m.mods.shift())));//.to(self.owner_id));
                 ctx.request_paint();
                 ctx.set_handled();
                 self.is_held = true;
@@ -1255,10 +1261,10 @@ impl Widget<EditStack> for Gutter {
             }
             Event::Wheel(m) => {
                 //self.dy -= m.wheel_delta.y;
-                ctx.submit_command(
+                ctx.submit_notification(
                     SCROLL_TO
                         .with((None, Some(self.dy - m.wheel_delta.y)))
-                        .to(self.owner_id),
+                        //.to(self.owner_id),
                 );
                 ctx.request_paint();
                 ctx.set_handled();
@@ -1430,7 +1436,7 @@ impl Widget<EditStack> for ScrollBar {
                     return;
                 }
                 if self.is_vertical() {
-                    if let Some(dy) = cmd.get_unchecked(SCROLL_TO).1 {
+                    if let Some(dy) = cmd.get(SCROLL_TO).unwrap().1 {
                         self.delta = dy;
                         let len = self.effective_len(data);
                         let dy = dy * self.len / self.text_len(data);
@@ -1441,7 +1447,7 @@ impl Widget<EditStack> for ScrollBar {
                         ctx.request_paint();
                         ctx.set_handled();
                     }
-                } else if let Some(dx) = cmd.get_unchecked(SCROLL_TO).0 {
+                } else if let Some(dx) = cmd.get(SCROLL_TO).unwrap().0 {
                     self.delta = dx;
                     let len = self.effective_len(data);
 
@@ -1484,22 +1490,22 @@ impl Widget<EditStack> for ScrollBar {
                 }
                 if self.is_held && ctx.is_active() && m.buttons.contains(MouseButton::Left) {
                     if self.is_vertical() {
-                        ctx.submit_command(
+                        ctx.submit_notification(
                             SCROLL_TO
                                 .with((
                                     None,
                                     Some((self.mouse_delta - m.pos.y) * self.text_len(data) / self.effective_len(data)),
                                 ))
-                                .to(self.owner_id),
+                                //.to(self.owner_id),
                         );
                     } else {
-                        ctx.submit_command(
+                        ctx.submit_notification(
                             SCROLL_TO
                                 .with((
                                     Some((self.mouse_delta - m.pos.x) * self.text_len(data) / self.effective_len(data)),
                                     None,
                                 ))
-                                .to(self.owner_id),
+                                //.to(self.owner_id),
                         );
                     }
 
@@ -1602,12 +1608,12 @@ impl Widget<EditStack> for ScrollBarSpacer {
     }
 }
 
-struct TextEditor {
+pub(super) struct TextEditor {
     gutter_id: WidgetId,
     editor_id: WidgetId,
     vscroll_id: WidgetId,
     hscroll_id: WidgetId,
-    id: WidgetId,
+    //id: WidgetId,
     inner: Flex<EditStack>,
     metrics: CommonMetrics,
 }
@@ -1634,7 +1640,7 @@ impl Default for TextEditor {
             editor_id,
             vscroll_id,
             hscroll_id,
-            id,
+            //id,
             inner: Flex::row()
                 .with_child(Gutter::new(id).with_id(gutter_id))
                 .with_flex_child(
@@ -1662,9 +1668,9 @@ impl Widget<EditStack> for TextEditor {
         let mut new_env = env.clone();
         self.metrics.to_env(&mut new_env);
         match event {
-            Event::Command(cmd) if cmd.is(SCROLL_TO) => {
+            Event::Notification(n)if n.is(SCROLL_TO) => {
                 // clamp to size
-                let d = *cmd.get_unchecked(SCROLL_TO);
+                let d = *n.get(SCROLL_TO).unwrap();
                 let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
                 let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
                 // dbg!(x,y);
@@ -1674,6 +1680,30 @@ impl Widget<EditStack> for TextEditor {
                 ctx.submit_command(SCROLL_TO.with((x, y)).to(self.hscroll_id));
                 ctx.is_handled();
             }
+            Event::Notification(n) if n.is(SELECT_LINE) => {
+                let l = *n.get(SELECT_LINE).unwrap();
+                ctx.submit_command(SELECT_LINE.with(l).to(self.editor_id));
+                // ctx.submit_command(SELECT_LINE.with(l).to(self.gutter_id));
+                // ctx.submit_command(SELECT_LINE.with(l).to(self.vscroll_id));
+                // ctx.submit_command(SELECT_LINE.with(l).to(self.hscroll_id));
+                ctx.is_handled();
+            }
+            Event::Command(cmd) if cmd.is(super::view_switcher::ACTIVATE_EDITVIEW) => {
+                dbg!("ho",ctx.widget_id());
+                ctx.submit_command(super::view_switcher::ACTIVATE_EDITVIEW.to(self.editor_id));
+            }
+            // Event::Notification(cmd) if cmd.is(SCROLL_TO) => {
+            //     // clamp to size
+            //     let d = *cmd.get(SCROLL_TO).unwrap();
+            //     let x = d.0.map(|x| x.clamp(-self.text_width(&data), 0.0));
+            //     let y = d.1.map(|y| y.clamp(-self.text_height(&data), 0.0));
+            //     // dbg!(x,y);
+            //     ctx.submit_command(SCROLL_TO.with((x, y)).to(self.editor_id));
+            //     ctx.submit_command(SCROLL_TO.with((x, y)).to(self.gutter_id));
+            //     ctx.submit_command(SCROLL_TO.with((x, y)).to(self.vscroll_id));
+            //     ctx.submit_command(SCROLL_TO.with((x, y)).to(self.hscroll_id));
+            //     ctx.is_handled();
+            // }
 
             _ => self.inner.event(ctx, event, data, &new_env),
         }
@@ -1707,8 +1737,6 @@ impl Widget<EditStack> for TextEditor {
     }
 }
 
-pub fn new() -> impl Widget<EditStack> {
-    let t = TextEditor::default();
-    let id = t.id;
-    t.with_id(id)
-}
+// pub fn new() -> impl Widget<EditStack> {
+//     TextEditor::default()
+// }

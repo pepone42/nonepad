@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
 
-use druid::{im::Vector, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods, Application, ClipboardFormat};
+use druid::{
+    im::Vector, Application, ClipboardFormat, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods,
+};
 use once_cell::sync::Lazy;
 
 use crate::widgets::{
@@ -178,53 +180,70 @@ wincmd! {
                 .show(ctx);
             true
         });
+        PALCMD_OPEN  = ("Open","Ctrl-o", true,
+        |window, ctx, data| {
+            let options = FileDialogOptions::new().show_hidden();
+            ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
+            true
+        });
+        PALCMD_NEW  = ("Open","Ctrl-n", true,
+        |window, ctx, data| {
+            ctx.submit_command(crate::widgets::view_switcher::NEW_EDITVIEW);
+            true
+        });
+
+    }
+}
+
+viewcmd! {
+    VIEWCOMMANDSET = {
         PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
-        |window, ctx, _data| {
+        |view, ctx, _data| {
             let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
-            window.palette().items(languages)
+            view.palette().items(languages)
                 .title("Set Language mode to")
                 .on_select(
                     |result: PaletteResult, _ctx, _win, data| {
-                        data.editor.file.syntax = SYNTAXSET.find_syntax_by_name(&result.name).unwrap();
+                        data.file.syntax = SYNTAXSET.find_syntax_by_name(&result.name).unwrap();
                     }
                 ).show(ctx);
             true
         });
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
-        |window, ctx, _data| {
-            window.palette().items(item!["Tabs","Spaces"])
+        |view, ctx, _data| {
+            view.palette().items(item!["Tabs","Spaces"])
                 .title("Indent using")
                 .on_select(
                     |result: PaletteResult, _ctx, _win, data| {
                         if result.index == 0 {
-                            data.editor.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
+                            data.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
                         } else {
-                            data.editor.file.indentation = crate::widgets::text_buffer::Indentation::Space(4);
+                            data.file.indentation = crate::widgets::text_buffer::Indentation::Space(4);
                         }
                     }
                 ).show(ctx);
             true
         });
-        PALCMD_OPEN  = ("Open","Ctrl-o", true,
-        |window, ctx, data| {
-            if data.editor.is_dirty() {
-                window.dialog().title("Discard unsaved change?").on_select(
-                    |result, ctx, _, _| {
-                        if result == DialogResult::Ok {
-                            let options = FileDialogOptions::new().show_hidden();
-                            ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
-                        }
-                    }
-                ).show(ctx);
-            } else {
-                let options = FileDialogOptions::new().show_hidden();
-                ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
-            }
-            true
-        });
+        // PALCMD_OPEN  = ("Open","Ctrl-o", true,
+        // |view, ctx, data| {
+        //     if data.is_dirty() {
+        //         view.dialog().title("Discard unsaved change?").on_select(
+        //             |result, ctx, _, _| {
+        //                 if result == DialogResult::Ok {
+        //                     let options = FileDialogOptions::new().show_hidden();
+        //                     ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
+        //                 }
+        //             }
+        //         ).show(ctx);
+        //     } else {
+        //         let options = FileDialogOptions::new().show_hidden();
+        //         ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
+        //     }
+        //     true
+        // });
         PALCMD_SAVE  = ("Save","Ctrl-s",true,
-        |_window, ctx, data| {
-            if data.editor.filename.is_some() {
+        |_view, ctx, data| {
+            if data.filename.is_some() {
                 ctx.submit_command(druid::commands::SAVE_FILE);
             } else {
                 let options = FileDialogOptions::new().show_hidden();
@@ -233,16 +252,11 @@ wincmd! {
             return true;
         });
         PALCMD_SAVE_AS  = ("Save As","CtrlShift-s",true,
-        |_window, ctx, _data| {
+        |_view, ctx, _data| {
             let options = FileDialogOptions::new().show_hidden();
             ctx.submit_command(druid::commands::SHOW_SAVE_PANEL.with(options));
             return true;
         });
-    }
-}
-
-viewcmd! {
-    VIEWCOMMANDSET = {
         PALCMD_GOTO_LINE  = ("Navigate to line","Ctrl-g", true,
         |view, ctx, _|{
             view.palette().title("Navigate to line").on_select(|result,ctx,ev,editor| {

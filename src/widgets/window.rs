@@ -2,14 +2,14 @@ use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view, PaletteCommandType, PALETTE_CALLBACK,
+    editor_view, PaletteCommandType, PALETTE_CALLBACK, view_switcher::{NPViewSwitcherState, self},
 };
 use super::{text_buffer::EditStack, DialogResult, PaletteBuilder, PaletteView, PaletteViewState};
 use crate::commands::{self, UICommandEventHandler};
 
 use druid::{
-    widget::{Flex, Label, MainAxisAlignment},
-    Color, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod,
+    widget::{Flex, Label, MainAxisAlignment, ListIter, ViewSwitcher},
+    Color, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod, im::{vector, Vector},
 };
 
 pub(super) const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");
@@ -22,7 +22,7 @@ pub struct NPWindow {
 
 #[derive(Clone, Data, Lens)]
 pub struct NPWindowState {
-    pub editor: EditStack,
+    pub views: NPViewSwitcherState,
     //pub editor2: EditStack,
     status: String,
     bottom_panel: BottonPanelState,
@@ -33,7 +33,7 @@ pub struct NPWindowState {
 impl Default for NPWindowState {
     fn default() -> Self {
         NPWindowState {
-            editor: EditStack::default(),
+            views: Default::default(),
             //editor2: EditStack::default(),
             status: "Untilted".to_owned(),
             bottom_panel: BottonPanelState::default(),
@@ -50,7 +50,7 @@ impl NPWindowState {
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<NPWindowState> {
         Ok(Self {
-            editor: EditStack::from_file(&path)?,
+            views: NPViewSwitcherState::from_file(&path)?,
             //editor2: EditStack::default(),
             status: path
                 .as_ref()
@@ -61,6 +61,13 @@ impl NPWindowState {
             ..Default::default()
         })
     }
+
+    // pub fn active_editor(&self) -> &EditStack {
+    //     &self.views.active_editor()
+    // }
+    // pub fn active_editor_mut(&mut self) -> &mut EditStack {
+    //     &mut self.views.active_editor_mut()
+    // }
 }
 impl Widget<NPWindowState> for NPWindow {
     fn event(&mut self, ctx: &mut druid::EventCtx, event: &druid::Event, data: &mut NPWindowState, env: &druid::Env) {
@@ -160,13 +167,13 @@ impl Widget<NPWindowState> for NPWindow {
                 return;
             }
             druid::Event::WindowCloseRequested => {
-                if data.editor.is_dirty() {
+                if data.views.editors.iter().any(|e| e.is_dirty()) {
                     ctx.set_handled();
                     self.dialog()
                         .title("Discard unsaved change?")
                         .on_select(|result, ctx, _, data| {
                             if result == DialogResult::Ok {
-                                data.editor.reset_dirty();
+                                data.views.editors.for_each_mut(|e,_| e.reset_dirty());
                                 ctx.submit_command(druid::commands::CLOSE_WINDOW);
                             }
                         })
@@ -242,7 +249,7 @@ impl NPWindow {
         let label_left = Label::new(|data: &NPWindowState, _env: &Env| {
             format!(
                 "{}{}",
-                data.editor
+                data.views.active_editor()
                     .filename
                     .clone()
                     .unwrap_or_default()
@@ -250,7 +257,7 @@ impl NPWindow {
                     .unwrap_or_else(|| OsStr::new("[Untilted]"))
                     .to_string_lossy()
                     .to_string(),
-                if data.editor.is_dirty() { "*" } else { "" }
+                if data.views.active_editor().is_dirty() { "*" } else { "" }
             )
         })
         .with_text_size(12.0);
@@ -258,16 +265,17 @@ impl NPWindow {
         let label_right = Label::new(|data: &NPWindowState, _env: &Env| {
             format!(
                 "{}    {}    {}    {}    {}",
-                data.editor.caret_display_info(),
-                data.editor.file.indentation,
-                data.editor.file.encoding.name(),
-                data.editor.file.linefeed,
-                data.editor.file.syntax.name
+                data.views.active_editor().caret_display_info(),
+                data.views.active_editor().file.indentation,
+                data.views.active_editor().file.encoding.name(),
+                data.views.active_editor().file.linefeed,
+                data.views.active_editor().file.syntax.name
             )
         })
         .with_text_size(12.0);
 
-        let edit = editor_view::new().lens(NPWindowState::editor);
+        //let edit = editor_view::new().lens(NPWindowState::views);
+        let edit = view_switcher::new().lens(NPWindowState::views);
         //let edit2 = editor_view::new().lens(NPWindowState::editor2);
         NPWindow {
             inner: WidgetPod::new(
