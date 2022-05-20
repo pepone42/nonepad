@@ -45,6 +45,14 @@ pub struct NPViewSwitcher {
 pub const NEW_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.new_editview");
 pub(super) const ACTIVATE_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.activate_editview");
 
+impl NPViewSwitcher {
+    pub fn new_view(&mut self,data: &mut NPViewSwitcherState) {
+        self.views.push(WidgetPod::new(TextEditor::default()));
+        data.editors.push_back(EditStack::new());
+        data.active_editor_index += 1;
+    }
+}
+
 impl Widget<NPViewSwitcherState> for NPViewSwitcher {
     fn event(
         &mut self,
@@ -55,13 +63,27 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
     ) {
         match event {
             Event::Command(c) if c.is(NEW_EDITVIEW) => {
-                self.views.push(WidgetPod::new(TextEditor::default()));
-                data.editors.push_back(EditStack::new());
-                data.active_editor_index += 1;
+                self.new_view(data);
 
                 ctx.children_changed();
 
                 ctx.submit_command(ACTIVATE_EDITVIEW.to(self.views[data.active_editor_index].id()));
+                ctx.set_handled();
+                return;
+            }
+            Event::Command(cmd) if cmd.is(druid::commands::OPEN_FILE) => {
+                
+                self.new_view(data);
+                ctx.children_changed();
+
+                ctx.submit_command(ACTIVATE_EDITVIEW.to(self.views[data.active_editor_index].id()));
+
+                if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
+                    ctx.submit_command(druid::commands::OPEN_FILE.with(file_info.clone()).to(self.views[data.active_editor_index].id()));
+                    // if let Err(_) = self.views..open(editor, file_info.path()) {
+                    //     self.alert("Error loading file").show(ctx);
+                    // }
+                }
                 ctx.set_handled();
                 return;
             }

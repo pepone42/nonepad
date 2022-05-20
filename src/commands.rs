@@ -1,4 +1,4 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, ffi::OsStr};
 
 use druid::{
     im::Vector, Application, ClipboardFormat, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods,
@@ -186,11 +186,22 @@ wincmd! {
             ctx.submit_command(druid::commands::SHOW_OPEN_PANEL.with(options));
             true
         });
-        PALCMD_NEW  = ("Open","Ctrl-n", true,
+        PALCMD_NEW  = ("New","Ctrl-n", true,
         |window, ctx, data| {
             ctx.submit_command(crate::widgets::view_switcher::NEW_EDITVIEW);
             true
         });
+        PALCMD_LIST_VIEW = ("Opened files","Ctrl-p", true,
+        |window, ctx, data| {
+            window.palette().items(data.views.editors.iter().map(|e| Item::new(&e.filename
+                .clone()
+                .unwrap_or_default()
+                .file_name()
+                .unwrap_or_else(|| OsStr::new("[Untilted]"))
+                .to_string_lossy()
+                ,&"")).collect::<Vector<Item>>()).show(ctx);
+            true
+        })
 
     }
 }
