@@ -1,23 +1,46 @@
-use std::path::Path;
+use std::{path::Path, sync::atomic::{AtomicU64, Ordering}};
 
 use super::{
     editor_view::{EditorView, TextEditor},
     text_buffer::EditStack,
 };
 use druid::{
-    im::{vector, Vector},
+    im::{vector, Vector, self, hashmap},
     Data, Event, Lens, Selector, Widget, WidgetPod,
 };
+
+struct Counter(AtomicU64);
+
+impl Counter {
+    pub const fn new() -> Counter {
+        Counter(AtomicU64::new(1))
+    }
+
+    pub fn next(&self) -> u64 {
+        self.0.fetch_add(1, Ordering::Relaxed)
+    }
+}
+
+#[derive(Debug,Default,Data,Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ViewId(u64);
+
+impl ViewId {
+    fn next() -> ViewId {
+        static VIEW_ID_COUNTER: Counter = Counter::new();
+        ViewId(VIEW_ID_COUNTER.next())
+    }
+}
+
 #[derive(Clone, Data, Lens)]
 pub struct NPViewSwitcherState {
-    pub editors: Vector<EditStack>,
-    active_editor_index: usize,
+    pub editors: im::HashMap<ViewId, EditStack>,
+    active_editor_index: ViewId,
 }
 
 impl Default for NPViewSwitcherState {
     fn default() -> Self {
         Self {
-            editors: vector![EditStack::default()],
+            editors: hashmap![ViewId::default() => EditStack::default()],
             active_editor_index: Default::default(),
         }
     }
@@ -26,20 +49,20 @@ impl Default for NPViewSwitcherState {
 impl NPViewSwitcherState {
     pub fn from_file<P: AsRef<Path>>(path: P) -> anyhow::Result<NPViewSwitcherState> {
         Ok(Self {
-            editors: vector![EditStack::from_file(&path)?],
-            active_editor_index: 0,
+            editors: hashmap![ViewId::default() => EditStack::from_file(&path)?],
+            active_editor_index: Default::default(),
         })
     }
     pub fn active_editor(&self) -> &EditStack {
-        &self.editors[self.active_editor_index]
+        &self.editors[&self.active_editor_index]
     }
     pub fn active_editor_mut(&mut self) -> &mut EditStack {
-        &mut self.editors[self.active_editor_index]
+        &mut self.editors[&self.active_editor_index]
     }
 }
 
 pub struct NPViewSwitcher {
-    views: Vec<WidgetPod<EditStack, TextEditor>>,
+    views: std::collections::HashMap<ViewId, WidgetPod<EditStack, TextEditor>>,
 }
 
 pub const NEW_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.new_editview");
@@ -47,9 +70,25 @@ pub(super) const ACTIVATE_EDITVIEW: Selector<()> = Selector::new("nonepad.viewsw
 
 impl NPViewSwitcher {
     pub fn new_view(&mut self,data: &mut NPViewSwitcherState) {
-        self.views.push(WidgetPod::new(TextEditor::default()));
-        data.editors.push_back(EditStack::new());
-        data.active_editor_index += 1;
+        let id = ViewId::next();
+        self.views.insert(id, WidgetPod::new(TextEditor::default()));
+        data.editors.insert(id ,EditStack::new());
+        data.active_editor_index = id;
+    }
+
+    fn active_view(&self, data:&NPViewSwitcherState) -> &TextEditor {
+        self.views[&data.active_editor_index].widget()
+    }
+    fn active_view_mut(&mut self, data:&NPViewSwitcherState) -> &mut TextEditor {
+        let id=data.active_editor_index;
+        self.views.get_mut(&id).unwrap().widget_mut()
+    }
+    fn active_pod(&self, data:&NPViewSwitcherState) -> &WidgetPod<EditStack, TextEditor> {
+        &self.views[&data.active_editor_index]
+    }
+    fn active_pod_mut(&mut self, data:&NPViewSwitcherState) -> &mut WidgetPod<EditStack, TextEditor> {
+        let id=data.active_editor_index;
+        self.views.get_mut(&id).unwrap()
     }
 }
 
@@ -67,7 +106,7 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
 
                 ctx.children_changed();
 
-                ctx.submit_command(ACTIVATE_EDITVIEW.to(self.views[data.active_editor_index].id()));
+                ctx.submit_command(ACTIVATE_EDITVIEW.to(self.views[&data.active_editor_index].id()));
                 ctx.set_handled();
                 return;
             }
@@ -76,10 +115,10 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
                 self.new_view(data);
                 ctx.children_changed();
 
-                ctx.submit_command(ACTIVATE_EDITVIEW.to(self.views[data.active_editor_index].id()));
+                ctx.submit_command(ACTIVATE_EDITVIEW.to(self.views[&data.active_editor_index].id()));
 
                 if let Some(file_info) = cmd.get(druid::commands::OPEN_FILE) {
-                    ctx.submit_command(druid::commands::OPEN_FILE.with(file_info.clone()).to(self.views[data.active_editor_index].id()));
+                    ctx.submit_command(druid::commands::OPEN_FILE.with(file_info.clone()).to(self.views[&data.active_editor_index].id()));
                     // if let Err(_) = self.views..open(editor, file_info.path()) {
                     //     self.alert("Error loading file").show(ctx);
                     // }
@@ -90,11 +129,11 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
             _ => (),
         }
         if event.should_propagate_to_hidden() {
-            for v in self.views.iter_mut().enumerate() {
+            for v in self.views.iter_mut() {
                 v.1.event(ctx, event, &mut data.editors[v.0], env);
             }
         } else {
-            self.views[data.active_editor_index].event(ctx, event, &mut data.editors[data.active_editor_index], env);
+            self.active_pod_mut(data).event(ctx, event, data.active_editor_mut(), env);
         }
     }
 
@@ -106,11 +145,11 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
         env: &druid::Env,
     ) {
         if event.should_propagate_to_hidden() {
-            for v in self.views.iter_mut().enumerate() {
+            for v in self.views.iter_mut() {
                 v.1.lifecycle(ctx, event, &data.editors[v.0], env);
             }
         } else {
-            self.views[data.active_editor_index].lifecycle(ctx, event, &data.editors[data.active_editor_index], env);
+            self.active_pod_mut(data).lifecycle(ctx, event, data.active_editor(), env);
         }
     }
 
@@ -121,9 +160,9 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
         data: &NPViewSwitcherState,
         env: &druid::Env,
     ) {
-        self.views[data.active_editor_index].update(
+        self.active_pod_mut(data).update(
             ctx,
-            &data.editors[data.active_editor_index],
+            &data.editors[&data.active_editor_index],
             env,
         );
     }
@@ -135,16 +174,16 @@ impl Widget<NPViewSwitcherState> for NPViewSwitcher {
         data: &NPViewSwitcherState,
         env: &druid::Env,
     ) -> druid::Size {
-        self.views[data.active_editor_index].layout(ctx, bc, &data.editors[data.active_editor_index], env)
+        self.active_pod_mut(data).layout(ctx, bc, &data.active_editor(), env)
     }
 
     fn paint(&mut self, ctx: &mut druid::PaintCtx, data: &NPViewSwitcherState, env: &druid::Env) {
-        self.views[data.active_editor_index].paint(ctx, &data.editors[data.active_editor_index], env);
+        self.active_pod_mut(data).paint(ctx, &data.active_editor(), env);
     }
 }
 
 pub fn new() -> impl Widget<NPViewSwitcherState> {
-    let mut v = Vec::new();
-    v.push(WidgetPod::new(TextEditor::default()));
+    let mut v = std::collections::HashMap::new();
+    v.insert(ViewId::default(), WidgetPod::new( TextEditor::default()));
     NPViewSwitcher { views: v }
 }

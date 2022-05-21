@@ -167,13 +167,13 @@ impl Widget<NPWindowState> for NPWindow {
                 return;
             }
             druid::Event::WindowCloseRequested => {
-                if data.views.editors.iter().any(|e| e.is_dirty()) {
+                if data.views.editors.iter().any(|e| e.1.is_dirty()) {
                     ctx.set_handled();
                     self.dialog()
                         .title("Discard unsaved change?")
                         .on_select(|result, ctx, _, data| {
                             if result == DialogResult::Ok {
-                                data.views.editors.for_each_mut(|e,_| e.reset_dirty());
+                                data.views.editors.iter_mut().for_each(|e| e.1.reset_dirty());
                                 ctx.submit_command(druid::commands::CLOSE_WINDOW);
                             }
                         })

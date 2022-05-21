@@ -193,7 +193,7 @@ wincmd! {
         });
         PALCMD_LIST_VIEW = ("Opened files","Ctrl-p", true,
         |window, ctx, data| {
-            window.palette().items(data.views.editors.iter().map(|e| Item::new(&e.filename
+            window.palette().items(data.views.editors.iter().map(|e| Item::new(&e.1.filename
                 .clone()
                 .unwrap_or_default()
                 .file_name()
