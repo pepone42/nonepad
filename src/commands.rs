@@ -10,7 +10,7 @@ use crate::widgets::{
     item,
     text_buffer::{syntax::SYNTAXSET, EditStack},
     window::{NPWindow, NPWindowState},
-    DialogResult, Item, PaletteBuilder, PaletteResult,
+    DialogResult, Item, PaletteBuilder, PaletteResult, view_switcher::ViewId,
 };
 
 const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
@@ -193,13 +193,18 @@ wincmd! {
         });
         PALCMD_LIST_VIEW = ("Opened files","Ctrl-p", true,
         |window, ctx, data| {
-            window.palette().items(data.views.editors.iter().map(|e| Item::new(&e.1.filename
+            let mut items : Vector<Item> = data.views.editors.iter().map(|e| Item::new(&e.1.filename
                 .clone()
                 .unwrap_or_default()
                 .file_name()
                 .unwrap_or_else(|| OsStr::new("[Untilted]"))
                 .to_string_lossy()
-                ,&"")).collect::<Vector<Item>>()).show(ctx);
+                ,&"")).collect();
+            //items.sort_by(|l,r| l.cmp(r));
+            window.palette().items(items).on_select(|result, ctx, window, data| { 
+                    data.views.select_view(ViewId::new(result.index as _));
+
+                 } ).show(ctx);
             true
         })
 

@@ -21,10 +21,13 @@ impl Counter {
     }
 }
 
-#[derive(Debug,Default,Data,Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug,Default,Data,Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ViewId(u64);
 
 impl ViewId {
+    pub fn new(i: u64) -> Self {
+        ViewId(i)
+    }
     fn next() -> ViewId {
         static VIEW_ID_COUNTER: Counter = Counter::new();
         ViewId(VIEW_ID_COUNTER.next())
@@ -44,6 +47,7 @@ impl Default for NPViewSwitcherState {
             active_editor_index: Default::default(),
         }
     }
+
 }
 
 impl NPViewSwitcherState {
@@ -58,6 +62,9 @@ impl NPViewSwitcherState {
     }
     pub fn active_editor_mut(&mut self) -> &mut EditStack {
         &mut self.editors[&self.active_editor_index]
+    }
+    pub fn select_view(&mut self, vid: ViewId) {
+        self.active_editor_index = vid;
     }
 }
 
