@@ -1,7 +1,11 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fmt::Display;
 use std::io::Result;
 use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
 use std::path::{Path, PathBuf};
+
+use crate::widgets::view_switcher::ViewId;
 
 use super::buffer::Buffer;
 use super::file::TextFileInfo;
@@ -16,6 +20,17 @@ pub struct EditStack {
     pub file: TextFileInfo,
     pub filename: Option<PathBuf>,
     dirty: bool,
+}
+
+impl Display for EditStack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.filename
+        .clone()
+        .unwrap_or_default()
+        .file_name()
+        .unwrap_or_else(|| OsStr::new("[Untilted]"))
+        .to_string_lossy())
+    }
 }
 
 impl Data for EditStack {

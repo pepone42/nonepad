@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, ffi::OsStr};
+use std::{borrow::Borrow, ffi::OsStr, fmt::Display, rc::Rc};
 
 use druid::{
     im::Vector, Application, ClipboardFormat, Event, EventCtx, FileDialogOptions, HotKey, KeyEvent, Selector, SysMods,
@@ -9,8 +9,9 @@ use crate::widgets::{
     editor_view::EditorView,
     item,
     text_buffer::{syntax::SYNTAXSET, EditStack},
+    view_switcher::ViewId,
     window::{NPWindow, NPWindowState},
-    DialogResult, Item, PaletteBuilder, PaletteResult, view_switcher::ViewId,
+    DialogResult, Item, PaletteBuilder, PaletteItemResult, 
 };
 
 const UICOMMAND_CALLBACK: Selector<UICommandCallback> = Selector::new("nonepad.all.uicommand_callback");
@@ -58,6 +59,7 @@ pub struct CommandSet;
 pub trait UICommandEventHandler<W, D> {
     fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut W, editor: &mut D);
 }
+
 
 impl UICommandEventHandler<NPWindow, NPWindowState> for CommandSet {
     fn event(&self, ctx: &mut EventCtx, event: &Event, window: &mut NPWindow, editor: &mut NPWindowState) {
@@ -166,7 +168,7 @@ wincmd! {
             win.palette()
                 .items(items)
                 .on_select(move |result, ctx, _, _| {
-                    if result.index>=viewcmd_start_index {
+                    if result.index >= viewcmd_start_index {
                         if let Some(ui_cmd) = &VIEWCOMMANDSET.commands.iter().filter(|c| c.show_in_palette).nth(result.index - viewcmd_start_index) {
                             // TODO: Send command to current editor target, not global
                             ctx.submit_command(UICOMMAND_CALLBACK.with(ui_cmd.exec.clone()));
@@ -193,18 +195,15 @@ wincmd! {
         });
         PALCMD_LIST_VIEW = ("Opened files","Ctrl-p", true,
         |window, ctx, data| {
-            let mut items : Vector<Item> = data.views.editors.iter().map(|e| Item::new(&e.1.filename
-                .clone()
-                .unwrap_or_default()
-                .file_name()
-                .unwrap_or_else(|| OsStr::new("[Untilted]"))
-                .to_string_lossy()
-                ,&"")).collect();
+            let items = data.views.editors.iter().map(|e| e.1);
+            let indexes : Vec<_> = data.views.editors.iter().map(|e| *e.0).collect();
             //items.sort_by(|l,r| l.cmp(r));
-            window.palette().items(items).on_select(|result, ctx, window, data| { 
-                    data.views.select_view(ViewId::new(result.index as _));
+            window.palette().items(items).on_select(move |result, ctx, window, data| {
+                dbg!(&result);
+                dbg!(&indexes);
+                data.views.select_view(indexes[result.index]);
 
-                 } ).show(ctx);
+                } ).show(ctx);
             true
         })
 
@@ -215,11 +214,11 @@ viewcmd! {
     VIEWCOMMANDSET = {
         PALCMD_CHANGE_LANGUAGE = ("Change language mode","CtrlShift-l", true,
         |view, ctx, _data| {
-            let languages: Vector<Item> = SYNTAXSET.syntaxes().iter().map(|l| Item::new(&l.name,&format!("File extensions : [{}]",l.file_extensions.join(", ")) )).collect();
+            let languages = SYNTAXSET.syntaxes().iter().map(|l| l.name.clone() );//.enumerate();//.collect();
             view.palette().items(languages)
                 .title("Set Language mode to")
                 .on_select(
-                    |result: PaletteResult, _ctx, _win, data| {
+                    |result: PaletteItemResult, _ctx, _win, data| {
                         data.file.syntax = SYNTAXSET.find_syntax_by_name(&result.name).unwrap();
                     }
                 ).show(ctx);
@@ -227,10 +226,10 @@ viewcmd! {
         });
         PALCMD_CHANGE_TYPE_TYPE = ("Change indentation","", true,
         |view, ctx, _data| {
-            view.palette().items(item!["Tabs","Spaces"])
+            view.palette().items(["Tabs","Spaces"])
                 .title("Indent using")
                 .on_select(
-                    |result: PaletteResult, _ctx, _win, data| {
+                    |result: PaletteItemResult, _ctx, _win, data| {
                         if result.index == 0 {
                             data.file.indentation = crate::widgets::text_buffer::Indentation::Tab(4);
                         } else {

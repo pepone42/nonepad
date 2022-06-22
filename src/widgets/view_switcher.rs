@@ -1,4 +1,4 @@
-use std::{path::Path, sync::atomic::{AtomicU64, Ordering}};
+use std::{path::Path, sync::atomic::{AtomicU64, Ordering, AtomicUsize}};
 
 use super::{
     editor_view::{EditorView, TextEditor},
@@ -9,28 +9,32 @@ use druid::{
     Data, Event, Lens, Selector, Widget, WidgetPod,
 };
 
-struct Counter(AtomicU64);
+struct Counter(AtomicUsize);
 
 impl Counter {
     pub const fn new() -> Counter {
-        Counter(AtomicU64::new(1))
+        Counter(AtomicUsize::new(1))
     }
 
-    pub fn next(&self) -> u64 {
+    pub fn next(&self) -> usize {
         self.0.fetch_add(1, Ordering::Relaxed)
     }
 }
 
 #[derive(Debug,Default,Data,Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct ViewId(u64);
+pub struct ViewId(usize);
 
 impl ViewId {
-    pub fn new(i: u64) -> Self {
+    pub fn new(i: usize) -> Self {
         ViewId(i)
     }
-    fn next() -> ViewId {
+    pub fn next() -> ViewId {
         static VIEW_ID_COUNTER: Counter = Counter::new();
-        ViewId(VIEW_ID_COUNTER.next())
+        dbg!(ViewId(VIEW_ID_COUNTER.next()))
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.0
     }
 }
 
@@ -44,7 +48,7 @@ impl Default for NPViewSwitcherState {
     fn default() -> Self {
         Self {
             editors: hashmap![ViewId::default() => EditStack::default()],
-            active_editor_index: Default::default(),
+            active_editor_index: dbg!(Default::default()),
         }
     }
 
@@ -76,6 +80,9 @@ pub const NEW_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.new_e
 pub(super) const ACTIVATE_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.activate_editview");
 
 impl NPViewSwitcher {
+    pub fn new() -> Self {
+        NPViewSwitcher { views: std::collections::HashMap::new() }
+    }
     pub fn new_view(&mut self,data: &mut NPViewSwitcherState) {
         let id = ViewId::next();
         self.views.insert(id, WidgetPod::new(TextEditor::default()));

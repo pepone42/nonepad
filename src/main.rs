@@ -62,8 +62,7 @@ fn make_menu<T: Data>(_window: Option<WindowId>, _data: &NPWindowState, _env: &E
     #[cfg(target_os = "macos")]
     /// The 'About App' menu item.
     pub fn about<T: Data>() -> druid::MenuItem<T> {
-        druid::MenuItem::new("About NonePad")
-            .command(druid::commands::SHOW_ABOUT)
+        druid::MenuItem::new("About NonePad").command(druid::commands::SHOW_ABOUT)
     }
     #[cfg(target_os = "macos")]
     /// The 'Quit' menu item.
@@ -74,10 +73,7 @@ fn make_menu<T: Data>(_window: Option<WindowId>, _data: &NPWindowState, _env: &E
     }
     #[cfg(target_os = "macos")]
     {
-    Menu::empty().entry(Menu::new("menu")
-                .entry(about())
-                .separator()
-                .entry(quit()))
+        Menu::empty().entry(Menu::new("menu").entry(about()).separator().entry(quit()))
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -96,10 +92,22 @@ fn main() -> anyhow::Result<()> {
 
     #[cfg(debug_assertions)]
     {
-    let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::TRACE).finish();
+        if let Ok(tracing) = std::env::var("TRACE_LEVEL") {
+            let tracing = match tracing.as_str() {
+                "INFO" => tracing::Level::INFO,
+                "DEBUG" => tracing::Level::DEBUG,
+                "ERROR" => tracing::Level::ERROR,
+                "TRACE" => tracing::Level::TRACE,
+                "WARN" => tracing::Level::WARN,
+                _ => panic!("Unkown tracing level {}",tracing),
+            };
 
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+            let subscriber = tracing_subscriber::FmtSubscriber::builder()
+                .with_max_level(tracing)
+                .finish();
+
+            tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+        }
     }
 
     let app_state = if let Some(filename) = std::env::args().nth(1) {
