@@ -51,6 +51,7 @@ const SELECT_LINE: Selector<(usize, bool)> = Selector::new("nonepad.editor.selec
 const HIGHLIGHT: Selector<(usize, usize)> = Selector::new("nonepad.editor.highlight");
 const RELOAD_FROM_DISK: Selector<()> = Selector::new("nonepad.editor.reload_from_disk");
 const FILE_REMOVED: Selector<()> = Selector::new("nonepad.editor.file_removed");
+pub const SELECTED: Selector<()> = Selector::new("nonepad.editor.selected");
 
 
 #[derive(Debug, Default)]
@@ -774,6 +775,10 @@ impl EditorView {
             }
             Event::Command(cmd) if cmd.is(FILE_REMOVED) => {
                 editor.set_dirty();
+                true
+            }
+            Event::Command(cmd) if cmd.is(SELECTED) => {
+                ctx.request_focus();
                 true
             }
             Event::Command(cmd) if cmd.is(super::view_switcher::ACTIVATE_EDITVIEW) => {

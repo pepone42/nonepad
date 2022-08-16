@@ -2,14 +2,14 @@ use std::{ffi::OsStr, path::Path};
 
 use super::{
     bottom_panel::{self, BottonPanelState},
-    editor_view, PaletteCommandType, PALETTE_CALLBACK, view_switcher::{NPViewSwitcherState, self},
+    editor_view, PaletteCommandType, PALETTE_CALLBACK, view_switcher::{NPViewSwitcherState, self, ViewId},
 };
 use super::{text_buffer::EditStack, DialogResult, PaletteBuilder, PaletteView, PaletteViewState};
 use crate::commands::{self, UICommandEventHandler};
 
 use druid::{
     widget::{Flex, Label, MainAxisAlignment, ListIter, ViewSwitcher},
-    Color, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod, im::{vector, Vector},
+    Color, Data, Env, Lens, Selector, Widget, WidgetExt, WidgetPod, im::{vector, Vector}, EventCtx,
 };
 
 pub(super) const RESET_HELD_STATE: Selector<()> = Selector::new("nonepad.all.reste_held_state");

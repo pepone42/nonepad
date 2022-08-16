@@ -10,7 +10,7 @@ use crate::widgets::{
     item,
     text_buffer::{syntax::SYNTAXSET, EditStack},
     view_switcher::ViewId,
-    window::{NPWindow, NPWindowState},
+    window::{NPWindow, NPWindowState, self},
     DialogResult, Item, PaletteBuilder, PaletteItemResult, 
 };
 
@@ -202,6 +202,7 @@ wincmd! {
                 dbg!(&result);
                 dbg!(&indexes);
                 data.views.select_view(indexes[result.index]);
+                //ctx.submit_command(crate::widgets::editor_view::SELECTED.to(window..views[indexes[result.index]].widget_id()));
 
                 } ).show(ctx);
             true

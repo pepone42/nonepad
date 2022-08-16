@@ -80,9 +80,6 @@ pub const NEW_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.new_e
 pub(super) const ACTIVATE_EDITVIEW: Selector<()> = Selector::new("nonepad.viewswitcher.activate_editview");
 
 impl NPViewSwitcher {
-    pub fn new() -> Self {
-        NPViewSwitcher { views: std::collections::HashMap::new() }
-    }
     pub fn new_view(&mut self,data: &mut NPViewSwitcherState) {
         let id = ViewId::next();
         self.views.insert(id, WidgetPod::new(TextEditor::default()));
