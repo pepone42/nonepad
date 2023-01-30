@@ -14,8 +14,7 @@ winres = "0.1"
 path = "vscodetheme"
 
 [dependencies]
-druid = { git = "https://github.com/linebender/druid", features = ["im"] }
-#druid = { path  = "../druid/druid" }
+druid = { version = "0.8.2", features = ["im"] }
 ropey = "1.2"
 unicode-segmentation = "1.6.0"
 chardetng = "0.1.3"
