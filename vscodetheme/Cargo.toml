@@ -2,7 +2,7 @@
 name = "nonepad-vscodetheme"
 version = "0.1.0"
 edition = "2021"
-license = "../LICENSE"
+license = "Apache License 2.0"
 description = "Helper vscode theme library for nonepad"
 homepage = "https://github.com/pepone42/nonepad"
 
