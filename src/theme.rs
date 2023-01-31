@@ -6,11 +6,11 @@ use once_cell::sync::Lazy;
 
 use druid::{Color, Env, Key};
 use syntect::highlighting::{ScopeSelector, ScopeSelectors, StyleModifier, ThemeItem, ThemeSettings};
-use vscodetheme::*;
+use nonepad_vscodetheme::*;
 
 #[derive(Debug)]
 pub struct Theme {
-    pub vscode: vscodetheme::VSCodeTheme,
+    pub vscode: VSCodeTheme,
     pub style: syntect::highlighting::Theme,
 }
 

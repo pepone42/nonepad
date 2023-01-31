@@ -1,7 +1,10 @@
 [package]
-name = "vscodetheme"
+name = "nonepad-vscodetheme"
 version = "0.1.0"
 edition = "2021"
+license = "../LICENSE"
+description = "Helper vscode theme library for nonepad"
+homepage = "https://github.com/pepone42/nonepad"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
